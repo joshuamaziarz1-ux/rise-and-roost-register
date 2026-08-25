@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Loading Rise & Roost Test Lab…</title>
+<style>body{font-family:system-ui,sans-serif;background:#f4efe5;margin:0;display:grid;place-items:center;min-height:100vh;color:#25231f}.boot{padding:24px;text-align:center}.boot strong{display:block;font-size:1.5rem;margin-bottom:8px}</style>
+</head>
+<body>
+<div class="boot"><strong>Rise & Roost Test Lab</strong>Loading the safe test register…</div>
+<script>
+(async()=>{
+  try{
+    let html=await (await fetch('index.html?testsource='+Date.now(),{cache:'no-store'})).text();
+    html=html.replace(/<title>[^<]*<\/title>/i,'<title>Rise & Roost TEST LAB</title>');
+    html=html.replace(/<script src="core\.js[^"]*"><\/script>/i,'<script src="test-storage.js?v=1"></'+'script>\n<script src="core.js?v=4"></'+'script>');
+    html=html.replace('</body>','<script src="test-lab.js?v=1"></'+'script>\n</body>');
+    document.open();document.write(html);document.close();
+  }catch(e){document.body.innerHTML='<div class="boot"><strong>Test Lab could not load.</strong>Return to the live register and try again.</div>'}
+})();
+</script>
+</body>
+</html>
