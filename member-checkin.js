@@ -1,5 +1,6 @@
 (()=>{
-const MEMBER_KEY='riseRoostActiveMemberV1',GUEST_KEY='riseRoostGuestShoppingV1';
+const TEST=!!window.__RR_TEST_MODE;
+const MEMBER_KEY=TEST?'riseRoostTESTActiveMemberV1':'riseRoostActiveMemberV1',GUEST_KEY=TEST?'riseRoostTESTGuestShoppingV1':'riseRoostGuestShoppingV1';
 const norm=s=>String(s||'').trim().replace(/\s+/g,' ').toLowerCase();
 function customers(){return Array.isArray(data.customers)?data.customers:[]}
 function currentMember(){const id=sessionStorage.getItem(MEMBER_KEY);const c=customers().find(x=>x.id===id);if(id&&!c)sessionStorage.removeItem(MEMBER_KEY);return c||null}
@@ -45,6 +46,6 @@ recordSale=function(lines,opts={}){const sale=baseRecordSale(lines,opts);if(opts
 const done=document.getElementById('doneThanks');if(done)done.onclick=()=>{document.getElementById('thanks')?.classList.add('hidden');clearIdentity();document.querySelector('#shopView .back-home')?.click()};
 
 // Keep the new build obvious on the kiosk and in Admin.
-document.title='Rise & Roost Register v4.3';document.querySelectorAll('.version').forEach(x=>x.textContent='Rise & Roost Register v4.3');const adminSub=document.querySelector('#adminScreen .admin-top .sub');if(adminSub)adminSub.textContent='Rise & Roost Register v4.3';const versionStrong=document.querySelector('#settingsTab .danger-zone strong');if(versionStrong)versionStrong.textContent='Rise & Roost Register v4.3';
+document.title=TEST?'Rise & Roost TEST LAB':'Rise & Roost Register v4.3';if(!TEST){document.querySelectorAll('.version').forEach(x=>x.textContent='Rise & Roost Register v4.3');const adminSub=document.querySelector('#adminScreen .admin-top .sub');if(adminSub)adminSub.textContent='Rise & Roost Register v4.3';const versionStrong=document.querySelector('#settingsTab .danger-zone strong');if(versionStrong)versionStrong.textContent='Rise & Roost Register v4.3'}
 renderCheckin();renderShopIdentity();
 })();
