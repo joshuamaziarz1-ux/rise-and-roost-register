@@ -1,10 +1,10 @@
 # Rise & Roost Register
 
-Self-service cash register and inventory system for Rise & Roost.
+Self-service cash register, inventory, pickup, vendor, and customer rewards system for Rise & Roost.
 
-Current version: **v2**
+Current version: **v3**
 
-## v2 features
+## v3 features
 
 - Self-serve tap-to-buy checkout
 - Exact-cash checkout with no change
@@ -20,8 +20,15 @@ Current version: **v2**
 - Pickup inventory reservations
 - Ready / waiting / picked up / cancelled pickup states
 - Paid / unpaid pickup handling
+- Regular customer profiles
+- **Carton Club** egg-carton return tracking
+- Customer-selectable carton return quantity
+- Configurable cartons-per-free-dozen reward threshold (default 12)
+- Free-dozen reward redemption with automatic egg inventory deduction
+- Carton return and reward history
+- Admin carton-credit adjustment
 - Admin PIN protection
-- Backup and restore
+- Backup and restore, including Carton Club data
 - Daily dashboard
 
 Live site: https://joshuamaziarz1-ux.github.io/rise-and-roost-register/
