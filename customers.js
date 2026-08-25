@@ -37,8 +37,8 @@ function renderCartonCustomerInfo(){
   const box=$('cartonCustomerInfo');if(!box)return;
   const c=customer($('cartonCustomerSelect')?.value);
   if(!c){box.innerHTML=data.customers.length?'<div class="empty">Choose your name to see your carton credits.</div>':'<div class="empty">Danielle can add regular customers from Admin → Carton Club.</div>';return}
-  const need=threshold(),eligible=Math.floor(c.cartonCredits/need),ri=rewardItem(),av=ri?available(ri):0;
-  const next=Math.max(0,need-(c.cartonCredits%need||need));
+  const need=threshold(),eligible=Math.floor(c.cartonCredits/need),ri=rewardItem(),av=ri?available(ri):0,rem=c.cartonCredits%need;
+  const next=rem===0?need:need-rem;
   const progress=c.cartonCredits>=need?`${eligible} free dozen${eligible===1?'':'s'} available`:`${next} more carton${next===1?'':'s'} until a free dozen`;
   box.innerHTML=`<div class="pickup-result"><h3>${esc(c.name)}</h3><div class="split" style="margin-top:12px"><div class="callout"><div class="rsub">Carton Credits</div><div class="big" style="font-size:2.3rem;margin:4px 0">${c.cartonCredits}</div><strong>${esc(progress)}</strong></div><div class="callout"><div class="rsub">Lifetime Returned</div><div style="font-size:1.8rem;font-weight:950;margin-top:6px">${c.totalCartons}</div><div class="rsub">Free dozens redeemed: ${c.freeDozens}</div></div></div>${c.cartonCredits>=need?`<button class="btn primary wide" id="redeemCartonReward" ${!ri||av<1?'disabled':''}>Redeem 1 Free Dozen</button>${!ri?'<p class="hint">The egg reward item has not been selected in Admin yet.</p>':av<1?'<p class="hint">The reward egg item is currently sold out.</p>':`<p class="hint">Reward: ${esc(ri.name)} · uses ${need} carton credits</p>`}`:''}</div>`;
   $('redeemCartonReward')?.addEventListener('click',()=>redeemReward(c.id));
