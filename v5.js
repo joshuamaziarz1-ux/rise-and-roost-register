@@ -1,6 +1,6 @@
 (()=>{
   const s=document.createElement('script');
-  s.src='v5base.js?v=5';
+  s.src='v5base.js?v=5.2';
   s.onload=()=>{
     const oldBtn=document.querySelector('[data-admin-name="Ivan"]');
     if(oldBtn){oldBtn.dataset.adminName='Joshua';oldBtn.textContent='Joshua';}
