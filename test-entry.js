@@ -16,6 +16,11 @@
     const s=document.createElement('script');
     s.id='rr45Features';
     s.src='v4.5-features.js?v=4.5.1';
+    s.onload=()=>{
+      const h=document.createElement('script');
+      h.src='v4.5-hotfix.js?v=4.5.1';
+      document.body.appendChild(h);
+    };
     document.body.appendChild(s);
   }
 })();
