@@ -31,7 +31,7 @@ function itemList(p){
 }
 function messageFor(p){
   const first=String(p.customerName||'there').trim().split(/\s+/)[0]||'there';
-  let msg=`Hi ${first}! Just a quick note to let you know your Rise & Roost order is ready for pickup. We have ${itemList(p)} ready for you.`;
+  let msg=`Hi ${first}! Just a quick note to let you know your Rise & Roost order is ready for pickup. Your pickup code is ${p.code}. We have ${itemList(p)} ready for you.`;
   if(String(p.note||'').trim())msg+=` Pickup note: ${String(p.note).trim()}.`;
   msg+=' Thank you so much!';
   return msg;
@@ -79,9 +79,9 @@ renderAll=function(){oldRenderAll();setTimeout(enhancePickups,0)};
 setTimeout(enhancePickups,0);
 
 if(!TEST){
-  document.title='Rise & Roost Register v4.7';
-  document.querySelectorAll('.version').forEach(x=>x.textContent='Rise & Roost Register v4.7');
-  const adminSub=document.querySelector('#adminScreen .admin-top .sub');if(adminSub)adminSub.textContent='Rise & Roost Register v4.7';
-  const versionStrong=document.querySelector('#settingsTab .danger-zone strong');if(versionStrong)versionStrong.textContent='Rise & Roost Register v4.7';
+  document.title='Rise & Roost Register v4.7.1';
+  document.querySelectorAll('.version').forEach(x=>x.textContent='Rise & Roost Register v4.7.1');
+  const adminSub=document.querySelector('#adminScreen .admin-top .sub');if(adminSub)adminSub.textContent='Rise & Roost Register v4.7.1';
+  const versionStrong=document.querySelector('#settingsTab .danger-zone strong');if(versionStrong)versionStrong.textContent='Rise & Roost Register v4.7.1';
 }
 })();
