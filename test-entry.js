@@ -6,7 +6,7 @@
     b.className='btn tab';
     b.id='openTestLab';
     b.textContent='Test Lab';
-    b.onclick=()=>{location.href='test.html?v=4.6.2'};
+    b.onclick=()=>{location.href='test.html?v=4.6.3'};
     tabs.appendChild(b);
   };
   add();
@@ -15,13 +15,13 @@
   if(!document.getElementById('rr45Features')){
     const s=document.createElement('script');
     s.id='rr45Features';
-    s.src='v4.5-features.js?v=4.6.2';
+    s.src='v4.5-features.js?v=4.6.3';
     s.onload=()=>{
       const h=document.createElement('script');
-      h.src='v4.5-hotfix.js?v=4.6.2';
+      h.src='v4.5-hotfix.js?v=4.6.3';
       h.onload=()=>{
         const m=document.createElement('script');
-        m.src='v4.6-session.js?v=4.6.2';
+        m.src='v4.6-session.js?v=4.6.3';
         document.body.appendChild(m);
       };
       document.body.appendChild(h);
