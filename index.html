@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f4efe5">
-<title>Rise & Roost Register v4.6.3</title>
-<link rel="stylesheet" href="styles.css?v=4.6.3">
+<title>Rise & Roost Register v4.7.2</title>
+<link rel="stylesheet" href="styles.css?v=4.7.2">
 </head>
 <body>
 <header class="top"><div><div class="logo">Rise & Roost</div><div class="sub">Self-Serve Market</div></div><button class="btn ghost" id="adminBtn">Admin</button></header>
@@ -20,7 +20,7 @@
 <main class="layout hidden" id="cartonView" style="grid-template-columns:1fr">
 <section class="card pickup-customer"><h2>Carton Club</h2><p class="hint">Regular customers can return clean, reusable dozen-egg cartons and earn a free dozen.</p><div class="form two" style="margin-top:16px"><div class="field"><label>Your name</label><select id="cartonCustomerSelect"></select></div><div class="field"><label>How many cartons are you returning?</label><div class="qtys"><button class="qbtn" id="cartonMinus">−</button><input id="cartonQty" type="number" inputmode="numeric" min="1" step="1" value="1" style="width:90px;min-height:44px;text-align:center;border:1px solid var(--line);border-radius:10px"><button class="qbtn" id="cartonPlus">+</button></div></div></div><button class="btn primary wide" id="cartonSubmit">Return Egg Cartons</button><p class="hint">Only clean, dry, reusable dozen-egg cartons should be counted.</p><div id="cartonCustomerInfo"></div></section>
 </main>
-<div class="version">Rise & Roost Register v4.6.3</div>
+<div class="version">Rise & Roost Register v4.7.2</div>
 
 <div class="overlay hidden" id="payOverlay"><div class="modal"><h2>Confirm Purchase</h2><div class="big" id="payTotal">$0.00</div><div class="notice">Please place the exact amount in the cash box.<br><strong>No change is available.</strong></div><p class="hint">Your inventory will not be reduced until you press Complete Purchase.</p><div class="actions"><button class="btn ghost" id="backPay">Go Back</button><button class="btn primary" id="finishSale">Complete Purchase</button></div></div></div>
 <div class="overlay hidden" id="thanks"><div class="modal" style="text-align:center"><h2>Thank You!</h2><p style="font-size:1.12rem">Your purchase is complete.</p><button class="btn primary wide" id="doneThanks">Done</button></div></div>
@@ -29,7 +29,7 @@
 <div class="overlay hidden" id="vendorDeleteOverlay"><div class="modal"><h2>Delete Vendor</h2><div id="vendorDeleteBody"></div><div class="actions"><button class="btn ghost" id="vendorDeleteCancel">Cancel</button><button class="btn danger" id="vendorDeleteConfirm">Delete</button></div></div></div>
 
 <section class="admin hidden" id="adminScreen">
-<div class="admin-top"><div><div class="logo">Store Admin</div><div class="sub">Rise & Roost Register v4.6.3</div></div><button class="btn" id="exitAdmin">Back to Store</button></div>
+<div class="admin-top"><div><div class="logo">Store Admin</div><div class="sub">Rise & Roost Register v4.7.2</div></div><button class="btn" id="exitAdmin">Back to Store</button></div>
 <div class="admin-wrap">
 <div class="tabs"><button class="btn tab active" data-tab="dashboard">Dashboard</button><button class="btn tab" data-tab="items">Items & Vendors</button><button class="btn tab" data-tab="pickups">Pickup Orders</button><button class="btn tab" data-tab="customers">Roost Club</button><button class="btn tab" data-tab="sales">Sales & Vendors</button><button class="btn tab" data-tab="inventory">Inventory History</button><button class="btn tab" data-tab="settings">Settings & Backup</button></div>
 
@@ -77,19 +77,19 @@
 <div id="settingsTab" class="hidden">
 <div class="card section"><div class="section-head"><h2>Admin PIN</h2></div><p class="hint">Customers cannot access store management without the PIN.</p><button class="btn" id="changePin">Change Admin PIN</button></div>
 <div class="card section"><div class="section-head"><h2>Backup & Restore</h2></div><p class="hint">Export a backup regularly. It includes vendors, products, inventory, pickup orders, Roost Club members, carton credits and history, sales, and inventory history.</p><div class="backup-box"><button class="btn primary" id="exportBackup">Export Backup</button><input id="importBackupFile" type="file" accept="application/json,.json"><button class="btn" id="importBackup">Import Backup</button></div></div>
-<div class="card section danger-zone"><div class="section-head"><h2>Version</h2></div><strong>Rise & Roost Register v4.6.3</strong><p class="hint">Data is saved on this device in the browser.</p></div>
+<div class="card section danger-zone"><div class="section-head"><h2>Version</h2></div><strong>Rise & Roost Register v4.7.2</strong><p class="hint">Data is saved on this device in the browser.</p></div>
 </div>
 </div>
 </section>
 
-<script src="core.js?v=4.6.3"></script>
-<script src="admin.js?v=4.6.3"></script>
-<script src="pickup.js?v=4.6.3"></script>
-<script src="ui.js?v=4.6.3"></script>
-<script src="customers.js?v=4.6.3"></script>
-<script src="v4.js?v=4.6.3"></script>
-<script src="member-checkin.js?v=4.6.3"></script>
-<script src="member-history.js?v=4.6.3"></script>
-<script src="test-entry.js?v=4.6.3"></script>
+<script src="core.js?v=4.7.2"></script>
+<script src="admin.js?v=4.7.2"></script>
+<script src="pickup.js?v=4.7.2"></script>
+<script src="ui.js?v=4.7.2"></script>
+<script src="customers.js?v=4.7.2"></script>
+<script src="v4.js?v=4.7.2"></script>
+<script src="member-checkin.js?v=4.7.2"></script>
+<script src="member-history.js?v=4.7.2"></script>
+<script src="test-entry.js?v=4.7.2"></script>
 </body>
 </html>
