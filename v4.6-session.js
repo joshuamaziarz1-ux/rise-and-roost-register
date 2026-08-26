@@ -30,7 +30,18 @@ function signOut(){
   try{cart={};renderCart()}catch(e){}
   document.getElementById('payOverlay')?.classList.add('hidden');
   document.getElementById('thanks')?.classList.add('hidden');
-  location.href=TEST?'test.html?v=4.6.1':'./?v=4.6.1';
+  location.href=TEST?'test.html?v=4.6.2':'./?v=4.6.2';
+}
+function openJoin(){
+  ['kioskHome','shopView','pickupView','cartonView','roostHub','myRoostView','feedbackView'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));
+  const j=document.getElementById('joinView');if(!j)return;
+  j.classList.remove('hidden');
+  j.querySelector('.join-form')?.classList.remove('hidden');
+  ['joinName','joinPhone','joinEmail'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});
+  const p=document.getElementById('joinPickupAlerts');if(p)p.checked=true;
+  const s=document.getElementById('joinStoreUpdates');if(s)s.checked=false;
+  const r=document.getElementById('joinResult');if(r)r.innerHTML='';
+  window.scrollTo(0,0);
 }
 function refresh(){
   const c=member(),box=ensureGlobal();if(!box)return;
@@ -41,11 +52,20 @@ function refresh(){
   if(box.dataset.memberId!==c.id||!$('globalMemberSignOut')){box.innerHTML=wanted;box.dataset.memberId=c.id;$('globalMemberSignOut').onclick=signOut}
 }
 
+// Use event delegation so the Join button still works after the check-in box is redrawn.
+document.addEventListener('click',e=>{
+  const join=e.target.closest?.('#joinFromCheckin');
+  if(!join)return;
+  e.preventDefault();
+  e.stopPropagation();
+  openJoin();
+},true);
+
 if(!TEST){
-  document.title='Rise & Roost Register v4.6';
-  document.querySelectorAll('.version').forEach(x=>x.textContent='Rise & Roost Register v4.6');
-  const adminSub=document.querySelector('#adminScreen .admin-top .sub');if(adminSub)adminSub.textContent='Rise & Roost Register v4.6';
-  const versionStrong=document.querySelector('#settingsTab .danger-zone strong');if(versionStrong)versionStrong.textContent='Rise & Roost Register v4.6';
+  document.title='Rise & Roost Register v4.6.2';
+  document.querySelectorAll('.version').forEach(x=>x.textContent='Rise & Roost Register v4.6.2');
+  const adminSub=document.querySelector('#adminScreen .admin-top .sub');if(adminSub)adminSub.textContent='Rise & Roost Register v4.6.2';
+  const versionStrong=document.querySelector('#settingsTab .danger-zone strong');if(versionStrong)versionStrong.textContent='Rise & Roost Register v4.6.2';
 }
 refresh();setInterval(refresh,300);
 })();
