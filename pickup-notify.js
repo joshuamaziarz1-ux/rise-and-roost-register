@@ -27,13 +27,20 @@ function contactFor(p){
   };
 }
 function itemList(p){
-  return (p.items||[]).map(i=>`${Number(i.qty||0)} ${i.itemName}`).join(', ');
+  const parts=(p.items||[]).map(i=>`${Number(i.qty||0)} ${i.itemName}`);
+  if(parts.length<=1)return parts[0]||'your order';
+  if(parts.length===2)return `${parts[0]} and ${parts[1]}`;
+  return `${parts.slice(0,-1).join(', ')}, and ${parts.at(-1)}`;
+}
+function cleanNote(s){
+  return String(s||'').trim().replace(/[.!?]+$/,'');
 }
 function messageFor(p){
   const first=String(p.customerName||'there').trim().split(/\s+/)[0]||'there';
-  let msg=`Hi ${first}! Just a quick note to let you know your Rise & Roost order is ready for pickup. Your pickup code is ${p.code}. We have ${itemList(p)} ready for you.`;
-  if(String(p.note||'').trim())msg+=` Pickup note: ${String(p.note).trim()}.`;
-  msg+=' Thank you so much!';
+  let msg=`Hi ${first}! Just a quick note to let you know your Rise & Roost order is ready for pickup. We have ${itemList(p)} ready for you.\n\nYour pickup code is ${p.code}. When you arrive, tap Pickup Order on the tablet and enter that code to pull up your order.`;
+  const note=cleanNote(p.note);
+  if(note)msg+=`\n\nPickup note: ${note}.`;
+  msg+='\n\nThank you so much!';
   return msg;
 }
 function subjectFor(){return 'Your Rise & Roost order is ready'}
@@ -79,9 +86,9 @@ renderAll=function(){oldRenderAll();setTimeout(enhancePickups,0)};
 setTimeout(enhancePickups,0);
 
 if(!TEST){
-  document.title='Rise & Roost Register v4.7.1';
-  document.querySelectorAll('.version').forEach(x=>x.textContent='Rise & Roost Register v4.7.1');
-  const adminSub=document.querySelector('#adminScreen .admin-top .sub');if(adminSub)adminSub.textContent='Rise & Roost Register v4.7.1';
-  const versionStrong=document.querySelector('#settingsTab .danger-zone strong');if(versionStrong)versionStrong.textContent='Rise & Roost Register v4.7.1';
+  document.title='Rise & Roost Register v4.7.2';
+  document.querySelectorAll('.version').forEach(x=>x.textContent='Rise & Roost Register v4.7.2');
+  const adminSub=document.querySelector('#adminScreen .admin-top .sub');if(adminSub)adminSub.textContent='Rise & Roost Register v4.7.2';
+  const versionStrong=document.querySelector('#settingsTab .danger-zone strong');if(versionStrong)versionStrong.textContent='Rise & Roost Register v4.7.2';
 }
 })();
