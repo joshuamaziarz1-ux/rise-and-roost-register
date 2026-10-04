@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Loading Rise & Roost v4.8 Preview…</title>
+<style>body{font-family:system-ui,sans-serif;background:#f4efe5;margin:0;display:grid;place-items:center;min-height:100vh;color:#25231f}.boot{padding:24px;text-align:center}.boot strong{display:block;font-size:1.5rem;margin-bottom:8px}</style>
+</head>
+<body>
+<div class="boot"><strong>Rise & Roost v4.8 Preview</strong>Loading the new big-button register…</div>
+<script>
+(async()=>{
+  try{
+    let html=await (await fetch('index.html?preview48='+Date.now(),{cache:'no-store'})).text();
+    html=html.replace(/<title>[^<]*<\/title>/i,'<title>Rise & Roost v4.8 Preview</title>');
+    html=html.replace('</head>','<link rel="stylesheet" href="v4.8-kiosk.css?v=4.8.0"></head>');
+    html=html.replace(/<script src="core\.js[^"]*"><\/script>/i,'<script src="test-storage.js?v=1"></'+'script>\n<script src="core.js?v=4.7.2"></'+'script>');
+    html=html.replace('</body>','<script src="test-lab.js?v=1"></'+'script>\n<script src="v4.8-kiosk.js?v=4.8.0"></'+'script>\n</body>');
+    document.open();document.write(html);document.close();
+  }catch(e){
+    document.body.innerHTML='<div class="boot"><strong>Preview could not load.</strong>Return to the live register and try again.</div>';
+  }
+})();
+</script>
+</body>
+</html>
