@@ -13,9 +13,9 @@
   try{
     let html=await (await fetch('index.html?preview48='+Date.now(),{cache:'no-store'})).text();
     html=html.replace(/<title>[^<]*<\/title>/i,'<title>Rise & Roost v4.8 Preview</title>');
-    html=html.replace('</head>','<link rel="stylesheet" href="v4.8-kiosk.css?v=4.8.2"><style>.rr48-home-logo,.rr48-shop-logo,.rr48-thanks-logo,.rr48-pay-logo img,.rr48-topbrand img{object-fit:contain!important;background:#fff!important}</style></head>');
+    html=html.replace('</head>','<link rel="stylesheet" href="v4.8-kiosk.css?v=4.8.3"><style>.rr48-home-logo,.rr48-shop-logo,.rr48-thanks-logo,.rr48-pay-logo img,.rr48-topbrand img{object-fit:contain!important;background:#fff!important}</style></head>');
     html=html.replace(/<script src="core\.js[^"]*"><\/script>/i,'<script src="test-storage.js?v=1"></'+'script>\n<script src="core.js?v=4.7.2"></'+'script>');
-    html=html.replace('</body>','<script src="test-lab.js?v=1"></'+'script>\n<script src="v4.8-kiosk.js?v=4.8.2"></'+'script>\n<script>(()=>{const clean="assets/rise-roost-logo-clean.jpg?v=4.8.2";const fix=()=>document.querySelectorAll("img").forEach(i=>{if((i.src||"").includes("rise-roost-logo")){i.src=clean;i.style.objectFit="contain";i.style.background="#fff"}});fix();setInterval(fix,800)})();</'+'script>\n</body>');
+    html=html.replace('</body>','<script src="test-lab.js?v=1"></'+'script>\n<script src="v4.8-kiosk.js?v=4.8.3"></'+'script>\n<script>(()=>{const clean="assets/rise-roost-logo.jpg?v=4.8.3";const fix=()=>document.querySelectorAll("img").forEach(i=>{if((i.src||"").includes("rise-roost-logo")){i.src=clean;i.style.objectFit="contain";i.style.background="#fff"}});fix();setInterval(fix,1500)})();</'+'script>\n</body>');
     document.open();document.write(html);document.close();
   }catch(e){
     document.body.innerHTML='<div class="boot"><strong>Preview could not load.</strong>Return to the live register and try again.</div>';
