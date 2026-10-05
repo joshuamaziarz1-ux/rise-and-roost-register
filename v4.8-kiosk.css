@@ -8,3 +8,37 @@
 .rr48-admin-photo-field{grid-column:span 2}.rr48-photo-preview{width:110px;height:82px;object-fit:cover;border:1px solid var(--line);border-radius:10px;margin-top:8px;background:#eee}.rr48-admin-thumb{width:58px;height:48px;border-radius:9px;object-fit:cover;float:left;margin-right:10px;border:1px solid var(--line)}
 @media(max-width:720px){.rr48-categories{grid-template-columns:1fr 1fr}.rr48-main-btn{min-height:94px;grid-template-columns:54px 1fr 24px;padding:14px 16px}.rr48-main-btn .rr48-icon{font-size:2rem}#productArea .grid{grid-template-columns:1fr 1fr;gap:9px}.rr48-product{min-height:280px}.rr48-photo{height:140px}.rr48-product-body{padding:11px}.rr48-product-name{font-size:1rem}.rr48-product-price{font-size:1.2rem}.rr48-qtyline{grid-template-columns:48px 1fr 48px}.rr48-qtybtn{height:50px}.cart-row{grid-template-columns:62px 1fr}.rr48-cart-thumb{width:62px;height:56px}.cart-row>div:last-child{grid-column:2}.rr48-admin-photo-field{grid-column:1}}
 @media(max-width:430px){#productArea .grid{grid-template-columns:1fr 1fr}.rr48-photo{height:118px}.rr48-product{min-height:255px}.rr48-product-body{gap:5px}.rr48-stock{display:none}}
+
+/* Tablet landscape kiosk layout */
+@media (orientation:landscape) and (min-width:700px) and (max-width:1400px){
+  .top{min-height:64px;padding:6px 18px}
+  .rr48-topbrand img{width:48px;height:48px}
+  .rr48-topbrand strong{font-size:1.15rem}
+  .kiosk-home{width:min(1180px,calc(100% - 36px));margin:8px auto 24px}
+  .kiosk-home h1.rr48-home-brand{margin:0 0 4px}
+  .rr48-home-logo{width:min(175px,20vh);max-height:175px;margin:0 auto 8px;display:block}
+  .kiosk-grid.rr48-main-actions{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:8px}
+  .rr48-main-btn{min-height:112px;grid-template-columns:52px 1fr 24px;padding:16px 16px;font-size:clamp(1.05rem,2.2vw,1.45rem)}
+  .rr48-main-btn .rr48-icon{font-size:2rem}
+  .rr48-cash-note{margin:12px 0 4px}
+  .rr48-home-links{margin-top:6px}
+  #shopView{max-width:1320px}
+  .shop{padding:12px 18px}
+  .rr48-shop-head{margin-bottom:8px}
+  .rr48-categories{grid-template-columns:repeat(4,1fr);margin:6px 0 12px}
+  .rr48-cat{min-height:52px}
+  #productArea .grid{grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:12px}
+  .rr48-product{min-height:285px}
+  .rr48-photo{height:145px}
+  .rr48-product-body{padding:11px}
+  .rr48-product-name{font-size:1.05rem}
+  .rr48-product-price{font-size:1.3rem}
+  .rr48-qtyline{grid-template-columns:50px 1fr 50px}
+  .rr48-qtybtn{height:52px}
+  .rr48-cartbar{min-height:64px;margin-top:10px}
+  #shopView .cart{max-width:1050px}
+  #payOverlay .modal{max-height:calc(100vh - 24px);overflow:auto;padding:18px 24px}
+  #payOverlay .rr48-pay-logo{width:72px;height:72px}
+  .rr48-pay-total{font-size:clamp(3.4rem,9vh,5rem)!important}
+  .rr48-confirm-cash{min-height:68px!important}
+}
