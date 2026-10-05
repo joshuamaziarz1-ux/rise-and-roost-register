@@ -247,11 +247,10 @@
       b.id='rrShopMemberBar';
       b.className='rr-shop-memberbar hidden';
     }
-    if(b.parentElement!==shopCard){
-      if(productArea)shopCard.insertBefore(b,productArea);
-      else shopCard.appendChild(b);
-    }else if(productArea&&b.nextElementSibling!==productArea){
-      shopCard.insertBefore(b,productArea);
+    const shopHead=shopCard.querySelector('.rr48-shop-head');
+    const target=shopHead||shopCard.firstElementChild;
+    if(b.parentElement!==shopCard || b.nextElementSibling!==target){
+      shopCard.insertBefore(b,target);
     }
   }
   function renderShopBanner(){
