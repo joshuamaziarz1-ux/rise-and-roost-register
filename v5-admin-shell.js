@@ -1,14 +1,11 @@
 (()=>{
-  function testQuery(){
-    return new URLSearchParams(location.search).get('test')==='1'?'?test=1':'';
-  }
   function openRegister(){
-    location.href='register-v5.html'+testQuery();
+    location.href='register-v5.html';
   }
   function setup(){
-    document.title='Rise & Roost Admin v5.0';
-    document.querySelectorAll('.admin-top .sub').forEach(el=>el.textContent='Rise & Roost Admin v5.0');
-    document.querySelectorAll('#settingsTab .danger-zone strong').forEach(el=>el.textContent='Rise & Roost Admin v5.0');
+    document.title='Rise & Roost Admin v5.0.3';
+    document.querySelectorAll('.admin-top .sub').forEach(el=>el.textContent='Rise & Roost Admin v5.0.3');
+    document.querySelectorAll('#settingsTab .danger-zone strong').forEach(el=>el.textContent='Rise & Roost Admin v5.0.3');
 
     const exit=document.getElementById('exitAdmin');
     if(exit){
