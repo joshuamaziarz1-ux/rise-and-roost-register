@@ -4,6 +4,25 @@
   const GUEST_KEY=TEST?'riseRoostTESTGuestShoppingV1':'riseRoostGuestShoppingV1';
   let muting=false;
 
+  function ensureShellStyles(){
+    if(document.getElementById('rr49ShellStyles'))return;
+    const s=document.createElement('style');
+    s.id='rr49ShellStyles';
+    s.textContent=`
+      #shopView .shop > .hint,
+      #rrShopMemberBar .rsub{
+        font-size:.98rem;
+        font-weight:600;
+        line-height:1.35;
+        color:#6b5847;
+      }
+      #rrShopMemberBar{
+        margin:0 0 16px!important;
+      }
+    `;
+    document.head.appendChild(s);
+  }
+
   const member=()=>{
     const id=sessionStorage.getItem(MEMBER_KEY);
     return (Array.isArray(window.data?.customers)?window.data.customers:[]).find(c=>c.id===id)||null;
@@ -68,8 +87,8 @@
       bar.querySelector('#rrShopJoinBtn').onclick=openNewSignup;
     }
 
-    if(bar.parentElement!==shop || bar.nextElementSibling!==product){
-      shop.insertBefore(bar,product);
+    if(bar.parentElement!==shop || shop.firstElementChild!==bar){
+      shop.insertBefore(bar,shop.firstElementChild);
     }
   }
 
@@ -95,6 +114,7 @@
   }
 
   function reinforce(){
+    ensureShellStyles();
     removeLegacy();
     ensureBanner();
   }
