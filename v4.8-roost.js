@@ -54,13 +54,31 @@
     if(document.getElementById('rrRoostV2Styles'))return;
     const s=document.createElement('style');s.id='rrRoostV2Styles';s.textContent=`
       #memberCheckin,#memberShopBanner{display:none!important}
-      .rr-roost-overlay .modal{width:min(940px,calc(100% - 24px));max-width:940px;max-height:calc(100vh - 24px);overflow:auto}
-      .rr-roost-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:16px}
-      .rr-roost-head h2{margin:0}.rr-roost-auth{width:min(620px,100%);margin:0 auto;display:grid;gap:14px}
-      .rr-roost-field{display:grid;gap:6px}.rr-roost-field label{font-weight:900}
-      .rr-roost-field input{width:100%;min-height:58px;border:1px solid var(--line);border-radius:14px;padding:0 15px;font-size:1.1rem;background:#fff}
-      .rr-roost-auth-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.rr-roost-auth-actions .btn{min-height:62px;font-weight:900}
-      .rr-roost-divider{text-align:center;color:var(--muted);font-weight:800;margin:2px 0}
+      .rr-roost-overlay .modal{width:min(940px,calc(100% - 24px));max-width:940px;max-height:calc(100vh - 24px);overflow:auto;background:linear-gradient(180deg,#fffaf2 0%,#f8f1e6 100%);border:2px solid #c7a574;border-radius:24px;box-shadow:0 24px 70px rgba(45,34,23,.28);padding:0}
+      .rr-roost-head{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:18px 20px;background:#f0e4d2;border-bottom:1px solid #d8c5a6}
+      .rr-roost-brand{display:flex;align-items:center;gap:12px;min-width:0}
+      .rr-roost-brand img{width:58px;height:58px;border-radius:50%;object-fit:cover;border:2px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.12)}
+      .rr-roost-brand-copy{min-width:0}.rr-roost-brand-copy h2{margin:0;font-size:1.55rem;color:#2f2b25}
+      .rr-roost-brand-copy .rr-roost-brand-sub{font-size:.78rem;font-weight:900;letter-spacing:.08em;color:#8d633d;text-transform:uppercase;margin-bottom:2px}
+      .rr-roost-head-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+      .rr-roost-about-btn{min-height:44px;border:1px solid #a87b4e;background:#fff7eb;color:#6d482b;border-radius:12px;padding:0 15px;font-weight:950;letter-spacing:.01em}
+      .rr-roost-body{padding:24px 26px 22px}
+      .rr-roost-auth{width:min(640px,100%);margin:0 auto;display:grid;gap:16px;background:#fff;border:1px solid #dfd2be;border-radius:20px;padding:22px;box-shadow:0 8px 24px rgba(77,54,32,.07)}
+      .rr-roost-field{display:grid;gap:7px}.rr-roost-field label{font-weight:950;color:#322b24}
+      .rr-roost-field input{width:100%;min-height:60px;border:2px solid #cdbda6;border-radius:14px;padding:0 15px;font-size:1.1rem;background:#fffdf9;transition:border-color .15s,box-shadow .15s}
+      .rr-roost-field input:focus{outline:none;border-color:#58705a;box-shadow:0 0 0 3px rgba(88,112,90,.12)}
+      .rr-roost-auth .btn{min-height:58px;font-weight:950}
+      .rr-roost-auth .btn.primary{background:#4e654c}
+      .rr-roost-divider{text-align:center;color:#786f64;font-weight:850;margin:2px 0;position:relative}
+      .rr-roost-divider:before,.rr-roost-divider:after{content:'';display:inline-block;width:22%;height:1px;background:#d7cab8;vertical-align:middle;margin:0 10px}
+      .rr-roost-about-overlay{z-index:10040;background:rgba(43,34,25,.48);backdrop-filter:blur(3px)}
+      .rr-roost-about{width:min(560px,calc(100% - 28px))!important;max-width:560px!important;text-align:center;padding:28px 28px 24px!important;background:linear-gradient(180deg,#fffaf2,#f7efe2)!important;border:2px solid #b58b5b!important;border-radius:24px!important}
+      .rr-roost-about img{width:86px;height:86px;border-radius:50%;object-fit:cover;margin:0 auto 12px;border:3px solid #fff;box-shadow:0 5px 16px rgba(0,0,0,.12)}
+      .rr-roost-about h2{margin:0 0 10px;color:#3b2e23;font-size:1.65rem}
+      .rr-roost-about p{margin:0 auto 12px;max-width:480px;line-height:1.5;color:#5f5347;font-size:1rem}
+      .rr-roost-about-points{display:grid;gap:8px;text-align:left;margin:16px auto 18px;max-width:460px}
+      .rr-roost-about-point{background:#fff;border:1px solid #ded0bc;border-radius:12px;padding:10px 12px;font-weight:800;color:#463c33}
+      .rr-roost-about-close{min-height:52px;font-weight:950}
       .rr-shop-memberbar{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin:0 0 12px;background:#fff}
       .rr-shop-memberbar strong{font-size:1.12rem}.rr-shop-memberbar .btn{min-width:130px}
       .rr-shop-memberbar.rr-guest{background:#fbf7ef;border-color:#d8c7ad}
@@ -94,7 +112,7 @@
       .rr-roost-notice-bar span{display:block;height:100%;width:100%;background:#5f7c61;transform-origin:left center;animation:rrNoticeDrain 3s linear forwards}
       .rr-roost-notice.warn .rr-roost-notice-bar span{background:#b18a52}
       @keyframes rrNoticeDrain{from{transform:scaleX(1)}to{transform:scaleX(0)}}
-      @media(max-width:720px){.rr-roost-grid{grid-template-columns:1fr}.rr-history{grid-column:auto}.rr-roost-auth-actions{grid-template-columns:1fr}.rr-shop-memberbar{align-items:flex-start;flex-direction:column}.rr-history-row{grid-template-columns:1fr}.rr-history-total{justify-self:start}}
+      @media(max-width:720px){.rr-roost-grid{grid-template-columns:1fr}.rr-history{grid-column:auto}.rr-roost-auth-actions{grid-template-columns:1fr}.rr-shop-memberbar{align-items:flex-start;flex-direction:column}.rr-history-row{grid-template-columns:1fr}.rr-history-total{justify-self:start}.rr-roost-head{align-items:flex-start}.rr-roost-brand img{width:50px;height:50px}.rr-roost-head-actions{gap:6px}.rr-roost-about-btn{font-size:.82rem;padding:0 10px}.rr-roost-body{padding:18px}.rr-roost-auth{padding:18px}}
       @media(orientation:landscape) and (min-width:700px) and (max-width:1400px){.rr-roost-overlay .modal{max-height:calc(100vh - 16px)}.rr-roost-section{padding:14px}.rr-history-row{grid-template-columns:120px 1fr auto}}
     `;document.head.appendChild(s);
   }
@@ -127,12 +145,39 @@
   function ensureOverlay(){
     if(document.getElementById('rrRoostV2Overlay'))return;
     const o=document.createElement('div');o.id='rrRoostV2Overlay';o.className='overlay hidden rr-roost-overlay';
-    o.innerHTML=`<div class="modal"><div class="rr-roost-head"><div><h2 id="rrRoostTitle">The Roost</h2><div class="rsub" id="rrRoostSub"></div></div><button class="btn ghost" id="rrRoostClose">Close</button></div><div id="rrRoostBody"></div></div>`;
+    o.innerHTML=`<div class="modal"><div class="rr-roost-head"><div class="rr-roost-brand"><img src="assets/rise-roost-logo.webp?v=4.10.2" alt="Rise & Roost"><div class="rr-roost-brand-copy"><div class="rr-roost-brand-sub">Rise & Roost</div><h2 id="rrRoostTitle">The Roost</h2><div class="rsub" id="rrRoostSub"></div></div></div><div class="rr-roost-head-actions"><button class="rr-roost-about-btn" id="rrRoostAbout" type="button">WHAT IS THE ROOST?</button><button class="btn ghost" id="rrRoostClose">Close</button></div></div><div id="rrRoostBody" class="rr-roost-body"></div></div>`;
     document.body.appendChild(o);
     document.getElementById('rrRoostClose').onclick=closeRoost;
+    document.getElementById('rrRoostAbout').onclick=openRoostAbout;
     o.addEventListener('click',e=>{if(e.target===o)closeRoost()});
   }
   function closeRoost(){document.getElementById('rrRoostV2Overlay')?.classList.add('hidden')}
+
+  function ensureRoostAbout(){
+    if(document.getElementById('rrRoostAboutOverlay'))return;
+    const o=document.createElement('div');
+    o.id='rrRoostAboutOverlay';
+    o.className='overlay hidden rr-roost-about-overlay';
+    o.innerHTML=`<div class="modal rr-roost-about">
+      <img src="assets/rise-roost-logo.webp?v=4.10.2" alt="Rise & Roost">
+      <h2>Welcome to The Roost</h2>
+      <p>The Roost is our simple member program for Rise & Roost customers. Joining only takes your name and phone number.</p>
+      <div class="rr-roost-about-points">
+        <div class="rr-roost-about-point">Your purchases stay connected to your account.</div>
+        <div class="rr-roost-about-point">Return reusable egg cartons, jars, and bottles to earn Roost Credits.</div>
+        <div class="rr-roost-about-point">View your purchase history, returns, credits, and pickup orders anytime.</div>
+      </div>
+      <p>No app, card, or password needed — just your phone number.</p>
+      <button class="btn primary wide rr-roost-about-close" id="rrRoostAboutClose">GOT IT</button>
+    </div>`;
+    document.body.appendChild(o);
+    document.getElementById('rrRoostAboutClose').onclick=()=>o.classList.add('hidden');
+    o.addEventListener('click',e=>{if(e.target===o)o.classList.add('hidden')});
+  }
+  function openRoostAbout(){
+    ensureRoostAbout();
+    document.getElementById('rrRoostAboutOverlay').classList.remove('hidden');
+  }
 
   let noticeTimer=null;
   function showRoostNotice(title,message,tone='success'){
