@@ -42,3 +42,8 @@
   .rr48-pay-total{font-size:clamp(3.4rem,9vh,5rem)!important}
   .rr48-confirm-cash{min-height:68px!important}
 }
+
+
+/* Customer stock privacy */
+.rr48-stock{display:none!important}
+#productArea .rr48-product.low,#productArea .product.low{border-color:var(--line)!important}
