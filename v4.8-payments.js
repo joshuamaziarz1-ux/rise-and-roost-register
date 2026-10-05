@@ -1,6 +1,6 @@
 (()=>{
   let selectedPayment=null;
-  const labels={cash:'Cash',cashapp:'Cash App',paypal:'PayPal'};
+  const labels={cash:'Cash',cashapp:'Cash App',paypal:'PayPal',applepay:'Apple Pay',googlepay:'Google Pay'};
   const ensureSettings=()=>{ data.settings=data.settings&&typeof data.settings==='object'?data.settings:{}; data.settings.paymentQrs=data.settings.paymentQrs&&typeof data.settings.paymentQrs==='object'?data.settings.paymentQrs:{}; return data.settings.paymentQrs; };
   const qrFor=m=>ensureSettings()[m]||'';
   const paymentTotal=(method)=>{
@@ -10,9 +10,9 @@
   function styles(){
     if(document.getElementById('rr48PaymentStyles'))return;
     const s=document.createElement('style');s.id='rr48PaymentStyles';s.textContent=`
-      .rr48-pay-methods{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0}
+      .rr48-pay-methods{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:18px 0}
       .rr48-pay-method{min-height:92px;border:2px solid #ded2bd;border-radius:18px;background:#fff;font-size:1.15rem;font-weight:950;color:#2a2926;padding:12px}
-      .rr48-pay-method.cash{border-color:#56765b}.rr48-pay-method.cashapp{border-color:#37c86b}.rr48-pay-method.paypal{border-color:#2374bb}
+      .rr48-pay-method.cash{border-color:#56765b}.rr48-pay-method.cashapp{border-color:#37c86b}.rr48-pay-method.paypal{border-color:#2374bb}.rr48-pay-method.applepay{border-color:#222}.rr48-pay-method.googlepay{border-color:#7d7467}
       .rr48-pay-method span{display:block;font-size:1.75rem;margin-bottom:4px}
       .rr48-payment-modal{max-width:680px!important}.rr48-payment-question{font-size:1.35rem;font-weight:950;margin-top:8px}
       .rr48-digital-pay{display:grid;gap:12px;justify-items:center}.rr48-qr{width:min(310px,70vw);aspect-ratio:1/1;object-fit:contain;background:#fff;border:8px solid #fff;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.12)}
@@ -31,9 +31,11 @@
       <div class="rr48-payment-question">CHOOSE PAYMENT</div>
       <div class="big rr48-pay-total">${money(total())}</div>
       <div class="rr48-pay-methods">
-        <button class="rr48-pay-method cash" data-method="cash"><span>💵</span>CASH</button>
-        <button class="rr48-pay-method cashapp" data-method="cashapp"><span>▣</span>CASH APP</button>
-        <button class="rr48-pay-method paypal" data-method="paypal"><span>Ⓟ</span>PAYPAL</button>
+        <button class="rr48-pay-method cash" data-method="cash">CASH</button>
+        ${qrFor('cashapp')?'<button class="rr48-pay-method cashapp" data-method="cashapp">CASH APP</button>':''}
+        ${qrFor('paypal')?'<button class="rr48-pay-method paypal" data-method="paypal">PAYPAL</button>':''}
+        ${qrFor('applepay')?'<button class="rr48-pay-method applepay" data-method="applepay">APPLE PAY</button>':''}
+        ${qrFor('googlepay')?'<button class="rr48-pay-method googlepay" data-method="googlepay">GOOGLE PAY</button>':''}
       </div>
       <button class="btn ghost wide rr48-pay-back" id="rr48BackCart">← BACK TO CART</button>
     </div>`;
@@ -93,26 +95,61 @@
     const tab=document.getElementById('settingsTab');if(!tab||document.getElementById('rr48PaymentAdmin'))return;
     ensureSettings();
     const card=document.createElement('div');card.id='rr48PaymentAdmin';card.className='card section rr48-payment-admin';
-    card.innerHTML=`<div class="section-head"><h2>Cash App & PayPal QR Codes</h2></div>
-      <p class="hint">Add Danielle’s official QR-code images here. Customers will see them after choosing Cash App or PayPal at checkout. These are included with the register data backup.</p>
+    card.innerHTML=`<div class="section-head"><h2>Payment QR Codes</h2></div>
+      <p class="hint">Upload the official QR code for each payment method you want to offer. A payment choice only appears on the register after its QR code has been added here. The register stores the QR image only — not card numbers, wallet credentials, or secret payment keys.</p>
       <div class="rr48-payment-admin-grid">
         <div class="field"><label>Cash App QR Code</label><input id="rr48CashAppQr" type="file" accept="image/*"><div id="rr48CashAppQrView"></div><button class="btn small ghost" id="rr48RemoveCashApp" type="button">Remove Cash App QR</button></div>
         <div class="field"><label>PayPal QR Code</label><input id="rr48PaypalQr" type="file" accept="image/*"><div id="rr48PaypalQrView"></div><button class="btn small ghost" id="rr48RemovePaypal" type="button">Remove PayPal QR</button></div>
+        <div class="field"><label>Apple Pay QR Code</label><input id="rr48ApplePayQr" type="file" accept="image/*"><div id="rr48ApplePayQrView"></div><button class="btn small ghost" id="rr48RemoveApplePay" type="button">Remove Apple Pay QR</button></div>
+        <div class="field"><label>Google Pay QR Code</label><input id="rr48GooglePayQr" type="file" accept="image/*"><div id="rr48GooglePayQrView"></div><button class="btn small ghost" id="rr48RemoveGooglePay" type="button">Remove Google Pay QR</button></div>
       </div>`;
     const version=tab.querySelector('.danger-zone'); tab.insertBefore(card,version||null);
-    const draw=()=>{const q=ensureSettings();document.getElementById('rr48CashAppQrView').innerHTML=q.cashapp?`<img class="rr48-qr-admin-preview" src="${q.cashapp}" alt="Cash App QR">`:'<p class="hint">Not added yet.</p>';document.getElementById('rr48PaypalQrView').innerHTML=q.paypal?`<img class="rr48-qr-admin-preview" src="${q.paypal}" alt="PayPal QR">`:'<p class="hint">Not added yet.</p>'};
-    document.getElementById('rr48CashAppQr').onchange=async e=>{if(!e.target.files[0])return;ensureSettings().cashapp=await qrData(e.target.files[0]);persist();draw();e.target.value=''};
-    document.getElementById('rr48PaypalQr').onchange=async e=>{if(!e.target.files[0])return;ensureSettings().paypal=await qrData(e.target.files[0]);persist();draw();e.target.value=''};
-    document.getElementById('rr48RemoveCashApp').onclick=()=>{delete ensureSettings().cashapp;persist();draw()};
-    document.getElementById('rr48RemovePaypal').onclick=()=>{delete ensureSettings().paypal;persist();draw()};
+
+    const configs=[
+      {key:'cashapp',input:'rr48CashAppQr',view:'rr48CashAppQrView',remove:'rr48RemoveCashApp',label:'Cash App'},
+      {key:'paypal',input:'rr48PaypalQr',view:'rr48PaypalQrView',remove:'rr48RemovePaypal',label:'PayPal'},
+      {key:'applepay',input:'rr48ApplePayQr',view:'rr48ApplePayQrView',remove:'rr48RemoveApplePay',label:'Apple Pay'},
+      {key:'googlepay',input:'rr48GooglePayQr',view:'rr48GooglePayQrView',remove:'rr48RemoveGooglePay',label:'Google Pay'}
+    ];
+    const draw=()=>{
+      const q=ensureSettings();
+      configs.forEach(c=>{
+        const v=document.getElementById(c.view);
+        if(v)v.innerHTML=q[c.key]?`<img class="rr48-qr-admin-preview" src="${q[c.key]}" alt="${c.label} QR">`:'<p class="hint">Not added yet.</p>';
+      });
+    };
+    configs.forEach(c=>{
+      const input=document.getElementById(c.input);
+      if(input)input.onchange=async e=>{
+        if(!e.target.files[0])return;
+        ensureSettings()[c.key]=await qrData(e.target.files[0]);
+        persist();draw();e.target.value='';
+      };
+      const remove=document.getElementById(c.remove);
+      if(remove)remove.onclick=()=>{
+        delete ensureSettings()[c.key];
+        persist();draw();
+      };
+    });
     draw();
   }
   function injectDashboard(){
     const stats=document.querySelector('#dashboardTab .stats');if(!stats)return;
-    let a=document.getElementById('rr48CashAppToday');if(!a){a=document.createElement('div');a.className='card stat';a.innerHTML='<label>Cash App Today</label><strong id="rr48CashAppToday">$0.00</strong>';stats.appendChild(a)}
-    let p=document.getElementById('rr48PaypalToday');if(!p){p=document.createElement('div');p.className='card stat';p.innerHTML='<label>PayPal Today</label><strong id="rr48PaypalToday">$0.00</strong>';stats.appendChild(p)}
-    document.getElementById('rr48CashAppToday').textContent=money(paymentTotal('cashapp'));
-    document.getElementById('rr48PaypalToday').textContent=money(paymentTotal('paypal'));
+    const cards=[
+      ['rr48CashAppToday','Cash App Today','cashapp'],
+      ['rr48PaypalToday','PayPal Today','paypal'],
+      ['rr48ApplePayToday','Apple Pay Today','applepay'],
+      ['rr48GooglePayToday','Google Pay Today','googlepay']
+    ];
+    cards.forEach(([id,label,method])=>{
+      let card=document.getElementById(id);
+      if(!card){
+        card=document.createElement('div');card.className='card stat';
+        card.innerHTML=`<label>${label}</label><strong id="${id}">$0.00</strong>`;
+        stats.appendChild(card);
+      }
+      document.getElementById(id).textContent=money(paymentTotal(method));
+    });
   }
   function apply(){
     styles();ensureSettings();injectAdmin();injectDashboard();
