@@ -63,6 +63,8 @@
       .rr-roost-divider{text-align:center;color:var(--muted);font-weight:800;margin:2px 0}
       .rr-shop-memberbar{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin:0 0 12px;background:#fff}
       .rr-shop-memberbar strong{font-size:1.12rem}.rr-shop-memberbar .btn{min-width:130px}
+      .rr-shop-memberbar.rr-guest{background:#fbf7ef;border-color:#d8c7ad}
+      .rr-shop-memberbar.rr-guest .rsub{max-width:620px}
       .rr-roost-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
       .rr-roost-section{border:1px solid var(--line);border-radius:16px;padding:16px;background:#fff}
       .rr-roost-section h3{margin:0 0 12px}.rr-roost-credit{font-size:2.8rem;font-weight:950;color:var(--rrgreen);line-height:1}
@@ -191,6 +193,11 @@
     goShop();
   }
 
+  function openSignup(){
+    ensureData();ensureOverlay();renderSignup();
+    document.getElementById('rrRoostV2Overlay').classList.remove('hidden');
+  }
+
   function renderSignup(){
     document.getElementById('rrRoostTitle').textContent='Join My Roost';
     document.getElementById('rrRoostSub').textContent='Just your name and phone number';
@@ -240,8 +247,14 @@
     ensureShopBanner();
     const b=document.getElementById('rrShopMemberBar');if(!b)return;
     const c=currentMember();
-    if(!c){b.classList.add('hidden');b.innerHTML='';return}
     b.classList.remove('hidden');
+    if(!c){
+      b.classList.add('rr-guest');
+      b.innerHTML=`<div><strong>Welcome, Guest</strong><div class="rsub">Join My Roost to save your purchases and earn return credits.</div></div><button class="btn" id="rrShopJoinBtn">JOIN MY ROOST</button>`;
+      document.getElementById('rrShopJoinBtn').onclick=openSignup;
+      return;
+    }
+    b.classList.remove('rr-guest');
     b.innerHTML=`<div><strong>Welcome, ${esc(c.name)}</strong><div class="rsub">Your purchases and returns will be saved to My Roost.</div></div><button class="btn primary" id="rrShopRoostBtn">MY ROOST</button>`;
     document.getElementById('rrShopRoostBtn').onclick=openRoost;
   }
