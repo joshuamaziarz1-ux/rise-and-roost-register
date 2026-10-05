@@ -343,9 +343,12 @@
       done.dataset.rrRoostDone='1';
       done.addEventListener('click',()=>setTimeout(()=>{ensureGuest();renderShopBanner()},0));
     }
-    ['pointerdown','touchstart','keydown'].forEach(ev=>document.addEventListener(ev,()=>{if(currentMember())resetTimer()},{passive:true}));
+    if(!document.documentElement.dataset.rrRoostActivity){
+      document.documentElement.dataset.rrRoostActivity='1';
+      ['pointerdown','touchstart','keydown'].forEach(ev=>document.addEventListener(ev,()=>{if(currentMember())resetTimer()},{passive:true}));
+    }
   }
 
-  window.addEventListener('load',()=>{let n=0;const t=setInterval(()=>{setup();if(wireHome()&&++n>4)clearInterval(t);if(n>25)clearInterval(t)},200)});
+  window.addEventListener('load',()=>{let n=0;const t=setInterval(()=>{n++;setup();wireHome();if(n>=12)clearInterval(t)},200)});
   if(document.readyState==='complete')setup();
 })();
