@@ -351,6 +351,26 @@
     box.innerHTML=events.length?'<div class="rr-history-list">'+events.slice(0,50).map(e=>{const d=new Date(e.date);return `<div class="rr-history-row"><div class="rr-history-date">${d.toLocaleDateString()}<br>${d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}</div><div><strong>${esc(e.type)}</strong><div class="rsub">${esc(e.text)}</div></div><div class="rr-history-total">${esc(e.total)}</div></div>`}).join('')+'</div>':'<div class="empty">No purchases or returns yet.</div>';
   }
 
+  function wireClearOrder(){
+    const clear=document.getElementById('clearBtn');
+    if(!clear)return false;
+    clear.onclick=()=>{
+      cart={};
+      try{renderCart()}catch(e){}
+      const keep=[...document.querySelectorAll('button,a')].find(el=>String(el.textContent||'').trim().toUpperCase().includes('KEEP SHOPPING'));
+      if(keep){keep.click()}
+      else{
+        document.getElementById('shopView')?.classList.remove('hidden');
+        document.querySelector('#shopView .shop')?.classList.remove('hidden');
+        document.querySelector('#shopView .cart')?.classList.remove('rr48-cart-full');
+      }
+      renderShopBanner();
+      resetTimer();
+    };
+    clear.dataset.rrDirectClear='1';
+    return true;
+  }
+
   function wireHome(){
     const home=document.getElementById('kioskHome');if(!home)return false;
     const buttons=[...home.querySelectorAll('button')];
@@ -366,7 +386,7 @@
     document.getElementById('memberCheckin')?.remove();
     document.getElementById('memberShopBanner')?.remove();
     document.getElementById('cartonView')?.remove();
-    wireHome();renderShopBanner();
+    wireHome();wireClearOrder();renderShopBanner();
     const shop=document.getElementById('goShop');
     if(shop&&!shop.dataset.rrGuestReady){
       shop.dataset.rrGuestReady='1';
@@ -385,6 +405,6 @@
     }
   }
 
-  window.addEventListener('load',()=>{let n=0;const t=setInterval(()=>{n++;setup();wireHome();if(n>=12)clearInterval(t)},200)});
+  window.addEventListener('load',()=>{let n=0;const t=setInterval(()=>{n++;setup();wireHome();wireClearOrder();if(n>=12)clearInterval(t)},200)});
   if(document.readyState==='complete')setup();
 })();
