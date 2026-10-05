@@ -9,11 +9,14 @@
     const s=document.createElement('style');
     s.id='rr49ShellStyles';
     s.textContent=`
-      #shopView .shop > .hint,
+      #shopView .rr48-shop-head .rsub,
+      #shopView .rr48-shop-head .hint,
+      #shopView .rr48-shop-head p,
+      #shopView .rr48-shop-head small,
       #rrShopMemberBar .rsub{
         font-family:inherit;
         font-size:.9rem;
-        font-weight:750;
+        font-weight:900;
         line-height:1.3;
         color:var(--muted);
         letter-spacing:0;
@@ -89,8 +92,10 @@
       bar.querySelector('#rrShopJoinBtn').onclick=openNewSignup;
     }
 
-    if(bar.parentElement!==shop || shop.firstElementChild!==bar){
-      shop.insertBefore(bar,shop.firstElementChild);
+    const shopHead=shop.querySelector('.rr48-shop-head');
+    const target=shopHead||shop.firstElementChild;
+    if(bar.parentElement!==shop || bar.nextElementSibling!==target){
+      shop.insertBefore(bar,target);
     }
   }
 
