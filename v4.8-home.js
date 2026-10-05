@@ -65,7 +65,7 @@
     const secondary=document.createElement('div');secondary.className='rr49-secondary';
 
     const roost=document.createElement('button');roost.type='button';roost.className='rr49-secondary-btn rr49-roost';
-    roost.textContent='MY ROOST';roost.onclick=openRoost;
+    roost.textContent='THE ROOST';roost.onclick=openRoost;
     const comment=document.createElement('button');comment.type='button';comment.className='rr49-secondary-btn rr49-comment';
     comment.textContent='ADD COMMENT';comment.onclick=openComment;
     secondary.append(roost,comment);main.append(primary,secondary);
@@ -76,7 +76,7 @@
   function ensureRoostOverlay(){
     if(document.getElementById('rr49RoostOverlay'))return;
     const o=document.createElement('div');o.id='rr49RoostOverlay';o.className='overlay hidden';
-    o.innerHTML='<div class="modal rr49-modal"><div class="rr49-modal-head"><div><h2>My Roost</h2><div class="rsub">Returns, credits and pickup orders</div></div><button class="btn ghost" id="rr49CloseRoost">Close</button></div><div id="rr49RoostBody"></div></div>';
+    o.innerHTML='<div class="modal rr49-modal"><div class="rr49-modal-head"><div><h2>The Roost</h2><div class="rsub">Returns, credits and pickup orders</div></div><button class="btn ghost" id="rr49CloseRoost">Close</button></div><div id="rr49RoostBody"></div></div>';
     document.body.appendChild(o);document.getElementById('rr49CloseRoost').onclick=()=>o.classList.add('hidden');
     o.addEventListener('click',e=>{if(e.target===o)o.classList.add('hidden')});
   }
@@ -86,7 +86,7 @@
     const c=currentMember();
     if(!c){
       body.innerHTML=`<p>Sign in to your Roost account.</p><div class="rr49-roost-signin"><div><input id="rr49MemberName" list="rr49MemberNames" autocomplete="off" placeholder="Type your name"><datalist id="rr49MemberNames">${customers().sort((a,b)=>a.name.localeCompare(b.name)).map(x=>`<option value="${esc(x.name)}"></option>`).join('')}</datalist><div id="rr49MemberStatus" class="member-checkin-status"></div></div><button class="btn primary" id="rr49MemberGo">SIGN IN</button></div>`;
-      const go=()=>{const input=document.getElementById('rr49MemberName'),status=document.getElementById('rr49MemberStatus'),q=norm(input.value);if(!q){status.textContent='Type your name first.';return}let m=customers().filter(x=>norm(x.name)===q);if(!m.length)m=customers().filter(x=>norm(x.name).includes(q));if(m.length!==1){status.textContent=m.length?'Please type your full name.':'Name not found. Ask Danielle to add you to My Roost.';return}sessionStorage.setItem(MEMBER_KEY,m[0].id);sessionStorage.removeItem(GUEST_KEY);renderRoost()};
+      const go=()=>{const input=document.getElementById('rr49MemberName'),status=document.getElementById('rr49MemberStatus'),q=norm(input.value);if(!q){status.textContent='Type your name first.';return}let m=customers().filter(x=>norm(x.name)===q);if(!m.length)m=customers().filter(x=>norm(x.name).includes(q));if(m.length!==1){status.textContent=m.length?'Please type your full name.':'Name not found. Ask Danielle to add you to The Roost.';return}sessionStorage.setItem(MEMBER_KEY,m[0].id);sessionStorage.removeItem(GUEST_KEY);renderRoost()};
       document.getElementById('rr49MemberGo').onclick=go;document.getElementById('rr49MemberName').onkeydown=e=>{if(e.key==='Enter')go()};return;
     }
     const ready=(data.pickups||[]).filter(p=>p.status==='ready'&&(p.customerId===c.id||norm(p.customerName)===norm(c.name)));
