@@ -79,6 +79,19 @@
       .rr-session-note{font-size:.82rem;color:var(--muted);margin-top:10px}
       .rr-roost-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.rr-roost-tabs .btn{min-height:46px}
       .rr-roost-status{min-height:20px;font-weight:850;color:#8a322b}
+      .rr-roost-notice-wrap{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(43,34,25,.38);backdrop-filter:blur(2px)}
+      .rr-roost-notice-wrap.hidden{display:none!important}
+      .rr-roost-notice{width:min(520px,calc(100% - 28px));background:#f7f1e6;border:2px solid #a87949;border-radius:22px;box-shadow:0 18px 50px rgba(44,33,22,.28);padding:24px 26px;text-align:center}
+      .rr-roost-notice h3{margin:0 0 8px;font-size:1.5rem;color:#3e2e20}
+      .rr-roost-notice p{margin:0;color:#5e5044;font-size:1.05rem;line-height:1.45}
+      .rr-roost-notice.success{border-color:#5f7c61}
+      .rr-roost-notice.success h3{color:#35563b}
+      .rr-roost-notice.warn{border-color:#b18a52}
+      .rr-roost-notice.warn h3{color:#765629}
+      .rr-roost-notice-bar{height:4px;border-radius:999px;background:#d8c7ad;overflow:hidden;margin-top:18px}
+      .rr-roost-notice-bar span{display:block;height:100%;width:100%;background:#5f7c61;transform-origin:left center;animation:rrNoticeDrain 3s linear forwards}
+      .rr-roost-notice.warn .rr-roost-notice-bar span{background:#b18a52}
+      @keyframes rrNoticeDrain{from{transform:scaleX(1)}to{transform:scaleX(0)}}
       @media(max-width:720px){.rr-roost-grid{grid-template-columns:1fr}.rr-history{grid-column:auto}.rr-roost-auth-actions{grid-template-columns:1fr}.rr-shop-memberbar{align-items:flex-start;flex-direction:column}.rr-history-row{grid-template-columns:1fr}.rr-history-total{justify-self:start}}
       @media(orientation:landscape) and (min-width:700px) and (max-width:1400px){.rr-roost-overlay .modal{max-height:calc(100vh - 16px)}.rr-roost-section{padding:14px}.rr-history-row{grid-template-columns:120px 1fr auto}}
     `;document.head.appendChild(s);
@@ -118,6 +131,28 @@
     o.addEventListener('click',e=>{if(e.target===o)closeRoost()});
   }
   function closeRoost(){document.getElementById('rrRoostV2Overlay')?.classList.add('hidden')}
+
+  let noticeTimer=null;
+  function showRoostNotice(title,message,tone='success'){
+    let wrap=document.getElementById('rrRoostNoticeWrap');
+    if(!wrap){
+      wrap=document.createElement('div');
+      wrap.id='rrRoostNoticeWrap';
+      wrap.className='rr-roost-notice-wrap hidden';
+      wrap.innerHTML='<div class="rr-roost-notice"><h3 id="rrRoostNoticeTitle"></h3><p id="rrRoostNoticeMessage"></p><div class="rr-roost-notice-bar"><span></span></div></div>';
+      document.body.appendChild(wrap);
+      wrap.addEventListener('click',()=>{wrap.classList.add('hidden');if(noticeTimer)clearTimeout(noticeTimer)});
+    }
+    const card=wrap.querySelector('.rr-roost-notice');
+    card.className='rr-roost-notice '+tone;
+    document.getElementById('rrRoostNoticeTitle').textContent=title;
+    document.getElementById('rrRoostNoticeMessage').textContent=message;
+    const bar=wrap.querySelector('.rr-roost-notice-bar');
+    bar.innerHTML='<span></span>';
+    wrap.classList.remove('hidden');
+    if(noticeTimer)clearTimeout(noticeTimer);
+    noticeTimer=setTimeout(()=>wrap.classList.add('hidden'),3000);
+  }
 
   function openRoost(){
     ensureData();ensureOverlay();
@@ -276,7 +311,7 @@
   function changeReturnQty(id,d){qtyState[id]=Math.max(0,Number(qtyState[id]||0)+d);const el=document.getElementById('rrRetQty_'+id);if(el)el.textContent=qtyState[id];resetTimer()}
   function submitReturns(c){
     const rows=data.roostReturnTypes.filter(t=>t.active!==false&&Number(qtyState[t.id]||0)>0);
-    if(!rows.length)return alert('Choose at least one item you are returning.');
+    if(!rows.length){showRoostNotice('Nothing Selected','Choose at least one item you are returning.','warn');return}
     let totalCredits=0,totalQty=0;
     rows.forEach(t=>{
       const qty=Number(qtyState[t.id]||0),earned=qty*Number(t.credit||1);
@@ -291,7 +326,7 @@
     persist();
     document.getElementById('rrCreditCount').textContent=c.roostCredits;
     renderReturns(c);renderHistory(c);
-    alert(`Thank you! ${totalQty} return${totalQty===1?'':'s'} added. You earned ${totalCredits} Roost Credit${totalCredits===1?'':'s'}.`);
+    showRoostNotice('Returns Added',`${totalQty} return${totalQty===1?'':'s'} added. You earned ${totalCredits} Roost Credit${totalCredits===1?'':'s'}.`,'success');
     resetTimer();
   }
 
