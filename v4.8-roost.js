@@ -127,7 +127,7 @@
   function ensureOverlay(){
     if(document.getElementById('rrRoostV2Overlay'))return;
     const o=document.createElement('div');o.id='rrRoostV2Overlay';o.className='overlay hidden rr-roost-overlay';
-    o.innerHTML=`<div class="modal"><div class="rr-roost-head"><div><h2 id="rrRoostTitle">My Roost</h2><div class="rsub" id="rrRoostSub">Sign in with your phone number</div></div><button class="btn ghost" id="rrRoostClose">Close</button></div><div id="rrRoostBody"></div></div>`;
+    o.innerHTML=`<div class="modal"><div class="rr-roost-head"><div><h2 id="rrRoostTitle">The Roost</h2><div class="rsub" id="rrRoostSub">Sign in with your phone number</div></div><button class="btn ghost" id="rrRoostClose">Close</button></div><div id="rrRoostBody"></div></div>`;
     document.body.appendChild(o);
     document.getElementById('rrRoostClose').onclick=closeRoost;
     o.addEventListener('click',e=>{if(e.target===o)closeRoost()});
@@ -165,7 +165,7 @@
   }
 
   function renderAuth(){
-    document.getElementById('rrRoostTitle').textContent='My Roost';
+    document.getElementById('rrRoostTitle').textContent='The Roost';
     document.getElementById('rrRoostSub').textContent='Sign in with the phone number on your account';
     const body=document.getElementById('rrRoostBody');
     body.innerHTML=`<div class="rr-roost-auth">
@@ -173,7 +173,7 @@
       <div id="rrPhoneStatus" class="rr-roost-status"></div>
       <button class="btn primary wide" id="rrPhoneGo">SIGN IN & SHOP</button>
       <div class="rr-roost-divider">Not a member yet?</div>
-      <button class="btn wide" id="rrJoinRoost">SIGN UP FOR MY ROOST</button>
+      <button class="btn wide" id="rrJoinRoost">JOIN THE ROOST</button>
     </div>`;
     const go=()=>signIn(document.getElementById('rrPhoneSignIn').value);
     document.getElementById('rrPhoneGo').onclick=go;
@@ -187,7 +187,7 @@
     if(!validPhone(phone)){status.textContent='Enter a 10-digit phone number.';return}
     const d=phoneDigits(phone);
     const matches=customers().filter(c=>phoneDigits(c.phone)===d);
-    if(matches.length!==1){status.textContent=matches.length?'More than one account uses that number. Please ask Danielle for help.':'No My Roost account was found with that number.';return}
+    if(matches.length!==1){status.textContent=matches.length?'More than one account uses that number. Please ask Danielle for help.':'No Roost account was found with that number.';return}
     setMember(matches[0]);
     closeRoost();
     goShop();
@@ -199,7 +199,7 @@
   }
 
   function renderSignup(){
-    document.getElementById('rrRoostTitle').textContent='Join My Roost';
+    document.getElementById('rrRoostTitle').textContent='Join The Roost';
     document.getElementById('rrRoostSub').textContent='Just your name and phone number';
     const body=document.getElementById('rrRoostBody');
     body.innerHTML=`<div class="rr-roost-auth">
@@ -220,7 +220,7 @@
     if(!name){status.textContent='Enter your name.';return}
     if(!validPhone(phone)){status.textContent='Enter a 10-digit phone number.';return}
     const existing=phoneOwner(phone);
-    if(existing){status.textContent='That phone number already has a My Roost account. Go back and sign in.';return}
+    if(existing){status.textContent='That phone number already has a Roost account. Go back and sign in.';return}
     const c={id:uid('customer'),name,phone:phoneDigits(phone),cartonCredits:0,roostCredits:0,totalCartons:0,freeDozens:0,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
     data.customers.push(c);persist();setMember(c);closeRoost();goShop();
   }
@@ -262,7 +262,7 @@
     if(!c){
       b.classList.remove('hidden');
       b.classList.add('rr-guest');
-      b.innerHTML=`<div><strong>Welcome, Guest</strong><div class="rsub">Join My Roost to save your purchases and earn return credits.</div></div><button class="btn" id="rrShopJoinBtn">JOIN MY ROOST</button>`;
+      b.innerHTML=`<div><strong>Welcome, Guest</strong><div class="rsub">Join The Roost to save your purchases and earn return credits.</div></div><button class="btn" id="rrShopJoinBtn">JOIN THE ROOST</button>`;
       document.getElementById('rrShopJoinBtn').onclick=openSignup;
       return;
     }
@@ -399,7 +399,7 @@
   function wireHome(){
     const home=document.getElementById('kioskHome');if(!home)return false;
     const buttons=[...home.querySelectorAll('button')];
-    const roost=buttons.find(b=>b.textContent.trim().toUpperCase()==='MY ROOST');
+    const roost=buttons.find(b=>b.textContent.trim().toUpperCase()==='THE ROOST');
     if(!roost)return false;
     roost.onclick=openRoost;
     roost.removeAttribute('data-roost-wired');
