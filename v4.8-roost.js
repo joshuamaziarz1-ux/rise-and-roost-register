@@ -238,17 +238,30 @@
 
   function ensureShopBanner(){
     const view=document.getElementById('shopView');
-    if(!view||document.getElementById('rrShopMemberBar'))return;
-    const b=document.createElement('div');b.id='rrShopMemberBar';b.className='rr-shop-memberbar hidden';
-    const anchor=view.querySelector('.rr48-shop-head')||view.querySelector('.back-home')||view.firstChild;
-    if(anchor?.after)anchor.after(b);else view.prepend(b);
+    const productArea=document.getElementById('productArea');
+    const shopCard=productArea?.closest('.shop')||view?.querySelector('.shop');
+    if(!view||!shopCard)return;
+    let b=document.getElementById('rrShopMemberBar');
+    if(!b){
+      b=document.createElement('div');
+      b.id='rrShopMemberBar';
+      b.className='rr-shop-memberbar hidden';
+    }
+    if(b.parentElement!==shopCard){
+      if(productArea)shopCard.insertBefore(b,productArea);
+      else shopCard.appendChild(b);
+    }else if(productArea&&b.nextElementSibling!==productArea){
+      shopCard.insertBefore(b,productArea);
+    }
   }
   function renderShopBanner(){
     ensureShopBanner();
     const b=document.getElementById('rrShopMemberBar');if(!b)return;
     const c=currentMember();
     b.classList.remove('hidden');
+    b.style.display='flex';
     if(!c){
+      b.classList.remove('hidden');
       b.classList.add('rr-guest');
       b.innerHTML=`<div><strong>Welcome, Guest</strong><div class="rsub">Join My Roost to save your purchases and earn return credits.</div></div><button class="btn" id="rrShopJoinBtn">JOIN MY ROOST</button>`;
       document.getElementById('rrShopJoinBtn').onclick=openSignup;
