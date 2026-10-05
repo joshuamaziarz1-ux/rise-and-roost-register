@@ -43,11 +43,11 @@
   }
 
   function openNewSignup(){
-    const homeRoost=[...document.querySelectorAll('button')].find(b=>b.textContent.trim().toUpperCase()==='MY ROOST');
+    const homeRoost=[...document.querySelectorAll('button')].find(b=>b.textContent.trim().toUpperCase()==='THE ROOST');
     if(homeRoost){
       homeRoost.click();
       setTimeout(()=>{
-        const sign=[...document.querySelectorAll('button')].find(b=>b.textContent.trim().toUpperCase()==='SIGN UP FOR MY ROOST');
+        const sign=[...document.querySelectorAll('button')].find(b=>b.textContent.trim().toUpperCase()==='JOIN THE ROOST');
         if(sign)sign.click();
       },30);
       return;
@@ -79,14 +79,14 @@
         bar.dataset.state=state;
       }
       bar.querySelector('#rrShopRoostBtn').onclick=()=>{
-        const homeRoost=[...document.querySelectorAll('#kioskHome button')].find(b=>b.textContent.trim().toUpperCase()==='MY ROOST');
+        const homeRoost=[...document.querySelectorAll('#kioskHome button')].find(b=>b.textContent.trim().toUpperCase()==='THE ROOST');
         if(homeRoost)homeRoost.click();
       };
     }else{
       sessionStorage.setItem(GUEST_KEY,'1');
       bar.classList.add('rr-guest');
       if(bar.dataset.state!==state){
-        bar.innerHTML='<div><strong>Welcome, Guest</strong><div class="rsub">Join My Roost to save your purchases and earn return credits.</div></div><button class="btn" id="rrShopJoinBtn">JOIN MY ROOST</button>';
+        bar.innerHTML='<div><strong>Welcome, Guest</strong><div class="rsub">Join The Roost to save your purchases and earn return credits.</div></div><button class="btn" id="rrShopJoinBtn">JOIN THE ROOST</button>';
         bar.dataset.state=state;
       }
       bar.querySelector('#rrShopJoinBtn').onclick=openNewSignup;
