@@ -1,5 +1,5 @@
 (()=>{
-  const isTest=location.pathname.endsWith('/test.html')||new URLSearchParams(location.search).get('test')==='1';
+  const isTest=location.pathname.endsWith('/test.html')||location.pathname.endsWith('/preview-4.8.html')||new URLSearchParams(location.search).get('test')==='1';
   if(!isTest)return;
   const map={
     riseRoostRegisterDataV2:'riseRoostRegisterTESTDataV2',
