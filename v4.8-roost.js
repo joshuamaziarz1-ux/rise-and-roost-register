@@ -406,8 +406,30 @@
     return true;
   }
 
+  function hookRecordSale(){
+    if(typeof recordSale!=='function'||recordSale.__rrRoostMember)return;
+    const base=recordSale;
+    const wrapped=function(lines,opts={}){
+      const sale=base(lines,opts);
+      if(opts.source==='store'){
+        const c=currentMember();
+        if(c){
+          sale.customerId=c.id;
+          sale.customerName=c.name;
+          sale.customerType='roost-member';
+        }else{
+          sale.customerType='guest';
+        }
+        persist();
+      }
+      return sale;
+    };
+    wrapped.__rrRoostMember=true;
+    recordSale=wrapped;
+  }
+
   function setup(){
-    ensureData();styles();ensureGuest();ensureOverlay();
+    ensureData();styles();ensureGuest();ensureOverlay();hookRecordSale();
     document.getElementById('memberCheckin')?.remove();
     document.getElementById('memberShopBanner')?.remove();
     document.getElementById('cartonView')?.remove();
@@ -422,7 +444,7 @@
     const done=document.getElementById('doneThanks');
     if(done&&!done.dataset.rrRoostDone){
       done.dataset.rrRoostDone='1';
-      done.addEventListener('click',()=>setTimeout(()=>{ensureGuest();renderShopBanner()},0));
+      done.addEventListener('click',()=>setTimeout(()=>logout(true),0));
     }
     if(!document.documentElement.dataset.rrRoostActivity){
       document.documentElement.dataset.rrRoostActivity='1';
@@ -430,6 +452,7 @@
     }
   }
 
+  window.RRRoost={open:openRoost,openSignup,logout,renderShopBanner};
   window.addEventListener('load',()=>{let n=0;const t=setInterval(()=>{n++;setup();wireHome();wireClearOrder();if(n>=12)clearInterval(t)},200)});
   if(document.readyState==='complete')setup();
 })();
