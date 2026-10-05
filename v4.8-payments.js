@@ -32,10 +32,10 @@
       <div class="big rr48-pay-total">${money(total())}</div>
       <div class="rr48-pay-methods">
         <button class="rr48-pay-method cash" data-method="cash">CASH</button>
-        ${qrFor('cashapp')?'<button class="rr48-pay-method cashapp" data-method="cashapp">CASH APP</button>':''}
-        ${qrFor('paypal')?'<button class="rr48-pay-method paypal" data-method="paypal">PAYPAL</button>':''}
-        ${qrFor('applepay')?'<button class="rr48-pay-method applepay" data-method="applepay">APPLE PAY</button>':''}
-        ${qrFor('googlepay')?'<button class="rr48-pay-method googlepay" data-method="googlepay">GOOGLE PAY</button>':''}
+        <button class="rr48-pay-method cashapp" data-method="cashapp">CASH APP</button>
+        <button class="rr48-pay-method paypal" data-method="paypal">PAYPAL</button>
+        <button class="rr48-pay-method applepay" data-method="applepay">APPLE PAY</button>
+        <button class="rr48-pay-method googlepay" data-method="googlepay">GOOGLE PAY</button>
       </div>
       <button class="btn ghost wide rr48-pay-back" id="rr48BackCart">← BACK TO CART</button>
     </div>`;
