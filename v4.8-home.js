@@ -12,10 +12,10 @@
     const s=document.createElement('style');s.id='rr48HomeCleanStyles';s.textContent=`
       .rr49-home-actions{display:grid;gap:14px;margin-top:10px}
       .rr49-primary{width:min(720px,100%);margin:0 auto}
-      .rr49-primary .rr48-main-btn{width:100%;min-height:126px;font-size:clamp(1.55rem,3.2vw,2rem)}
+      .rr49-primary .rr48-main-btn{width:100%;min-height:126px;font-size:clamp(1.55rem,3.2vw,2rem);display:flex;align-items:center;justify-content:center;text-align:center;padding:18px 24px}
+      .rr49-primary .rr48-main-btn .rr48-icon,.rr49-primary .rr48-main-btn .rr48-arrow{display:none!important}
       .rr49-secondary{width:min(720px,100%);margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:14px}
-      .rr49-secondary-btn{min-height:88px;border:0;border-radius:20px;padding:16px 20px;display:grid;grid-template-columns:48px 1fr 24px;align-items:center;text-align:left;color:#fff;font-weight:950;font-size:clamp(1.05rem,2.1vw,1.35rem);box-shadow:var(--shadow)}
-      .rr49-secondary-btn .rr49-icon{font-size:1.85rem;text-align:center}.rr49-secondary-btn .rr49-arrow{text-align:right;font-size:1.7rem}
+      .rr49-secondary-btn{min-height:88px;border:0;border-radius:20px;padding:16px 20px;display:flex;align-items:center;justify-content:center;text-align:center;color:#fff;font-weight:950;font-size:clamp(1.05rem,2.1vw,1.35rem);box-shadow:var(--shadow)}
       .rr49-roost{background:linear-gradient(135deg,#9b5d31,var(--rrbrown))}
       .rr49-comment{background:linear-gradient(135deg,#b58b55,#9b7446)}
       .rr49-hidden{display:none!important}
@@ -45,6 +45,7 @@
     if(!home||!main||home.dataset.rr49Clean==='1')return false;
     const start=findAction('start shopping',main);
     if(!start)return false;
+    start.innerHTML='<span>START SHOPPING</span>';
     const pickup=findAction('pick up',main);
     const cartons=findAction('return egg',main);
     const cash=home.querySelector('.rr48-cash-note');
@@ -64,9 +65,9 @@
     const secondary=document.createElement('div');secondary.className='rr49-secondary';
 
     const roost=document.createElement('button');roost.type='button';roost.className='rr49-secondary-btn rr49-roost';
-    roost.innerHTML='<span class="rr49-icon">🐓</span><span>MY ROOST</span><span class="rr49-arrow">›</span>';roost.onclick=openRoost;
+    roost.textContent='MY ROOST';roost.onclick=openRoost;
     const comment=document.createElement('button');comment.type='button';comment.className='rr49-secondary-btn rr49-comment';
-    comment.innerHTML='<span class="rr49-icon">✎</span><span>ADD COMMENT</span><span class="rr49-arrow">›</span>';comment.onclick=openComment;
+    comment.textContent='ADD COMMENT';comment.onclick=openComment;
     secondary.append(roost,comment);main.append(primary,secondary);
     home.dataset.rr49Clean='1';
     return true;
