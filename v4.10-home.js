@@ -99,7 +99,7 @@
     o.id='rr410CommentOverlay';
     o.className='overlay hidden';
     o.innerHTML=`<div class="modal rr410-modal">
-      <div class="rr410-modal-head"><div><h2>Leave Us a Comment</h2><div class="rsub">We'd love to hear from you.</div></div><button class="btn ghost" id="rr410CloseComment">Close</button></div>
+      <div class="rr410-modal-head"><div><h2>Leave Us a Comment</h2></div><button class="btn ghost" id="rr410CloseComment">Close</button></div>
       <div class="rr410-comment-form"><input id="rr410CommentName" placeholder="Your name (optional)"><textarea id="rr410CommentText" placeholder="Type your comment here..."></textarea><button class="btn primary wide" id="rr410SubmitComment">SUBMIT COMMENT</button></div>
     </div>`;
     document.body.appendChild(o);
@@ -156,8 +156,22 @@
     list.innerHTML=arr.length?'<div class="rr410-comment-list">'+arr.slice(0,50).map(x=>`<div class="rr410-comment-row"><strong>${esc(x.name||'Anonymous')}</strong><div class="rr410-comment-meta">${new Date(x.date).toLocaleString()}</div><p>${esc(x.text)}</p></div>`).join('')+'</div>':'<div class="empty">No customer comments yet.</div>';
   }
 
+  function removeFillerCopy(){
+    const phrases=new Set([
+      'what would you like to do?',
+      'what would you like to do',
+      'choose what you would like to do',
+      'please choose an option'
+    ]);
+    document.querySelectorAll('#kioskHome p,#kioskHome .hint,#kioskHome .rsub,#kioskHome div').forEach(el=>{
+      if(el.children.length)return;
+      const t=norm(el.textContent);
+      if(phrases.has(t))el.remove();
+    });
+  }
+
   function apply(){
-    styles();cleanHome();ensureCommentOverlay();renderCommentAdmin();
+    styles();cleanHome();removeFillerCopy();ensureCommentOverlay();renderCommentAdmin();
     const prior=window.renderDashboard;
     if(typeof prior==='function'&&!prior.__rr410Comments){
       const wrapped=function(){prior();renderCommentAdmin()};
