@@ -161,13 +161,14 @@
     o.innerHTML=`<div class="modal rr-roost-about">
       <img src="assets/rise-roost-logo.webp?v=4.10.2" alt="Rise & Roost">
       <h2>Welcome to The Roost</h2>
-      <p>The Roost is our simple member program for Rise & Roost customers. Joining only takes your name and phone number.</p>
+      <p>The Roost is our simple member program for Rise & Roost customers.</p>
       <div class="rr-roost-about-points">
+        <div class="rr-roost-about-point">Keep up with special items, limited products, seasonal offerings, and sales.</div>
         <div class="rr-roost-about-point">Your purchases stay connected to your account.</div>
         <div class="rr-roost-about-point">Return reusable egg cartons, jars, and bottles to earn Roost Credits.</div>
         <div class="rr-roost-about-point">View your purchase history, returns, credits, and pickup orders anytime.</div>
       </div>
-      <p>No app, card, or password needed — just your phone number.</p>
+      <p>Joining only takes your name and phone number. No app, card, or password needed.</p>
       <button class="btn primary wide rr-roost-about-close" id="rrRoostAboutClose">GOT IT</button>
     </div>`;
     document.body.appendChild(o);
