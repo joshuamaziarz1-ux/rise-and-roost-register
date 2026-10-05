@@ -127,7 +127,7 @@
   function ensureOverlay(){
     if(document.getElementById('rrRoostV2Overlay'))return;
     const o=document.createElement('div');o.id='rrRoostV2Overlay';o.className='overlay hidden rr-roost-overlay';
-    o.innerHTML=`<div class="modal"><div class="rr-roost-head"><div><h2 id="rrRoostTitle">The Roost</h2><div class="rsub" id="rrRoostSub">Sign in with your phone number</div></div><button class="btn ghost" id="rrRoostClose">Close</button></div><div id="rrRoostBody"></div></div>`;
+    o.innerHTML=`<div class="modal"><div class="rr-roost-head"><div><h2 id="rrRoostTitle">The Roost</h2><div class="rsub" id="rrRoostSub"></div></div><button class="btn ghost" id="rrRoostClose">Close</button></div><div id="rrRoostBody"></div></div>`;
     document.body.appendChild(o);
     document.getElementById('rrRoostClose').onclick=closeRoost;
     o.addEventListener('click',e=>{if(e.target===o)closeRoost()});
@@ -166,7 +166,7 @@
 
   function renderAuth(){
     document.getElementById('rrRoostTitle').textContent='The Roost';
-    document.getElementById('rrRoostSub').textContent='Sign in with the phone number on your account';
+    document.getElementById('rrRoostSub').textContent='';
     const body=document.getElementById('rrRoostBody');
     body.innerHTML=`<div class="rr-roost-auth">
       <div class="rr-roost-field"><label>Phone Number</label><input id="rrPhoneSignIn" type="tel" inputmode="tel" autocomplete="tel" placeholder="(260) 555-1234"></div>
@@ -200,7 +200,7 @@
 
   function renderSignup(){
     document.getElementById('rrRoostTitle').textContent='Join The Roost';
-    document.getElementById('rrRoostSub').textContent='Just your name and phone number';
+    document.getElementById('rrRoostSub').textContent='';
     const body=document.getElementById('rrRoostBody');
     body.innerHTML=`<div class="rr-roost-auth">
       <div class="rr-roost-field"><label>Name</label><input id="rrJoinName" autocomplete="name" placeholder="Your name"></div>
@@ -267,13 +267,13 @@
       return;
     }
     b.classList.remove('rr-guest');
-    b.innerHTML=`<div><strong>Welcome, ${esc(c.name)}</strong><div class="rsub">Your purchases and returns will be saved to My Roost.</div></div><button class="btn primary" id="rrShopRoostBtn">MY ROOST</button>`;
+    b.innerHTML=`<div><strong>Welcome, ${esc(c.name)}</strong></div><button class="btn primary" id="rrShopRoostBtn">MY ROOST</button>`;
     document.getElementById('rrShopRoostBtn').onclick=openRoost;
   }
 
   function renderPortal(c){
     document.getElementById('rrRoostTitle').textContent='My Roost';
-    document.getElementById('rrRoostSub').textContent=`Welcome, ${c.name}`;
+    document.getElementById('rrRoostSub').textContent='';
     const body=document.getElementById('rrRoostBody');
     body.innerHTML=`<div class="rr-roost-grid">
       <section class="rr-roost-section">
@@ -287,7 +287,7 @@
         <h3>Returns & Credits</h3>
         <div class="rsub">Available Roost Credits</div>
         <div class="rr-roost-credit" id="rrCreditCount">${credits(c)}</div>
-        <div class="rr-session-note">Return reusable items below. Each listed item earns the credit shown.</div>
+        
         <div id="rrReturnList" class="rr-return-list" style="margin-top:12px"></div>
         <button class="btn primary wide" id="rrSubmitReturns" style="margin-top:12px">ADD RETURNS</button>
       </section>
@@ -297,7 +297,7 @@
       </section>
       <section class="rr-roost-section">
         <h3>Session</h3>
-        <p class="hint">For privacy, My Roost signs out automatically after 2 minutes with no activity. Completing a purchase also signs you out.</p>
+        <p class="hint">Auto sign-out after 2 minutes of inactivity.</p>
         <button class="btn danger wide" id="rrLogout">LOG OUT</button>
       </section>
       <section class="rr-roost-section rr-history">
