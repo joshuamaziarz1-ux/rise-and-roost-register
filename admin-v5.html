@@ -35,7 +35,7 @@ body{background:#f4efe5}
 <section class="admin hidden" id="adminScreen">
 <div class="admin-top"><div><div class="logo">Store Admin</div><div class="sub">Rise & Roost Admin v5.0</div></div><button class="btn" id="exitAdmin">Back to Store</button></div>
 <div class="admin-wrap">
-<div class="tabs"><button class="btn tab active" data-tab="dashboard">Dashboard</button><button class="btn tab" data-tab="items">Items & Vendors</button><button class="btn tab" data-tab="pickups">Pickup Orders</button><button class="btn tab" data-tab="customers">Roost Club</button><button class="btn tab" data-tab="sales">Sales & Vendors</button><button class="btn tab" data-tab="inventory">Inventory History</button><button class="btn tab" data-tab="settings">Settings & Backup</button></div>
+<div class="tabs"><button class="btn tab active" data-tab="dashboard">Dashboard</button><button class="btn tab" data-tab="items">Items & Vendors</button><button class="btn tab" data-tab="pickups">Pickup Orders</button><button class="btn tab" data-tab="customers">The Roost</button><button class="btn tab" data-tab="sales">Sales & Vendors</button><button class="btn tab" data-tab="inventory">Inventory History</button><button class="btn tab" data-tab="settings">Settings & Backup</button></div>
 
 <div id="dashboardTab">
 <div class="stats"><div class="card stat"><label>Sales Today</label><strong id="dashSalesToday">$0.00</strong></div><div class="card stat"><label>Items Sold Today</label><strong id="dashItemsToday">0</strong></div><div class="card stat"><label>Cash Expected Today</label><strong id="dashCashToday">$0.00</strong></div><div class="card stat"><label>Low / Sold Out</label><strong id="dashLowStock">0</strong></div></div>
@@ -61,12 +61,12 @@ body{background:#f4efe5}
 </div>
 
 <div id="customersTab" class="hidden">
-<div class="stats"><div class="card stat"><label>Regular Customers</label><strong id="cartonMembersAdmin">0</strong></div><div class="card stat"><label>Cartons Returned Today</label><strong id="cartonTodayAdmin">0</strong></div><div class="card stat"><label>Total Cartons Returned</label><strong id="cartonTotalAdmin">0</strong></div><div class="card stat"><label>Free Dozens Redeemed</label><strong id="cartonRewardsAdmin">0</strong></div></div>
-<div class="card section"><div class="section-head"><h2>Carton Club Settings</h2></div><div class="form two"><div class="field"><label>Cartons needed for 1 free dozen</label><input id="cartonThreshold" type="number" min="1" step="1" value="12"></div><div class="field"><label>Egg item used for the free dozen</label><select id="cartonRewardItem"></select></div></div><button class="btn primary" id="saveCartonSettings" style="margin-top:10px">Save Carton Club Settings</button></div>
-<div class="card section"><div class="section-head"><h2>Add Regular Customer</h2></div><div class="form" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto"><div class="field"><label>Customer name</label><input id="cartonCustomerName" placeholder="Customer name"></div><div class="field"><label>Phone (optional)</label><input id="cartonCustomerPhone" type="tel" placeholder="Optional"></div><button class="btn primary" id="addCartonCustomer">Add Customer</button></div></div>
-<div class="card section"><div class="section-head"><h2>Regular Customers</h2></div><div id="cartonCustomerList" class="list"></div></div>
-<div class="card section"><div class="section-head"><h2>Carton Return History</h2></div><div id="cartonHistory"></div></div>
-<div class="card section"><div class="section-head"><h2>Free Dozen Reward History</h2></div><div id="cartonRewardHistory"></div></div>
+<div class="stats"><div class="card stat"><label>Roost Members</label><strong id="cartonMembersAdmin">0</strong></div><div class="card stat"><label>Cartons Returned Today</label><strong id="cartonTodayAdmin">0</strong></div><div class="card stat"><label>Total Cartons Returned</label><strong id="cartonTotalAdmin">0</strong></div><div class="card stat"><label>Free Dozens Redeemed</label><strong id="cartonRewardsAdmin">0</strong></div></div>
+<div class="card section"><div class="section-head"><h2>The Roost Settings</h2></div><div class="form two"><div class="field"><label>Cartons needed for 1 free dozen</label><input id="cartonThreshold" type="number" min="1" step="1" value="12"></div><div class="field"><label>Egg item used for the free dozen</label><select id="cartonRewardItem"></select></div></div><button class="btn primary" id="saveCartonSettings" style="margin-top:10px">Save The Roost Settings</button></div>
+<div class="card section"><div class="section-head"><h2>Add Roost Member</h2></div><div class="form" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto"><div class="field"><label>Customer name</label><input id="cartonCustomerName" placeholder="Customer name"></div><div class="field"><label>Phone (optional)</label><input id="cartonCustomerPhone" type="tel" placeholder="Optional"></div><button class="btn primary" id="addCartonCustomer">Add Customer</button></div></div>
+<div class="card section"><div class="section-head"><h2>Roost Members</h2></div><div id="cartonCustomerList" class="list"></div></div>
+<div class="card section"><div class="section-head"><h2>Return History</h2></div><div id="cartonHistory"></div></div>
+<div class="card section"><div class="section-head"><h2>Roost Reward History</h2></div><div id="cartonRewardHistory"></div></div>
 </div>
 
 <div id="salesTab" class="hidden">
@@ -80,7 +80,7 @@ body{background:#f4efe5}
 
 <div id="settingsTab" class="hidden">
 <div class="card section"><div class="section-head"><h2>Admin PIN</h2></div><p class="hint">Customers cannot access store management without the PIN.</p><button class="btn" id="changePin">Change Admin PIN</button></div>
-<div class="card section"><div class="section-head"><h2>Backup & Restore</h2></div><p class="hint">Export a backup regularly. It includes vendors, products, inventory, pickup orders, Roost Club members, carton credits and history, sales, and inventory history.</p><div class="backup-box"><button class="btn primary" id="exportBackup">Export Backup</button><input id="importBackupFile" type="file" accept="application/json,.json"><button class="btn" id="importBackup">Import Backup</button></div></div>
+<div class="card section"><div class="section-head"><h2>Backup & Restore</h2></div><p class="hint">Export a backup regularly. It includes vendors, products, inventory, pickup orders, The Roost members, carton credits and history, sales, and inventory history.</p><div class="backup-box"><button class="btn primary" id="exportBackup">Export Backup</button><input id="importBackupFile" type="file" accept="application/json,.json"><button class="btn" id="importBackup">Import Backup</button></div></div>
 <div class="card section danger-zone"><div class="section-head"><h2>Version</h2></div><strong>Rise & Roost Admin v5.0</strong><p class="hint">Data is saved on this device in the browser.</p></div>
 </div>
 </div>
