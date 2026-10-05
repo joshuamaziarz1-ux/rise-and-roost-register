@@ -11,10 +11,12 @@
     s.textContent=`
       #shopView .shop > .hint,
       #rrShopMemberBar .rsub{
-        font-size:.98rem;
-        font-weight:600;
-        line-height:1.35;
-        color:#6b5847;
+        font-family:inherit;
+        font-size:.9rem;
+        font-weight:750;
+        line-height:1.3;
+        color:var(--muted);
+        letter-spacing:0;
       }
       #rrShopMemberBar{
         margin:0 0 16px!important;
