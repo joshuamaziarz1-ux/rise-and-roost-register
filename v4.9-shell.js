@@ -8,7 +8,7 @@
     const id=sessionStorage.getItem(MEMBER_KEY);
     return (Array.isArray(window.data?.customers)?window.data.customers:[]).find(c=>c.id===id)||null;
   };
-  const escText=s=>String(s??'');
+  const htmlEscape=s=>String(s??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 
   function removeLegacy(){
     ['memberGlobalSession','memberCheckin','memberShopBanner','roostHub','joinView','myRoostView','feedbackView'].forEach(id=>{
@@ -47,9 +47,13 @@
     bar.style.display='flex';
 
     const c=member();
+    const state=c?'member:'+c.id:'guest';
     if(c){
       bar.classList.remove('rr-guest');
-      bar.innerHTML='<div><strong>Welcome, '+escText(c.name)+'</strong><div class="rsub">Your purchases and returns will be saved to My Roost.</div></div><button class="btn primary" id="rrShopRoostBtn">MY ROOST</button>';
+      if(bar.dataset.state!==state){
+        bar.innerHTML='<div><strong>Welcome, '+htmlEscape(c.name)+'</strong><div class="rsub">Your purchases and returns will be saved to My Roost.</div></div><button class="btn primary" id="rrShopRoostBtn">MY ROOST</button>';
+        bar.dataset.state=state;
+      }
       bar.querySelector('#rrShopRoostBtn').onclick=()=>{
         const homeRoost=[...document.querySelectorAll('#kioskHome button')].find(b=>b.textContent.trim().toUpperCase()==='MY ROOST');
         if(homeRoost)homeRoost.click();
@@ -57,7 +61,10 @@
     }else{
       sessionStorage.setItem(GUEST_KEY,'1');
       bar.classList.add('rr-guest');
-      bar.innerHTML='<div><strong>Welcome, Guest</strong><div class="rsub">Join My Roost to save your purchases and earn return credits.</div></div><button class="btn" id="rrShopJoinBtn">JOIN MY ROOST</button>';
+      if(bar.dataset.state!==state){
+        bar.innerHTML='<div><strong>Welcome, Guest</strong><div class="rsub">Join My Roost to save your purchases and earn return credits.</div></div><button class="btn" id="rrShopJoinBtn">JOIN MY ROOST</button>';
+        bar.dataset.state=state;
+      }
       bar.querySelector('#rrShopJoinBtn').onclick=openNewSignup;
     }
 
@@ -83,7 +90,7 @@
   function safeLogout(){
     sessionStorage.removeItem(MEMBER_KEY);
     sessionStorage.setItem(GUEST_KEY,'1');
-    try{window.cart={};window.renderCart?.()}catch(e){}
+    try{cart={};renderCart()}catch(e){}
     showNewHome();
   }
 
