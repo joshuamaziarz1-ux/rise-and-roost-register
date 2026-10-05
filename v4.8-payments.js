@@ -28,7 +28,7 @@
     const o=document.getElementById('payOverlay'); if(!o)return;
     o.innerHTML=`<div class="modal rr48-payment-modal">
       <div class="rr48-pay-logo"><img src="assets/rise-roost-logo.webp?v=4.8.6" alt="Rise & Roost"></div>
-      <div class="rr48-payment-question">HOW WOULD YOU LIKE TO PAY?</div>
+      <div class="rr48-payment-question">CHOOSE PAYMENT</div>
       <div class="big rr48-pay-total">${money(total())}</div>
       <div class="rr48-pay-methods">
         <button class="rr48-pay-method cash" data-method="cash"><span>💵</span>CASH</button>
