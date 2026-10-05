@@ -328,8 +328,9 @@
 
   function setup(){
     ensureData();styles();ensureGuest();ensureOverlay();
-    document.getElementById('memberCheckin')?.classList.add('hidden');
-    document.getElementById('memberShopBanner')?.classList.add('hidden');
+    document.getElementById('memberCheckin')?.remove();
+    document.getElementById('memberShopBanner')?.remove();
+    document.getElementById('cartonView')?.remove();
     wireHome();renderShopBanner();
     const shop=document.getElementById('goShop');
     if(shop&&!shop.dataset.rrGuestReady){
