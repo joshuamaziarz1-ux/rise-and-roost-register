@@ -107,6 +107,9 @@
       .rr-pickup-meta strong{display:block;margin-top:2px}
       .rr-pickup-access{margin-top:10px;padding:10px 12px;border-radius:10px;background:#f7f3ea;font-weight:800}
       .rr-pickup-note{margin-top:8px}
+      .rr-pickup-heartnote{margin-top:10px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#faf7f0}
+      .rr-pickup-heartnote strong{display:block;margin-bottom:4px;color:#5d4a35}
+      .rr-pickup-heartnote p{margin:0;line-height:1.45;color:var(--muted);font-size:.92rem}
       @media(max-width:520px){.rr-pickup-meta{grid-template-columns:1fr}}
       .rr-session-note{font-size:.82rem;color:var(--muted);margin-top:10px}
       .rr-roost-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.rr-roost-tabs .btn{min-height:46px}
@@ -396,6 +399,10 @@
       </section>
       <section class="rr-roost-section">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><h3 style="margin:0">Pickup Orders</h3><span class="badge on">Live</span></div>
+        <div class="rr-pickup-heartnote">
+          <strong>A little note about pickups</strong>
+          <p>Rise &amp; Roost is meant to stay simple, self-serve, and first come, first served. We’re always happy to help when we can, and in special cases we may arrange a pickup ahead of time. Once we’ve approved a pickup for you, you’ll be able to choose from the available pickup times here in My Roost. Thank you for helping us keep the store simple and fair for everyone.</p>
+        </div>
         <div id="rrPickupList"></div>
       </section>
       <section class="rr-roost-section">
