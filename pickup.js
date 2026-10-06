@@ -1,5 +1,6 @@
 let rrSalesArchive={year:'',month:'',day:''};
 let rrInventoryArchive={year:'',month:'',day:''};
+let rrPickupEditItems=[];
 function pickupDraftAvailable(id){const i=item(id);const used=pickupDraft.filter(x=>x.itemId===id).reduce((s,x)=>s+x.qty,0);return Math.max(0,available(i)-used)}
 function addPickupLine(){const id=$('pickupItemSelect').value,qty=Math.floor(Number($('pickupQty').value));const i=item(id);if(!i||!Number.isFinite(qty)||qty<1)return alert('Choose an item and quantity.');const existing=pickupDraft.find(x=>x.itemId===id),current=existing?existing.qty:0;if(current+qty>available(i))return alert(`Only ${available(i)} of ${i.name} are available after other pickup reservations.`);if(existing)existing.qty+=qty;else pickupDraft.push({itemId:id,qty});$('pickupQty').value='1';renderPickupDraft()}
 function renderPickupDraft(){pickupDraft=pickupDraft.filter(x=>item(x.itemId)&&x.qty>0);$('pickupDraft').innerHTML=pickupDraft.length?pickupDraft.map(x=>{const i=item(x.itemId);return`<div class="draft-row"><div><strong>${esc(i.name)}</strong><div class="rsub">${esc(brand(i.brandId)?.name||'Unknown')} · ${money(i.price)} each</div></div><div><strong>× ${x.qty}</strong></div><button class="btn tiny danger" data-rdraft="${i.id}">Remove</button></div>`}).join(''):'<div class="empty" style="padding:16px">No items added to this pickup order yet.</div>';$('pickupDraft').querySelectorAll('[data-rdraft]').forEach(b=>b.onclick=()=>{pickupDraft=pickupDraft.filter(x=>x.itemId!==b.dataset.rdraft);renderPickupDraft()});$('pickupDraftTotal').textContent=money(pickupDraft.reduce((s,x)=>s+Number(item(x.itemId)?.price||0)*x.qty,0))}
@@ -53,17 +54,17 @@ function pickupEditAvailable(i,p){
 }
 function renderPickupEditItems(p){
   const box=$('pickupEditItems');if(!box)return;
-  const rows=(p._editItems||[]).filter(x=>Number(x.qty)>0);
+  const rows=(rrPickupEditItems||[]).filter(x=>Number(x.qty)>0);
   box.innerHTML=rows.length?rows.map(x=>{const i=item(x.itemId),max=i?pickupEditAvailable(i,p):Number(x.qty);return `<div class="draft-row"><div><strong>${esc(x.itemName)}</strong><div class="rsub">${esc(x.brandName||'Unknown')} · ${money(x.price)} each · max ${max}</div></div><div class="field" style="max-width:110px"><input type="number" min="1" max="${max}" step="1" value="${x.qty}" data-edit-pickup-qty="${x.itemId}"></div><button class="btn tiny danger" data-edit-pickup-remove="${x.itemId}">Remove</button></div>`}).join(''):'<div class="empty">No items in this pickup.</div>';
-  box.querySelectorAll('[data-edit-pickup-qty]').forEach(inp=>inp.onchange=()=>{const x=p._editItems.find(y=>y.itemId===inp.dataset.editPickupQty),i=item(x?.itemId);if(!x||!i)return;const max=pickupEditAvailable(i,p),q=Math.floor(Number(inp.value||0));x.qty=Math.max(1,Math.min(max,q||1));inp.value=x.qty;updatePickupEditTotal(p)});
-  box.querySelectorAll('[data-edit-pickup-remove]').forEach(b=>b.onclick=()=>{p._editItems=p._editItems.filter(x=>x.itemId!==b.dataset.editPickupRemove);renderPickupEditItems(p);updatePickupEditTotal(p)});
+  box.querySelectorAll('[data-edit-pickup-qty]').forEach(inp=>inp.onchange=()=>{const x=rrPickupEditItems.find(y=>y.itemId===inp.dataset.editPickupQty),i=item(x?.itemId);if(!x||!i)return;const max=pickupEditAvailable(i,p),q=Math.floor(Number(inp.value||0));x.qty=Math.max(1,Math.min(max,q||1));inp.value=x.qty;updatePickupEditTotal(p)});
+  box.querySelectorAll('[data-edit-pickup-remove]').forEach(b=>b.onclick=()=>{rrPickupEditItems=rrPickupEditItems.filter(x=>x.itemId!==b.dataset.editPickupRemove);renderPickupEditItems(p);updatePickupEditTotal(p)});
   updatePickupEditTotal(p);
 }
-function updatePickupEditTotal(p){const el=$('pickupEditTotal');if(el)el.textContent=money((p._editItems||[]).reduce((s,x)=>s+Number(x.price||0)*Number(x.qty||0),0))}
+function updatePickupEditTotal(p){const el=$('pickupEditTotal');if(el)el.textContent=money((rrPickupEditItems||[]).reduce((s,x)=>s+Number(x.price||0)*Number(x.qty||0),0))}
 function openPickupEditor(id){
   const p=data.pickups.find(x=>x.id===id);if(!p||!['ready','waiting'].includes(p.status))return;
   const o=ensurePickupEditor(),body=$('pickupEditBody');
-  p._editItems=(p.items||[]).map(x=>({...x}));
+  rrPickupEditItems=(p.items||[]).map(x=>({...x}));
   const slots=pickupAvailableSlots(45,p.id);
   const current=p.scheduledAt?{value:p.scheduledAt,label:pickupDateTimeLabel(p.scheduledAt)}:null;
   const slotRows=current&&!slots.some(x=>new Date(x.value).getTime()===new Date(current.value).getTime())?[current,...slots]:slots;
@@ -83,12 +84,12 @@ function openPickupEditor(id){
     <button class="btn" id="pickupEditAddBtn">Add Item</button>
   </div>`;
   renderPickupEditItems(p);
-  $('pickupEditAddBtn').onclick=()=>{const iid=$('pickupEditAddItem').value,i=item(iid),qty=Math.floor(Number($('pickupEditAddQty').value||0));if(!i||qty<1)return;const existing=p._editItems.find(x=>x.itemId===iid),max=pickupEditAvailable(i,p);const next=(existing?Number(existing.qty):0)+qty;if(next>max)return alert(`Only ${max} of ${i.name} can be reserved for this order.`);if(existing)existing.qty=next;else p._editItems.push({itemId:i.id,itemName:i.name,brandId:i.brandId,brandName:brand(i.brandId)?.name||'Unknown',price:Number(i.price),qty});$('pickupEditAddQty').value='1';renderPickupEditItems(p)};
+  $('pickupEditAddBtn').onclick=()=>{const iid=$('pickupEditAddItem').value,i=item(iid),qty=Math.floor(Number($('pickupEditAddQty').value||0));if(!i||qty<1)return;const existing=rrPickupEditItems.find(x=>x.itemId===iid),max=pickupEditAvailable(i,p);const next=(existing?Number(existing.qty):0)+qty;if(next>max)return alert(`Only ${max} of ${i.name} can be reserved for this order.`);if(existing)existing.qty=next;else rrPickupEditItems.push({itemId:i.id,itemName:i.name,brandId:i.brandId,brandName:brand(i.brandId)?.name||'Unknown',price:Number(i.price),qty});$('pickupEditAddQty').value='1';renderPickupEditItems(p)};
   $('pickupEditSave').onclick=()=>savePickupEdits(p);
   o.classList.remove('hidden');
 }
 function savePickupEdits(p){
-  const name=$('pickupEditName').value.trim(),phone=$('pickupEditPhone').value.trim(),slot=$('pickupEditSlot').value,pin=$('pickupEditPin').value.trim(),items=(p._editItems||[]).filter(x=>Number(x.qty)>0);
+  const name=$('pickupEditName').value.trim(),phone=$('pickupEditPhone').value.trim(),slot=$('pickupEditSlot').value,pin=$('pickupEditPin').value.trim(),items=(rrPickupEditItems||[]).filter(x=>Number(x.qty)>0);
   if(!name)return alert('Enter the customer name.');
   if(String(phone).replace(/\D/g,'').length<7)return alert('Enter a valid phone number.');
   if(pin&&!/^\d{4,8}$/.test(pin))return alert('Door PIN should be 4 to 8 digits.');
@@ -97,7 +98,7 @@ function savePickupEdits(p){
   const oldPin=p.doorPin||'',oldSlot=p.scheduledAt||'';
   p.customerName=name;p.phone=phone;p.scheduledAt=slot||null;p.doorPin=pin;p.status=$('pickupEditStatus').value;p.paid=$('pickupEditPaid').value==='yes';p.note=$('pickupEditNote').value.trim();p.items=items.map(x=>({...x,qty:Number(x.qty)}));p.updatedAt=new Date().toISOString();
   if(oldPin!==p.doorPin||oldSlot!==p.scheduledAt)p.pinTextedAt=null;
-  delete p._editItems;
+  rrPickupEditItems=[];
   $('pickupEditOverlay').classList.add('hidden');
   save();
 }
