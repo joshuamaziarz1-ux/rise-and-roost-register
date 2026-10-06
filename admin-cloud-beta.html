@@ -23,6 +23,31 @@ body{background:#f4efe5}
 .rr-item-vendor-open-head strong{font-size:1.08rem}
 .rr-item-vendor-open-head span{color:var(--muted);font-weight:800}
 @media(max-width:650px){.rr-item-vendor-letter-group{grid-template-columns:30px 1fr}.rr-item-vendor-buttons{grid-template-columns:1fr}.rr-item-vendor-open-head{align-items:flex-start;flex-direction:column}}
+
+.rr-archive{display:grid;gap:12px}
+.rr-archive-level{display:grid;gap:8px}
+.rr-archive-level>strong{font-size:.85rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.rr-archive-buttons{display:flex;flex-wrap:wrap;gap:8px}
+.rr-archive-btn{border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 14px;font-weight:950;min-width:78px}
+.rr-archive-btn.active{background:#526b50;color:#fff;border-color:#526b50}
+.rr-archive-table{margin-top:4px}
+.rr-sales-insights{margin-bottom:16px}
+.rr-insight-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.rr-insight-stats>div{border:1px solid var(--line);border-radius:13px;padding:12px;background:#faf8f3}
+.rr-insight-stats span{display:block;font-size:.8rem;color:var(--muted);font-weight:850}
+.rr-insight-stats strong{display:block;font-size:1.25rem;margin-top:4px}
+.rr-insight-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+.rr-insight-panel{border:1px solid var(--line);border-radius:14px;padding:14px;background:#fff}
+.rr-insight-panel h3,.rr-smart-summary h3{margin:0 0 10px}
+.rr-bar-row{display:grid;gap:6px;margin:10px 0}
+.rr-bar-label{display:flex;justify-content:space-between;gap:10px;font-size:.9rem}
+.rr-bar-label span{color:var(--muted)}
+.rr-bar-track{height:9px;background:#eee7da;border-radius:999px;overflow:hidden}
+.rr-bar-track span{display:block;height:100%;background:#526b50;border-radius:999px}
+.rr-smart-summary{margin-top:14px;border:1px solid var(--line);border-radius:14px;padding:14px;background:#f7f3ea}
+.rr-smart-summary ul{margin:0;padding-left:20px;display:grid;gap:6px}
+@media(max-width:760px){.rr-insight-stats,.rr-insight-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.rr-insight-stats,.rr-insight-grid{grid-template-columns:1fr}}
 </style></head>
 <body>
 <header class="top"><div><div class="logo">Rise & Roost</div><div class="sub">Self-Serve Market</div></div><button class="btn ghost" id="adminBtn">Admin</button></header>
@@ -48,7 +73,7 @@ body{background:#f4efe5}
 <section class="admin hidden" id="adminScreen">
 <div class="admin-top"><div><div class="logo">Store Admin</div><div class="sub">Rise & Roost Admin v5.0.7</div></div><button class="btn" id="exitAdmin">Back to Store</button></div>
 <div class="admin-wrap">
-<div class="tabs"><button class="btn tab active" data-tab="dashboard">Dashboard</button><button class="btn tab" data-tab="items">Items & Vendors</button><button class="btn tab" data-tab="pickups">Pickup Orders</button><button class="btn tab" data-tab="customers">The Roost</button><button class="btn tab" data-tab="sales">Sales & Vendors</button><button class="btn tab" data-tab="inventory">Inventory History</button><button class="btn tab" data-tab="settings">Settings & Backup</button></div>
+<div class="tabs"><button class="btn tab active" data-tab="dashboard">Dashboard</button><button class="btn tab" data-tab="items">Items & Vendors</button><button class="btn tab" data-tab="pickups">Pickup Orders</button><button class="btn tab" data-tab="customers">The Roost</button><button class="btn tab" data-tab="sales">Sales & Vendors</button><button class="btn tab" data-tab="inventory">Inventory History</button><button class="btn tab" data-tab="comments">Comments</button><button class="btn tab" data-tab="settings">Settings & Backup</button></div>
 
 <div id="dashboardTab">
 <div class="stats"><div class="card stat"><label>Sales Today</label><strong id="dashSalesToday">$0.00</strong></div><div class="card stat"><label>Items Sold Today</label><strong id="dashItemsToday">0</strong></div><div class="card stat"><label>Cash Expected Today</label><strong id="dashCashToday">$0.00</strong></div><div class="card stat"><label>Low / Sold Out</label><strong id="dashLowStock">0</strong></div></div>
@@ -91,6 +116,8 @@ body{background:#f4efe5}
 <div class="card section"><div class="section-head"><h2>Inventory Adjustment History</h2></div><div id="inventoryHistory"></div></div>
 </div>
 
+<div id="commentsTab" class="hidden"><div class="card section"><div class="section-head"><h2>Customer Comments</h2></div><div id="rr410CommentList"></div></div></div>
+
 <div id="settingsTab" class="hidden">
 <div class="card section"><div class="section-head"><h2>Admin PIN</h2></div><p class="hint">Customers cannot access store management without the PIN.</p><button class="btn" id="changePin">Change Admin PIN</button></div>
 <div class="card section"><div class="section-head"><h2>Backup & Restore</h2></div><p class="hint">Export a backup regularly. It includes vendors, products, inventory, pickup orders, The Roost members, carton credits and history, sales, and inventory history.</p><div class="backup-box"><button class="btn primary" id="exportBackup">Export Backup</button><input id="importBackupFile" type="file" accept="application/json,.json"><button class="btn" id="importBackup">Import Backup</button></div></div>
@@ -100,14 +127,15 @@ body{background:#f4efe5}
 </section>
 <script src="core.js?v=4.7.2"></script>
 <script src="admin.js?v=4.7.3"></script>
-<script src="pickup.js?v=4.7.2"></script>
-<script src="ui.js?v=4.7.2"></script>
+<script src="pickup.js?v=4.7.3"></script>
+<script src="ui.js?v=4.7.3"></script>
 <script src="customers.js?v=4.7.2"></script>
 <script src="v4.js?v=4.7.3"></script>
 <script src="v4.8-payments-cloud.js?v=5.1.0"></script>
 <script src="v5-admin-shell.js?v=5.0.3"></script>
+<script src="v4.10-home.js?v=4.10.4"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="rise-roost-cloud.js?v=5.1.4"></script>
+<script src="rise-roost-cloud.js?v=5.1.5"></script>
 <script src="roost-credit-program.js?v=1.0.6"></script>
 </body>
 </html>
