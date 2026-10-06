@@ -424,25 +424,46 @@
     document.getElementById('rrSubmitReturns').onclick=()=>submitReturns(c);
   }
   function changeReturnQty(id,d){qtyState[id]=Math.max(0,Number(qtyState[id]||0)+d);const el=document.getElementById('rrRetQty_'+id);if(el)el.textContent=qtyState[id];resetTimer()}
-  function submitReturns(c){
+  async function submitReturns(c){
     const rows=data.roostReturnTypes.filter(t=>t.active!==false&&Number(qtyState[t.id]||0)>0);
     if(!rows.length){showRoostNotice('Nothing Selected','Choose at least one item you are returning.','warn');return}
+    const submit=document.getElementById('rrSubmitReturns');
+    if(submit){submit.disabled=true;submit.textContent='SAVING RETURNS…'}
     let totalCredits=0,totalQty=0;
-    rows.forEach(t=>{
-      const qty=Number(qtyState[t.id]||0),earned=qty*Number(t.credit||1);
-      totalQty+=qty;totalCredits+=earned;
-      data.roostReturns.unshift({id:uid('return'),date:new Date().toISOString(),customerId:c.id,customerName:c.name,typeId:t.id,typeName:t.name,qty,credits:earned});
-      qtyState[t.id]=0;
-    });
-    c.roostCredits=credits(c)+totalCredits;
-    c.cartonCredits=c.roostCredits;
-    c.updatedAt=new Date().toISOString();
-    if(data.roostReturns.length>2500)data.roostReturns.length=2500;
-    persist();
-    document.getElementById('rrCreditCount').textContent=c.roostCredits;
-    renderReturns(c);renderHistory(c);
-    showRoostNotice('Returns Added',`${totalQty} return${totalQty===1?'':'s'} added. You earned ${totalCredits} Roost Credit${totalCredits===1?'':'s'}.`,'success');
-    resetTimer();
+    try{
+      if(window.RRCloud&&typeof window.RRCloud.api==='function'){
+        for(const t of rows){
+          const qty=Number(qtyState[t.id]||0);
+          const out=await window.RRCloud.api('roost_return',{customerId:c.id,phone:phoneDigits(c.phone),typeId:t.id,qty});
+          const earned=Number(out?.result?.creditsEarned ?? (qty*Number(t.credit||0)));
+          totalQty+=qty;totalCredits+=earned;
+          c.roostCredits=Number(out?.result?.roostCredits ?? (credits(c)+earned));
+          c.cartonCredits=c.roostCredits;
+          data.roostReturns.unshift({id:uid('return'),date:new Date().toISOString(),customerId:c.id,customerName:c.name,typeId:t.id,typeName:t.name,qty,credits:earned});
+          qtyState[t.id]=0;
+        }
+      }else{
+        rows.forEach(t=>{
+          const qty=Number(qtyState[t.id]||0),earned=qty*Number(t.credit||0);
+          totalQty+=qty;totalCredits+=earned;
+          data.roostReturns.unshift({id:uid('return'),date:new Date().toISOString(),customerId:c.id,customerName:c.name,typeId:t.id,typeName:t.name,qty,credits:earned});
+          qtyState[t.id]=0;
+        });
+        c.roostCredits=credits(c)+totalCredits;
+        c.cartonCredits=c.roostCredits;
+      }
+      c.updatedAt=new Date().toISOString();
+      if(data.roostReturns.length>2500)data.roostReturns.length=2500;
+      persist();
+      document.getElementById('rrCreditCount').textContent=c.roostCredits;
+      renderReturns(c);renderHistory(c);
+      showRoostNotice('Returns Added',`${totalQty} return${totalQty===1?'':'s'} added. You earned ${totalCredits} Roost Credit${totalCredits===1?'':'s'}.`,'success');
+      resetTimer();
+    }catch(e){
+      showRoostNotice('Could Not Save',(e&&e.message)||'Your returns could not be saved. Please ask Danielle for help.','warn');
+    }finally{
+      if(submit){submit.disabled=false;submit.textContent='ADD RETURNS'}
+    }
   }
 
   function renderPickups(c){
