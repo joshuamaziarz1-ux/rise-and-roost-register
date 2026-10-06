@@ -19,6 +19,7 @@
   let liveChannel=null;
   let liveTimer=null;
   let catalogRefreshing=false;
+  let memberRefreshing=false;
   let adminIgnoreRealtimeUntil=0;
   let basePersist=typeof persist==='function'?persist:null;
 
@@ -70,10 +71,10 @@
     publicCatalogRevision=Number(cat.revision||0);
     data.brands=Array.isArray(cat.brands)?cat.brands:[];
     data.items=Array.isArray(cat.items)?cat.items:[];
-    data.pickups=[];
+    const activeMemberId=sessionStorage.getItem('riseRoostActiveMemberV1')||sessionStorage.getItem('riseRoostTESTActiveMemberV1')||'';
+    if(!activeMemberId)data.pickups=[];
     data.sales=[];
     data.stockLog=[];
-    const activeMemberId=sessionStorage.getItem('riseRoostActiveMemberV1')||sessionStorage.getItem('riseRoostTESTActiveMemberV1')||'';
     data.customers=Array.isArray(data.customers)&&activeMemberId
       ? data.customers.filter(c=>c&&c.id===activeMemberId)
       : [];
@@ -108,6 +109,33 @@
     }finally{
       catalogRefreshing=false;
     }
+  }
+
+  async function refreshMemberAccount(){
+    if(memberRefreshing)return null;
+    const activeMemberId=sessionStorage.getItem('riseRoostActiveMemberV1')||sessionStorage.getItem('riseRoostTESTActiveMemberV1')||'';
+    if(!activeMemberId)return null;
+    const member=(Array.isArray(data.customers)?data.customers:[]).find(x=>x&&x.id===activeMemberId);
+    const phone=String(member?.phone||'').replace(/\D/g,'');
+    if(!member||phone.length<10)return null;
+    memberRefreshing=true;
+    try{
+      const out=await api('member_account',{customerId:activeMemberId,phone});
+      if(out.member)data.customers=[{...member,...out.member}];
+      data.pickups=Array.isArray(out.pickups)?out.pickups:[];
+      data.settings=data.settings&&typeof data.settings==='object'?data.settings:{};
+      data.settings.pickupPinLeadMinutes=Number(out.pinLeadMinutes||60);
+      if(basePersist)basePersist();
+      if(typeof window.RRRoostLiveRefresh==='function')window.RRRoostLiveRefresh();
+      return out;
+    }finally{
+      memberRefreshing=false;
+    }
+  }
+
+  async function refreshPublicState(){
+    await refreshCatalog();
+    await refreshMemberAccount();
   }
 
   async function checkout(method,entryList,opts={}){
@@ -284,7 +312,7 @@
           loadAdmin().then(()=>setSaveStatus('Saved · Live')).catch(console.error);
         },250);
       }else{
-        refreshCatalog().catch(console.error);
+        refreshPublicState().catch(console.error);
       }
     };
 
@@ -333,7 +361,7 @@
     setupPublicSignup();
     setupLiveUpdates();
 
-    refreshCatalog().catch(e=>{
+    refreshPublicState().catch(e=>{
       console.error(e);
       cloudBadge('Cloud unavailable — showing cached items');
       setTimeout(()=>cloudBadge('', 'hidden'),3500);
@@ -342,7 +370,7 @@
     // Realtime handles normal updates. This is only a fallback in case a
     // tablet temporarily loses its realtime connection.
     setInterval(()=>{
-      if(document.visibilityState==='visible')refreshCatalog().catch(()=>{});
+      if(document.visibilityState==='visible')refreshPublicState().catch(()=>{});
     },30000);
   }
 
@@ -514,7 +542,7 @@
       auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
     });
 
-    window.RRCloud={api,checkout,refreshCatalog,client,get revision(){return publicCatalogRevision}};
+    window.RRCloud={api,checkout,refreshCatalog,refreshMemberAccount,refreshPublicState,client,get revision(){return publicCatalogRevision}};
 
     if(isAdminPage)await setupAdmin();
     else setupPublic();
