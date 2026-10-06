@@ -48,6 +48,13 @@ body{background:#f4efe5}
 .rr-smart-summary ul{margin:0;padding-left:20px;display:grid;gap:6px}
 @media(max-width:760px){.rr-insight-stats,.rr-insight-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){.rr-insight-stats,.rr-insight-grid{grid-template-columns:1fr}}
+
+.pickup-schedule-grid{display:grid;gap:8px}
+.pickup-schedule-row{display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:center}
+.pickup-day-toggle{display:flex;align-items:center;gap:8px;min-height:44px}
+.pickup-schedule-row input[type="text"]{width:100%;min-height:44px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fff}
+.pickup-appt-row{align-items:flex-start}
+@media(max-width:650px){.pickup-schedule-row{grid-template-columns:1fr}.pickup-schedule-row input[type="text"]{margin-top:-4px}}
 </style></head>
 <body>
 <header class="top"><div><div class="logo">Rise & Roost</div><div class="sub">Self-Serve Market</div></div><button class="btn ghost" id="adminBtn">Admin</button></header>
@@ -90,8 +97,9 @@ body{background:#f4efe5}
 </div>
 
 <div id="pickupsTab" class="hidden">
+<div class="card section"><div class="section-head"><div><h2>Pickup Schedule</h2><div class="hint">Choose which days and times are available for pickup appointments.</div></div></div><div id="pickupScheduleSettings"></div></div>
 <div class="card section"><div class="section-head"><h2>Create Pickup Order</h2><span class="badge">Items are reserved immediately</span></div>
-<div class="form"><div class="field"><label>Customer name</label><input id="pickupName" placeholder="Customer name"></div><div class="field"><label>Phone (optional)</label><input id="pickupPhone" type="tel" placeholder="Optional"></div><div class="field"><label>Status</label><select id="pickupStatus"><option value="ready">Ready for Pickup</option><option value="waiting">Waiting</option></select></div><div class="field"><label>Payment</label><select id="pickupPaid"><option value="no">Not paid</option><option value="yes">Already paid</option></select></div></div>
+<div class="form"><div class="field"><label>Customer name</label><input id="pickupName" placeholder="Customer name"></div><div class="field"><label>Phone Number</label><input id="pickupPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Phone number" required></div><div class="field"><label>Pickup day & time</label><select id="pickupSlot"><option value="">Choose pickup day & time</option></select></div><div class="field"><label>Temporary door PIN</label><input id="pickupDoorPin" type="text" inputmode="numeric" maxlength="8" placeholder="4–8 digit PIN"></div><div class="field"><label>Status</label><select id="pickupStatus"><option value="waiting">Scheduled</option><option value="ready">Ready for Pickup</option></select></div><div class="field"><label>Payment</label><select id="pickupPaid"><option value="no">Not paid</option><option value="yes">Already paid</option></select></div></div>
 <div class="form" style="margin-top:10px"><div class="field"><label>Item</label><select id="pickupItemSelect"></select></div><div class="field"><label>Quantity</label><input id="pickupQty" type="number" min="1" step="1" value="1"></div><button class="btn" id="addPickupLine">Add to Pickup</button><div class="field"><label>Pickup note (optional)</label><input id="pickupNote" placeholder="Example: refrigerator shelf"></div></div>
 <div id="pickupDraft" class="draft-lines"></div><div class="total" style="margin-top:12px"><span>Pickup Total</span><span id="pickupDraftTotal">$0.00</span></div><button class="btn primary wide" id="createPickupBtn">Create Pickup Order</button></div>
 <div class="card section"><div class="section-head"><h2>Active Pickup Orders</h2></div><div id="activePickupList"></div></div>
@@ -127,7 +135,7 @@ body{background:#f4efe5}
 </section>
 <script src="core.js?v=4.7.2"></script>
 <script src="admin.js?v=4.7.3"></script>
-<script src="pickup.js?v=4.7.3"></script>
+<script src="pickup.js?v=4.8.0"></script>
 <script src="ui.js?v=4.7.3"></script>
 <script src="customers.js?v=4.7.2"></script>
 <script src="v4.js?v=4.7.3"></script>
@@ -135,7 +143,7 @@ body{background:#f4efe5}
 <script src="v5-admin-shell.js?v=5.0.3"></script>
 <script src="v4.10-home.js?v=4.10.5"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="rise-roost-cloud.js?v=5.1.5"></script>
+<script src="rise-roost-cloud.js?v=5.1.6"></script>
 <script src="roost-credit-program.js?v=1.0.6"></script>
 </body>
 </html>
