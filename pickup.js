@@ -64,7 +64,7 @@ function rrSalesInsights(){
       <div class="rr-insight-panel"><h3>Best Sellers</h3>${topItems.length?topItems.map(x=>`<div class="rr-bar-row"><div class="rr-bar-label"><strong>${esc(x.name)}</strong><span>${x.units} sold · ${money(x.sales)}</span></div><div class="rr-bar-track"><span style="width:${Math.max(4,(x.units/maxItem)*100)}%"></span></div></div>`).join(''):'<div class="empty">No sales yet.</div>'}</div>
       <div class="rr-insight-panel"><h3>Sales by Month</h3>${monthRows.length?monthRows.map(([m,v])=>{const d=new Date(m+'-01T12:00:00');return`<div class="rr-bar-row"><div class="rr-bar-label"><strong>${d.toLocaleDateString([],{month:'short',year:'numeric'})}</strong><span>${money(v)}</span></div><div class="rr-bar-track"><span style="width:${Math.max(4,(v/maxMonth)*100)}%"></span></div></div>`}).join(''):'<div class="empty">No monthly trend yet.</div>'}</div>
     </div>
-    <div class="rr-smart-summary"><h3>Rise & Roost Summary</h3><ul>${suggestions.map(s=>'<li>'+esc(s)+'</li>').join('')}</ul><div class="hint">Customer-feedback suggestions can be added once feedback is connected to the register.</div></div>`;
+    <div class="rr-smart-summary"><h3>Rise & Roost Summary</h3><ul>${suggestions.map(s=>'<li>'+esc(s)+'</li>').join('')}</ul><div class="hint">Customer comments are available in the Comments section.</div></div>`;
 }
 function renderSales(){
   const t={};data.sales.filter(s=>!s.voided).forEach(s=>s.items.forEach(i=>{const k=i.brandId||i.brandName;if(!t[k])t[k]={name:i.brandName,units:0,total:0};t[k].units+=Number(i.qty);t[k].total+=Number(i.price)*Number(i.qty)}));
@@ -96,7 +96,7 @@ function renderSales(){
   $('salesHistory').querySelectorAll('[data-sales-day]').forEach(b=>b.onclick=()=>{const v=b.dataset.salesDay;rrSalesArchive.day=rrSalesArchive.day===v?'':v;renderSales()});
   $('salesHistory').querySelectorAll('[data-void]').forEach(b=>b.onclick=()=>voidSale(b.dataset.void));
 }
-function voidSale(id){const s=data.sales.find(x=>x.id===id);if(!s||s.voided)return;if(!confirm(`Void this ${money(s.total)} sale?\n\nInventory will be added back.`))return;s.items.forEach(line=>{const i=item(line.itemId);if(i){i.stock+=Number(line.qty);logStock(i,Number(line.qty),`Voided sale ${s.id.slice(-5)}`)}});s.voided=true;s.voidedAt=new Date().toISOString()save()}
+function voidSale(id){const s=data.sales.find(x=>x.id===id);if(!s||s.voided)return;if(!confirm(`Void this ${money(s.total)} sale?\n\nInventory will be added back.`))return;s.items.forEach(line=>{const i=item(line.itemId);if(i){i.stock+=Number(line.qty);logStock(i,Number(line.qty),`Voided sale ${s.id.slice(-5)}`)}});s.voided=true;s.voidedAt=new Date().toISOString();save()}
 function renderInventoryHistory(){
   const all=[...(data.stockLog||[])].sort((a,b)=>new Date(b.date)-new Date(a.date));
   if(!all.length){$('inventoryHistory').innerHTML='<div class="empty">No inventory adjustments recorded yet.</div>';return}
