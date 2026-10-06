@@ -158,14 +158,17 @@
   }
 
   function renderCommentAdmin(){
-    const tab=document.getElementById('dashboardTab');if(!tab)return;
+    const tab=document.getElementById('commentsTab')||document.getElementById('dashboardTab');if(!tab)return;
     let card=document.getElementById('rr410CommentsAdmin');
-    if(!card){
-      card=document.createElement('div');card.id='rr410CommentsAdmin';card.className='card section';
-      card.innerHTML='<div class="section-head"><h2>Customer Comments</h2></div><div id="rr410CommentList"></div>';
-      tab.appendChild(card);
+    let list=document.getElementById('rr410CommentList');
+    if(!list){
+      if(!card){
+        card=document.createElement('div');card.id='rr410CommentsAdmin';card.className='card section';
+        card.innerHTML='<div class="section-head"><h2>Customer Comments</h2></div><div id="rr410CommentList"></div>';
+        tab.appendChild(card);
+      }
+      list=document.getElementById('rr410CommentList');
     }
-    const list=document.getElementById('rr410CommentList');
     const arr=Array.isArray(data.comments)?data.comments:[];
     list.innerHTML=arr.length?'<div class="rr410-comment-list">'+arr.slice(0,50).map(x=>`<div class="rr410-comment-row"><strong>${esc(x.name||'Anonymous')}</strong><div class="rr410-comment-meta">${new Date(x.date).toLocaleString()}</div><p>${esc(x.text)}</p></div>`).join('')+'</div>':'<div class="empty">No customer comments yet.</div>';
   }
