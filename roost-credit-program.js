@@ -275,7 +275,6 @@
           <div>
             <h3 style="margin:0 0 4px">${escRR(customer.name)}</h3>
             <div class="rsub">${escRR(customer.phone||'No phone saved')}</div>
-            <div class="rsub">${escRR(customer.email||'No email')}</div>
           </div>
           <div class="rr-member-credit-big">${balance(customer)} <span>credits</span></div>
         </div>
