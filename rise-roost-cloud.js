@@ -414,6 +414,8 @@
     data.customers=Array.isArray(out.data?.customers)?out.data.customers:[];
     data.cartonReturns=Array.isArray(out.data?.cartonReturns)?out.data.cartonReturns:[];
     data.cartonRewards=Array.isArray(out.data?.cartonRewards)?out.data.cartonRewards:[];
+    data.roostReturns=Array.isArray(out.data?.roostReturns)?out.data.roostReturns:[];
+    data.roostCreditUses=Array.isArray(out.data?.roostCreditUses)?out.data.roostCreditUses:[];
     data.cartonSettings=out.data?.cartonSettings||{cartonsPerFreeDozen:12,rewardItemId:''};
     data.settings=out.data?.settings||{paymentQrs:{}};
     if(basePersist)basePersist();
