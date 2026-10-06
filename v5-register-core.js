@@ -40,13 +40,9 @@ function persist(){localStorage.setItem(V2,JSON.stringify(data))}
 function save(){persist();renderAll()}
 function brand(id){return data.brands.find(b=>b.id===id)}
 function item(id){return data.items.find(i=>i.id===id)}
-function activeReservations(itemId,excludePickupId=null){
-  return data.pickups
-    .filter(p=>p.id!==excludePickupId&&['ready','waiting'].includes(p.status))
-    .reduce((s,p)=>s+(p.items||[]).filter(x=>x.itemId===itemId).reduce((a,x)=>a+Number(x.qty||0),0),0);
-}
-function reserved(itemId){return activeReservations(itemId)}
-function available(i){return Math.max(0,Number(i.stock||0)-reserved(i.id))}
+function activeReservations(){return 0}
+function reserved(){return 0}
+function available(i){return Math.max(0,Number(i.stock||0))}
 function logStock(i,delta,reason){
   data.stockLog.unshift({
     id:uid('log'),date:new Date().toISOString(),itemId:i.id,itemName:i.name,
