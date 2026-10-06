@@ -107,9 +107,9 @@
       .rr-pickup-meta strong{display:block;margin-top:2px}
       .rr-pickup-access{margin-top:10px;padding:10px 12px;border-radius:10px;background:#f7f3ea;font-weight:800}
       .rr-pickup-note{margin-top:8px}
-      .rr-pickup-heartnote{margin-top:10px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#faf7f0}
-      .rr-pickup-heartnote strong{display:block;margin-bottom:4px;color:#5d4a35}
-      .rr-pickup-heartnote p{margin:0;line-height:1.45;color:var(--muted);font-size:.92rem}
+      .rr-pickup-heartnote{margin-top:12px;padding:16px 18px;border:1px solid #d8c3a4;border-radius:14px;background:#f7f0e4;box-shadow:inset 0 0 0 1px rgba(255,255,255,.45)}
+      .rr-pickup-heartnote strong{display:block;margin-bottom:6px;color:#795a38;font-family:Georgia,'Times New Roman',serif;font-size:1.08rem;font-weight:700;letter-spacing:.01em}
+      .rr-pickup-heartnote p{margin:0;line-height:1.58;color:#6a5846;font-family:Georgia,'Times New Roman',serif;font-size:.96rem}
       @media(max-width:520px){.rr-pickup-meta{grid-template-columns:1fr}}
       .rr-session-note{font-size:.82rem;color:var(--muted);margin-top:10px}
       .rr-roost-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.rr-roost-tabs .btn{min-height:46px}
