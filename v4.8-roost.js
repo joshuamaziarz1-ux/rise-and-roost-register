@@ -521,7 +521,7 @@
         <div class="rr-pickup-meta">
           <div><span>Order Total</span><strong>${money(total)}</strong></div>
           <div><span>Payment</span><strong>${p.paid?'Paid':'Payment due'}</strong></div>
-          <div><span>Pickup Code</span><strong>${esc(p.code||'—')}</strong></div>
+          <div><span>Door Access</span><strong>${p.pinTextedAt&&p.doorPin?'PIN sent':'PIN sent before pickup'}</strong></div>
           <div><span>Order Status</span><strong>${statusLabel}</strong></div>
         </div>
         <div class="rr-pickup-access">${access}</div>
