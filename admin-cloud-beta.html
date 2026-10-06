@@ -10,6 +10,19 @@
 body > header.top,.store-tabs,#shopView,#pickupView,#cartonView,.version{display:none!important}
 body{background:#f4efe5}
 #adminScreen{min-height:100vh}
+
+.rr-item-vendor-picker{display:grid;gap:12px}
+.rr-item-vendor-letter-group{display:grid;grid-template-columns:42px 1fr;gap:10px;align-items:start}
+.rr-item-vendor-letter{font-size:1.2rem;font-weight:950;color:#6b563f;padding-top:10px;text-align:center}
+.rr-item-vendor-buttons{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
+.rr-item-vendor-btn{min-height:58px;border:1px solid var(--line);border-radius:13px;background:#fff;text-align:left;padding:10px 12px;font-weight:950;color:#2f2924}
+.rr-item-vendor-btn span{display:block;font-size:.8rem;font-weight:700;color:var(--muted);margin-top:3px}
+.rr-item-vendor-btn.active{background:#526b50;color:#fff;border-color:#526b50}
+.rr-item-vendor-btn.active span{color:#edf3e8}
+.rr-item-vendor-open-head{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;margin-bottom:8px;border:1px solid var(--line);border-radius:13px;background:#f7f3ea}
+.rr-item-vendor-open-head strong{font-size:1.08rem}
+.rr-item-vendor-open-head span{color:var(--muted);font-weight:800}
+@media(max-width:650px){.rr-item-vendor-letter-group{grid-template-columns:30px 1fr}.rr-item-vendor-buttons{grid-template-columns:1fr}.rr-item-vendor-open-head{align-items:flex-start;flex-direction:column}}
 </style></head>
 <body>
 <header class="top"><div><div class="logo">Rise & Roost</div><div class="sub">Self-Serve Market</div></div><button class="btn ghost" id="adminBtn">Admin</button></header>
@@ -86,7 +99,7 @@ body{background:#f4efe5}
 </div>
 </section>
 <script src="core.js?v=4.7.2"></script>
-<script src="admin.js?v=4.7.2"></script>
+<script src="admin.js?v=4.7.3"></script>
 <script src="pickup.js?v=4.7.2"></script>
 <script src="ui.js?v=4.7.2"></script>
 <script src="customers.js?v=4.7.2"></script>
