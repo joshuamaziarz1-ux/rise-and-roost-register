@@ -96,8 +96,18 @@
       .rr-history{grid-column:1/-1}.rr-history-list{display:grid;gap:8px}
       .rr-history-row{display:grid;grid-template-columns:130px 1fr auto;gap:12px;align-items:start;padding:11px 0;border-bottom:1px solid var(--line)}
       .rr-history-row:last-child{border-bottom:0}.rr-history-date{color:var(--muted);font-size:.85rem}.rr-history-total{font-weight:950}
-      .rr-pickup-row{border:1px solid var(--line);border-radius:13px;padding:12px;margin-top:8px}
+      .rr-pickup-row{border:1px solid var(--line);border-radius:13px;padding:14px;margin-top:10px;background:#fff}
       .rr-pickup-top{display:flex;justify-content:space-between;gap:10px;align-items:center}
+      .rr-pickup-time{font-size:1.05rem;font-weight:950;margin-top:8px}
+      .rr-pickup-lines{display:grid;gap:5px;margin-top:10px;padding:10px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+      .rr-pickup-line{display:flex;justify-content:space-between;gap:12px}
+      .rr-pickup-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+      .rr-pickup-meta>div{border:1px solid var(--line);border-radius:10px;padding:9px;background:#faf8f3}
+      .rr-pickup-meta span{display:block;font-size:.75rem;color:var(--muted);font-weight:800}
+      .rr-pickup-meta strong{display:block;margin-top:2px}
+      .rr-pickup-access{margin-top:10px;padding:10px 12px;border-radius:10px;background:#f7f3ea;font-weight:800}
+      .rr-pickup-note{margin-top:8px}
+      @media(max-width:520px){.rr-pickup-meta{grid-template-columns:1fr}}
       .rr-session-note{font-size:.82rem;color:var(--muted);margin-top:10px}
       .rr-roost-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.rr-roost-tabs .btn{min-height:46px}
       .rr-roost-status{min-height:20px;font-weight:850;color:#8a322b}
@@ -243,6 +253,7 @@
         data.customers=[m];
         persist();
         setMember(m);
+        if(window.RRCloud?.refreshMemberAccount)await window.RRCloud.refreshMemberAccount();
         closeRoost();
         goShop();
         return;
@@ -384,7 +395,7 @@
         <button class="btn primary wide" id="rrSubmitReturns" style="margin-top:12px">ADD RETURNS</button>
       </section>
       <section class="rr-roost-section">
-        <h3>Pickup Orders</h3>
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><h3 style="margin:0">Pickup Orders</h3><span class="badge on">Live</span></div>
         <div id="rrPickupList"></div>
       </section>
       <section class="rr-roost-section">
@@ -474,12 +485,41 @@
 
   function renderPickups(c){
     const box=document.getElementById('rrPickupList');if(!box)return;
-    const list=memberPickups(c).sort((a,b)=>new Date(b.created)-new Date(a.created));
+    const rank={ready:0,waiting:1,picked:2,cancelled:3};
+    const list=memberPickups(c).sort((a,b)=>{
+      const ra=rank[a.status]??9,rb=rank[b.status]??9;
+      if(ra!==rb)return ra-rb;
+      const ad=new Date(a.scheduledAt||a.created||0).getTime(),bd=new Date(b.scheduledAt||b.created||0).getTime();
+      return (a.status==='ready'||a.status==='waiting')?ad-bd:bd-ad;
+    });
     if(!list.length){box.innerHTML='<div class="empty">No pickup orders on this account.</div>';return}
-    box.innerHTML=list.slice(0,8).map(p=>{
+    const lead=Number(data.settings?.pickupPinLeadMinutes||60);
+    box.innerHTML=list.slice(0,12).map(p=>{
       const total=(p.items||[]).reduce((s,i)=>s+Number(i.price||0)*Number(i.qty||0),0);
-      const items=(p.items||[]).map(i=>`${i.qty}× ${esc(i.itemName)}`).join(', ');
-      return `<div class="rr-pickup-row"><div class="rr-pickup-top"><strong>${p.status==='ready'?'Ready for Pickup':p.status==='waiting'?'Waiting':p.status==='picked'?'Picked Up':'Cancelled'}</strong><span class="badge ${p.status==='ready'?'on':''}">${esc(p.status)}</span></div><div class="rsub" style="margin-top:5px">${items}</div><div style="margin-top:7px"><strong>${money(total)}</strong>${p.paid?' · Paid':''}</div></div>`
+      const statusLabel=p.status==='ready'?'Ready for Pickup':p.status==='waiting'?'Scheduled':p.status==='picked'?'Picked Up':'Cancelled';
+      const statusClass=p.status==='ready'?'on':p.status==='cancelled'?'off':'';
+      const when=p.scheduledAt?new Date(p.scheduledAt):null;
+      const whenText=when&&!Number.isNaN(when.getTime())?when.toLocaleString([],{weekday:'long',month:'long',day:'numeric',hour:'numeric',minute:'2-digit'}):'Pickup time not scheduled yet';
+      const lines=(p.items||[]).map(i=>`<div class="rr-pickup-line"><span>${Number(i.qty||0)}× ${esc(i.itemName)}</span><strong>${money(Number(i.price||0)*Number(i.qty||0))}</strong></div>`).join('');
+      let access='';
+      if(p.status==='picked')access='Pickup completed.';
+      else if(p.status==='cancelled')access='This pickup was cancelled.';
+      else if(p.pinTextedAt&&p.doorPin)access=`Temporary door PIN: <strong>${esc(p.doorPin)}</strong>`;
+      else if(p.pinReady)access=`Your temporary door PIN will be texted about ${lead} minute${lead===1?'':'s'} before pickup.`;
+      else access='Your temporary door PIN will be added before pickup.';
+      return `<div class="rr-pickup-row">
+        <div class="rr-pickup-top"><strong>${statusLabel}</strong><span class="badge ${statusClass}">${statusLabel}</span></div>
+        <div class="rr-pickup-time">${esc(whenText)}</div>
+        <div class="rr-pickup-lines">${lines||'<div class="rsub">No item details available.</div>'}</div>
+        <div class="rr-pickup-meta">
+          <div><span>Order Total</span><strong>${money(total)}</strong></div>
+          <div><span>Payment</span><strong>${p.paid?'Paid':'Payment due'}</strong></div>
+          <div><span>Pickup Code</span><strong>${esc(p.code||'—')}</strong></div>
+          <div><span>Order Status</span><strong>${statusLabel}</strong></div>
+        </div>
+        <div class="rr-pickup-access">${access}</div>
+        ${p.note?`<div class="rr-pickup-note rsub"><strong>Pickup note:</strong> ${esc(p.note)}</div>`:''}
+      </div>`;
     }).join('');
   }
 
@@ -492,6 +532,14 @@
     events.sort((a,b)=>new Date(b.date)-new Date(a.date));
     box.innerHTML=events.length?'<div class="rr-history-list">'+events.slice(0,50).map(e=>{const d=new Date(e.date);return `<div class="rr-history-row"><div class="rr-history-date">${d.toLocaleDateString()}<br>${d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}</div><div><strong>${esc(e.type)}</strong><div class="rsub">${esc(e.text)}</div></div><div class="rr-history-total">${esc(e.total)}</div></div>`}).join('')+'</div>':'<div class="empty">No purchases or returns yet.</div>';
   }
+
+  window.RRRoostLiveRefresh=()=>{
+    const c=currentMember();if(!c)return;
+    const credit=document.getElementById('rrCreditCount');if(credit)credit.textContent=credits(c);
+    renderShopBanner();
+    renderPickups(c);
+    renderHistory(c);
+  };
 
   function wireClearOrder(){
     const clear=document.getElementById('clearBtn');
