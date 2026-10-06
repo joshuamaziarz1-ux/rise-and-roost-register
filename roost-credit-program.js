@@ -51,6 +51,14 @@
       .rr-return-admin-list{display:grid;gap:10px;margin-top:14px}
       .rr-return-admin-row{display:grid;grid-template-columns:minmax(170px,1fr) 140px auto;gap:10px;align-items:end;border:1px solid var(--line);padding:12px;border-radius:14px;background:#fff}
       .rr-credit-save-status{margin-top:10px;font-weight:850}
+      .rr-member-list-az{display:grid;gap:12px}
+      .rr-member-letter-group{display:grid;grid-template-columns:42px 1fr;gap:10px;align-items:start}
+      .rr-member-letter{font-size:1.2rem;font-weight:950;color:#6b563f;padding-top:10px;text-align:center}
+      .rr-member-buttons{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
+      .rr-member-name-btn{min-height:58px;border:1px solid var(--line);border-radius:13px;background:#fff;text-align:left;padding:10px 12px;font-weight:950;color:#2f2924}
+      .rr-member-name-btn span{display:block;font-size:.8rem;font-weight:700;color:var(--muted);margin-top:3px}
+      .rr-member-name-btn.active{background:#526b50;color:#fff;border-color:#526b50}
+      .rr-member-name-btn.active span{color:#edf3e8}
       .rr-member-detail-card{border:1px solid var(--line);border-radius:16px;background:#fff;padding:16px}
       .rr-member-detail-top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
       .rr-member-credit-big{font-size:2rem;font-weight:950;color:#355f3a;white-space:nowrap}
@@ -62,7 +70,7 @@
       .rr-member-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
       .rr-credit-history-table{width:100%;border-collapse:collapse}.rr-credit-history-table th,.rr-credit-history-table td{padding:10px;border-bottom:1px solid var(--line);text-align:left}.rr-credit-history-table th{font-size:.82rem;color:var(--muted)}
       .rr-credit-plus{font-weight:950;color:#355f3a}.rr-credit-minus{font-weight:950;color:#8b3a34}
-      @media(max-width:650px){.rr-credit-actions,.rr-credit-admin-grid,.rr-return-admin-row,.rr-member-stats{grid-template-columns:1fr}.rr-member-detail-top{flex-direction:column}}
+      @media(max-width:650px){.rr-credit-actions,.rr-credit-admin-grid,.rr-return-admin-row,.rr-member-stats{grid-template-columns:1fr}.rr-member-detail-top{flex-direction:column}.rr-member-letter-group{grid-template-columns:30px 1fr}.rr-member-buttons{grid-template-columns:1fr}}
     `;document.head.appendChild(s);
   }
 
@@ -221,15 +229,14 @@
     card.id='rrMemberBrowser';
     card.className='card section';
     card.innerHTML=`
-      <div class="section-head"><h2>Roost Members</h2><span class="badge">Member Lookup</span></div>
-      <div class="field"><label>Select Roost Member</label><select id="rrMemberSelect"><option value="">Choose a member</option></select></div>
+      <div class="section-head"><h2>Roost Members</h2><span class="badge">A–Z</span></div>
+      <div id="rrMemberListAZ" class="rr-member-list-az"></div>
       <div id="rrMemberDetail" style="margin-top:14px"></div>
     `;
     const creditCard=document.getElementById('rrCreditAdmin');
     if(creditCard?.nextSibling)tab.insertBefore(card,creditCard.nextSibling);
     else tab.appendChild(card);
 
-    document.getElementById('rrMemberSelect').onchange=e=>drawMemberDetail(e.target.value);
     return card;
   }
 
@@ -302,13 +309,38 @@
     const globalHistory=document.getElementById('rrCreditHistoryCard');
     if(globalHistory)globalHistory.remove();
 
-    const sel=document.getElementById('rrMemberSelect');
-    if(!sel)return;
-    const selected=sel.value;
+    const list=document.getElementById('rrMemberListAZ');
+    if(!list)return;
+    const current=document.querySelector('.rr-member-name-btn.active')?.dataset.memberId||'';
     const members=[...(data.customers||[])].sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
-    sel.innerHTML='<option value="">Choose a member</option>'+members.map(c=>`<option value="${escRR(c.id)}">${escRR(c.name)}${c.phone?' · '+escRR(c.phone):''}</option>`).join('');
-    if(selected&&members.some(c=>c.id===selected))sel.value=selected;
-    drawMemberDetail(sel.value);
+    if(!members.length){
+      list.innerHTML='<div class="empty">No Roost members yet.</div>';
+      drawMemberDetail('');
+      return;
+    }
+    const groups={};
+    members.forEach(m=>{
+      const first=(String(m.name||'').trim().charAt(0)||'#').toUpperCase();
+      const key=/[A-Z]/.test(first)?first:'#';
+      (groups[key]||(groups[key]=[])).push(m);
+    });
+    const letters=Object.keys(groups).sort();
+    list.innerHTML=letters.map(letter=>`
+      <div class="rr-member-letter-group">
+        <div class="rr-member-letter">${letter}</div>
+        <div class="rr-member-buttons">
+          ${groups[letter].map(m=>`<button class="rr-member-name-btn ${m.id===current?'active':''}" data-member-id="${escRR(m.id)}">${escRR(m.name)}<span>${escRR(m.phone||'')}</span></button>`).join('')}
+        </div>
+      </div>
+    `).join('');
+    list.querySelectorAll('[data-member-id]').forEach(btn=>btn.onclick=()=>{
+      list.querySelectorAll('.rr-member-name-btn').forEach(x=>x.classList.remove('active'));
+      btn.classList.add('active');
+      drawMemberDetail(btn.dataset.memberId);
+      document.getElementById('rrMemberDetail')?.scrollIntoView({behavior:'smooth',block:'nearest'});
+    });
+    if(current&&members.some(m=>m.id===current))drawMemberDetail(current);
+    else drawMemberDetail('');
   }
 
   async function saveAdminSettings(){
