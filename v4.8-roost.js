@@ -110,7 +110,13 @@
       .rr-pickup-heartnote{margin-top:12px;padding:16px 18px;border:1px solid #d8c3a4;border-radius:14px;background:#f7f0e4;box-shadow:inset 0 0 0 1px rgba(255,255,255,.45)}
       .rr-pickup-heartnote strong{display:block;margin-bottom:6px;color:#795a38;font-family:Georgia,'Times New Roman',serif;font-size:1.08rem;font-weight:700;letter-spacing:.01em}
       .rr-pickup-heartnote p{margin:0;line-height:1.58;color:#6a5846;font-family:Georgia,'Times New Roman',serif;font-size:.96rem}
-      @media(max-width:520px){.rr-pickup-meta{grid-template-columns:1fr}}
+      .rr-pickup-how{display:grid;gap:9px;margin-top:13px}
+      .rr-pickup-how>div{display:grid;grid-template-columns:30px 1fr;gap:10px;align-items:start;padding:10px 11px;border-radius:11px;background:rgba(255,255,255,.48)}
+      .rr-pickup-how>div>span{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#b89267;color:#fff;font-family:Georgia,'Times New Roman',serif;font-weight:700}
+      .rr-pickup-how p{font-size:.92rem}
+      .rr-pickup-how p strong{display:inline;color:#765738;font-size:.96rem}
+      .rr-pickup-thanks{margin-top:12px!important;font-style:italic;color:#7b654e!important}
+      @media(max-width:520px){.rr-pickup-meta{grid-template-columns:1fr}.rr-pickup-heartnote{padding:14px}.rr-pickup-how>div{grid-template-columns:28px 1fr}}
       .rr-session-note{font-size:.82rem;color:var(--muted);margin-top:10px}
       .rr-roost-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.rr-roost-tabs .btn{min-height:46px}
       .rr-roost-status{min-height:20px;font-weight:850;color:#8a322b}
@@ -401,7 +407,15 @@
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><h3 style="margin:0">Pickup Orders</h3><span class="badge on">Live</span></div>
         <div class="rr-pickup-heartnote">
           <strong>A little note about pickups</strong>
-          <p>Rise &amp; Roost is meant to stay simple, self-serve, and first come, first served. We’re always happy to help when we can, and in special cases we may arrange a pickup ahead of time. Once we’ve approved a pickup for you, you’ll be able to choose from the available pickup times here in My Roost. Thank you for helping us keep the store simple and fair for everyone.</p>
+          <p>Rise &amp; Roost is, first and foremost, a simple self-serve market where items are available on a first come, first served basis. We want to keep it that way so the store stays easy, fair, and enjoyable for everyone.</p>
+          <p style="margin-top:8px">From time to time, though, we’re happy to make a special pickup arrangement when we can. Pickups are not a way to reserve items ahead of everyone else — they’re something we arrange personally with you first.</p>
+          <div class="rr-pickup-how">
+            <div><span>1</span><p><strong>We approve the pickup first.</strong><br>Once we’ve agreed to a pickup, we’ll prepare and reserve the specific items for you.</p></div>
+            <div><span>2</span><p><strong>You choose a pickup time.</strong><br>After approval, available pickup days and times will appear here in My Roost for you to choose from.</p></div>
+            <div><span>3</span><p><strong>Your temporary door PIN is sent one hour before pickup.</strong><br>The PIN becomes active 15 minutes before your scheduled time, so there’s no need to arrive early.</p></div>
+            <div><span>4</span><p><strong>You have a little grace time.</strong><br>Your PIN stays active for 45 minutes after your scheduled pickup. If you’re going to be later than that, please contact us and, when possible, we can extend your access.</p></div>
+          </div>
+          <p class="rr-pickup-thanks">Thank you for helping us keep Rise &amp; Roost simple, personal, and fair. We truly appreciate it.</p>
         </div>
         <div id="rrPickupList"></div>
       </section>
