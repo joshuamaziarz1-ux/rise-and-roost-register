@@ -130,17 +130,31 @@
     setTimeout(()=>w.classList.add('hidden'),2600);
   }
 
-  function submitComment(){
+  async function submitComment(){
     const text=document.getElementById('rr410CommentText').value.trim();
     const name=document.getElementById('rr410CommentName').value.trim();
     if(!text){toast('Add a Comment','Type your comment first.');return}
-    data.comments=Array.isArray(data.comments)?data.comments:[];
-    data.comments.unshift({id:typeof uid==='function'?uid('comment'):'comment_'+Date.now(),date:new Date().toISOString(),name,text});
-    if(data.comments.length>500)data.comments.length=500;
-    persist();
-    document.getElementById('rr410CommentOverlay').classList.add('hidden');
-    renderCommentAdmin();
-    toast('Thank You','Your comment has been saved.');
+    const btn=document.getElementById('rr410SubmitComment');
+    if(btn){btn.disabled=true;btn.textContent='SAVING…'}
+    try{
+      let saved={id:typeof uid==='function'?uid('comment'):'comment_'+Date.now(),date:new Date().toISOString(),name,text};
+      if(/cloud-beta/i.test(location.pathname)){
+        if(!window.RRCloud?.api)throw new Error('The shared store database is still connecting. Please try again.');
+        const out=await window.RRCloud.api('comment_submit',{name,text});
+        saved=out.comment||saved;
+      }
+      data.comments=Array.isArray(data.comments)?data.comments:[];
+      data.comments.unshift(saved);
+      if(data.comments.length>500)data.comments.length=500;
+      persist();
+      document.getElementById('rr410CommentOverlay').classList.add('hidden');
+      renderCommentAdmin();
+      toast('Thank You','Your comment has been saved.');
+    }catch(e){
+      toast('Could Not Save',(e&&e.message)||'Please try again.');
+    }finally{
+      if(btn){btn.disabled=false;btn.textContent='SUBMIT COMMENT'}
+    }
   }
 
   function renderCommentAdmin(){
