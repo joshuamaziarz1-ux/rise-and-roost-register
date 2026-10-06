@@ -16,6 +16,10 @@
   let saving=false;
   let pendingSave=false;
   let publicCatalogRevision=0;
+  let liveChannel=null;
+  let liveTimer=null;
+  let catalogRefreshing=false;
+  let adminIgnoreRealtimeUntil=0;
   let basePersist=typeof persist==='function'?persist:null;
 
   const clone=v=>JSON.parse(JSON.stringify(v));
@@ -80,11 +84,17 @@
   }
 
   async function refreshCatalog(){
-    const cat=await api('catalog');
-    applyCatalog(cat);
-    cloudBadge('Cloud inventory connected');
-    setTimeout(()=>cloudBadge('', 'hidden'),2200);
-    return cat;
+    if(catalogRefreshing)return null;
+    catalogRefreshing=true;
+    try{
+      const cat=await api('catalog');
+      applyCatalog(cat);
+      cloudBadge('Live inventory connected');
+      setTimeout(()=>cloudBadge('', 'hidden'),1600);
+      return cat;
+    }finally{
+      catalogRefreshing=false;
+    }
   }
 
   async function checkout(method,entryList){
@@ -194,6 +204,104 @@
     };
   }
 
+  function setupPublicSignup(){
+    const btn=document.getElementById('joinSubmit');
+    if(!btn)return;
+
+    btn.onclick=async()=>{
+      const name=document.getElementById('joinName')?.value.trim()||'';
+      const phone=document.getElementById('joinPhone')?.value.trim()||'';
+      const email=(document.getElementById('joinEmail')?.value.trim()||'').toLowerCase();
+      const pickupAlerts=!!document.getElementById('joinPickupAlerts')?.checked;
+      const storeUpdates=!!document.getElementById('joinStoreUpdates')?.checked;
+      const digits=phone.replace(/\D/g,'');
+
+      if(!name)return alert('Please enter your name.');
+      if(digits.length<7)return alert('Please enter a valid phone number.');
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return alert('Please enter a valid email address.');
+
+      btn.disabled=true;
+      const oldText=btn.textContent;
+      btn.textContent='Joining…';
+
+      try{
+        const out=await api('member_signup',{name,phone,email,pickupAlerts,storeUpdates});
+        const member=out.member||{};
+        const form=document.querySelector('.join-form');
+        if(form)form.classList.add('hidden');
+        const result=document.getElementById('joinResult');
+        if(result){
+          result.innerHTML='<div class="pickup-result welcome-roost"><h2>Welcome to the Roost, '+safe(member.name||name)+'!</h2><div class="rsub">Carton Credits</div><div class="credit-number">0</div><p class="hint">Your Roost account is saved. Bring back clean, reusable dozen-egg cartons to earn credits toward a free dozen.</p><button class="btn primary wide" id="rrReturnNow">Return Cartons Now</button><button class="btn ghost wide" id="rrSignupDone">Done</button></div>';
+          document.getElementById('rrSignupDone').onclick=()=>typeof home==='function'?home():location.reload();
+          document.getElementById('rrReturnNow').onclick=()=>{
+            if(typeof cartons==='function')cartons();
+            setTimeout(()=>{
+              const n=document.getElementById('rrMemberName');
+              const l=document.getElementById('rrMemberLast4');
+              if(n)n.value=member.name||name;
+              if(l)l.value=digits.slice(-4);
+              document.getElementById('rrFindMember')?.click();
+            },80);
+          };
+        }
+        cloudBadge('Roost membership saved');
+        setTimeout(()=>cloudBadge('', 'hidden'),1800);
+      }catch(e){
+        alert(e.message||'Your Roost membership could not be saved. Please ask Danielle for help.');
+        btn.disabled=false;
+        btn.textContent=oldText;
+      }
+    };
+  }
+
+  function setupLiveUpdates(){
+    if(liveChannel||!client)return;
+
+    const syncNow=()=>{
+      if(isAdminPage){
+        if(!adminReady||saving||pendingSave||Date.now()<adminIgnoreRealtimeUntil)return;
+        clearTimeout(liveTimer);
+        liveTimer=setTimeout(()=>{
+          loadAdmin().then(()=>setSaveStatus('Saved · Live')).catch(console.error);
+        },250);
+      }else{
+        refreshCatalog().catch(console.error);
+      }
+    };
+
+    liveChannel=client
+      .channel('rise-roost-live-'+(isAdminPage?'admin':'register'))
+      .on('postgres_changes',
+        {event:'UPDATE',schema:'public',table:'store_revision_public',filter:'id=eq.1'},
+        payload=>{
+          const rev=Number(payload?.new?.revision||0);
+          if(isAdminPage){
+            if(rev<=adminRevision)return;
+            if(saving||pendingSave||Date.now()<adminIgnoreRealtimeUntil){
+              clearTimeout(liveTimer);
+              liveTimer=setTimeout(syncNow,1200);
+              return;
+            }
+            syncNow();
+          }else if(rev>publicCatalogRevision){
+            syncNow();
+          }
+        }
+      )
+      .subscribe(status=>{
+        if(status==='SUBSCRIBED'){
+          cloudBadge('Live updates connected');
+          setTimeout(()=>cloudBadge('', 'hidden'),1400);
+        }
+      });
+
+    window.addEventListener('online',syncNow);
+    window.addEventListener('focus',syncNow);
+    document.addEventListener('visibilitychange',()=>{
+      if(document.visibilityState==='visible')syncNow();
+    });
+  }
+
   function setupPublic(){
     const adminBtn=document.getElementById('adminBtn');
     if(adminBtn)adminBtn.onclick=()=>location.href=ADMIN_PATH;
@@ -203,6 +311,8 @@
 
     setupPublicPickup();
     setupPrivateCartonClub();
+    setupPublicSignup();
+    setupLiveUpdates();
 
     refreshCatalog().catch(e=>{
       console.error(e);
@@ -210,9 +320,11 @@
       setTimeout(()=>cloudBadge('', 'hidden'),3500);
     });
 
+    // Realtime handles normal updates. This is only a fallback in case a
+    // tablet temporarily loses its realtime connection.
     setInterval(()=>{
       if(document.visibilityState==='visible')refreshCatalog().catch(()=>{});
-    },60000);
+    },30000);
   }
 
   function authOverlay(){
@@ -320,8 +432,10 @@
     const snapshot=clone(data);
     const revisionAtStart=adminRevision;
     try{
+      adminIgnoreRealtimeUntil=Date.now()+2500;
       const out=await api('admin_save',{revision:revisionAtStart,data:snapshot},true);
       adminRevision=Number(out.revision||adminRevision);
+      adminIgnoreRealtimeUntil=Date.now()+1200;
       setSaveStatus('Saved');
     }catch(e){
       if(e.conflict||e.status===409){
@@ -360,6 +474,8 @@
         }
       }
     }
+
+    setupLiveUpdates();
 
     client.auth.onAuthStateChange((_event,newSession)=>{
       if(newSession&&!adminReady)setTimeout(()=>loadAdmin().catch(console.error),50);
