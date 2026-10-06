@@ -12,25 +12,13 @@ function saleCustomerInfo(s){
     const c=memberById(s.customerId)||memberByName(s.customerName);
     if(c)return {type:'member',name:c.name};
   }
-  if(s.source==='pickup'){
-    const p=(data.pickups||[]).find(x=>x.id===s.pickupId);
-    const c=memberById(p?.customerId)||memberByName(p?.customerName||s.customerName);
-    if(c)return {type:'member',name:c.name};
-    return {type:'guest',name:p?.customerName||s.customerName||''};
-  }
   return {type:'guest',name:s.customerName||''};
 }
 
-// Make future pickup and reward sales carry member/guest identity too.
+// Keep reward sales connected to the member account.
 const priorRecordSaleV44=recordSale;
 recordSale=function(lines,opts={}){
   const sale=priorRecordSaleV44(lines,opts);
-  if(opts.source==='pickup'){
-    const p=(data.pickups||[]).find(x=>x.id===opts.pickupId);
-    const c=memberById(p?.customerId)||memberByName(p?.customerName);
-    if(c){sale.customerId=c.id;sale.customerName=c.name;sale.customerType='roost-member'}
-    else{sale.customerName=p?.customerName||'';sale.customerType='guest'}
-  }
   if(opts.source==='carton-club'){
     const r=(data.cartonRewards||[])[0],c=memberById(r?.customerId)||memberByName(r?.customerName);
     if(c){sale.customerId=c.id;sale.customerName=c.name;sale.customerType='roost-member'}
@@ -48,7 +36,7 @@ renderSales=function(){
   box.innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>Date</th><th>Customer</th><th>Items</th><th>Type</th><th>Total</th><th></th></tr></thead><tbody>${data.sales.slice(0,150).map(s=>{
     const d=new Date(s.date),who=saleCustomerInfo(s),lines=s.items.map(i=>`${i.qty}× ${esc(i.itemName)} <span class="muted">(${esc(i.brandName)})</span>`).join('<br>');
     const customer=who.type==='member'?`<span class="badge on">MEMBER</span><br><strong>${esc(who.name)}</strong>`:`<span class="badge">GUEST</span>${who.name?`<br><span class="muted">${esc(who.name)}</span>`:''}`;
-    const source=s.source==='pickup'?'Pickup':s.source==='carton-club'?'Reward':'Store',pay=s.payment==='cash'?'Cash':s.payment==='prepaid'?'Prepaid':s.payment==='reward'?'Free Reward':esc(s.payment||'');
+    const source=s.source==='carton-club'?'Reward':'Store',pay=s.payment==='cash'?'Cash':s.payment==='prepaid'?'Prepaid':s.payment==='reward'?'Free Reward':esc(s.payment||'');
     return `<tr style="${s.voided?'opacity:.5':''}"><td>${d.toLocaleDateString()}<br><span class="muted">${d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}</span></td><td>${customer}</td><td>${lines}${s.voided?'<br><strong>VOIDED</strong>':''}</td><td>${source}${pay?` · ${pay}`:''}</td><td class="money">${money(s.total)}</td><td>${s.voided?'':`<button class="btn tiny danger" data-void="${s.id}">Void</button>`}</td></tr>`
   }).join('')}</tbody></table></div>`;
   box.querySelectorAll('[data-void]').forEach(b=>b.onclick=()=>voidSale(b.dataset.void));
@@ -63,17 +51,15 @@ function buildHistoryModal(){
 function memberSales(c){return (data.sales||[]).filter(s=>!s.voided&&(s.customerId===c.id||(s.customerType==='roost-member'&&normName(s.customerName)===normName(c.name))))}
 function memberReturns(c){return (data.cartonReturns||[]).filter(r=>r.customerId===c.id||normName(r.customerName)===normName(c.name))}
 function memberRewards(c){return (data.cartonRewards||[]).filter(r=>r.customerId===c.id||normName(r.customerName)===normName(c.name))}
-function memberPickups(c){return (data.pickups||[]).filter(p=>p.customerId===c.id||normName(p.customerName)===normName(c.name))}
 
 function openMemberHistory(id){
   buildHistoryModal();const c=memberById(id);if(!c)return;
-  const sales=memberSales(c),returns=memberReturns(c),rewards=memberRewards(c),pickups=memberPickups(c);
+  const sales=memberSales(c),returns=memberReturns(c),rewards=memberRewards(c);
   const spent=sales.reduce((n,s)=>n+Number(s.total||0),0),units=sales.reduce((n,s)=>n+s.items.reduce((a,i)=>a+Number(i.qty||0),0),0);
   const events=[];
-  sales.forEach(s=>events.push({date:s.date,type:'Purchase',html:`<strong>${money(s.total)}</strong> · ${s.items.map(i=>`${i.qty}× ${esc(i.itemName)}`).join(', ')}${s.source==='pickup'?' <span class="badge">Pickup</span>':s.source==='carton-club'?' <span class="badge on">Free Reward</span>':''}`}));
+  sales.forEach(s=>events.push({date:s.date,type:'Purchase',html:`<strong>${money(s.total)}</strong> · ${s.items.map(i=>`${i.qty}× ${esc(i.itemName)}`).join(', ')}${s.source==='carton-club'?' <span class="badge on">Free Reward</span>':''}`}));
   returns.forEach(r=>events.push({date:r.date,type:'Cartons',html:`Returned <strong>${Number(r.qty||0)}</strong> carton${Number(r.qty||0)===1?'':'s'}`}));
   rewards.forEach(r=>events.push({date:r.date,type:'Reward',html:`Redeemed <strong>${esc(r.itemName||'free dozen')}</strong> · ${Number(r.creditsUsed||0)} credits used`}));
-  pickups.forEach(p=>events.push({date:p.completed||p.created,type:'Pickup',html:`${p.status==='picked'?'Picked up':p.status==='cancelled'?'Cancelled':p.status==='ready'?'Ready':'Waiting'} · ${p.items.map(i=>`${i.qty}× ${esc(i.itemName)}`).join(', ')} · <strong>${money(pickupTotal(p))}</strong>`}));
   events.sort((a,b)=>new Date(b.date)-new Date(a.date));
   $('memberHistoryName').textContent=c.name;$('memberHistoryContact').textContent=[c.phone,c.email].filter(Boolean).join(' · ')||'No contact information saved';
   $('memberHistoryBody').innerHTML=`<div class="member-history-stats"><div><span>Carton Credits</span><strong>${Number(c.cartonCredits||0)}</strong></div><div><span>Purchases</span><strong>${sales.length}</strong></div><div><span>Items Bought</span><strong>${units}</strong></div><div><span>Total Spent</span><strong>${money(spent)}</strong></div><div><span>Cartons Returned</span><strong>${returns.reduce((n,r)=>n+Number(r.qty||0),0)}</strong></div><div><span>Free Dozens</span><strong>${rewards.length}</strong></div></div><h3 class="history-title">History</h3>${events.length?`<div class="member-timeline">${events.map(e=>{const d=new Date(e.date);return `<div class="member-event"><div><span class="badge">${e.type}</span><div class="rsub">${d.toLocaleDateString()} · ${d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}</div></div><div>${e.html}</div></div>`}).join('')}</div>`:'<div class="empty">No history for this member yet.</div>'}`;
