@@ -1,9 +1,27 @@
 let rrItemLibraryVendorOpen='';
+async function setAdminVisibility(kind,id,next,btn){
+  const list=kind==='brand'?data.brands:data.items;
+  const row=(list||[]).find(x=>x.id===id);
+  if(!row)return;
+  if(btn)btn.disabled=true;
+  try{
+    if(window.RRCloud?.setVisibility){
+      await window.RRCloud.setVisibility(kind,id,next);
+    }else{
+      row.active=next;
+      save();
+    }
+  }catch(e){
+    alert((e&&e.message)||'Could not update store visibility.');
+    if(btn)btn.disabled=false;
+  }
+}
+
 function renderAdmin(){
  $('statBrands').textContent=data.brands.length;$('statItems').textContent=data.items.length;$('statStock').textContent=data.items.reduce((s,i)=>s+Number(i.stock||0),0);
  $('itemBrand').innerHTML=data.brands.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');$('addItem').disabled=!data.brands.length;
  $('brandList').innerHTML=data.brands.length?data.brands.map(b=>{const n=data.items.filter(i=>i.brandId===b.id).length;return`<div class="row"><div><div class="rtitle">${esc(b.name)}</div><div class="rsub">${n} saved item${n===1?'':'s'}</div></div><div><span class="badge ${b.active?'on':'off'}">${b.active?'Shown in Store':'Hidden'}</span></div><div class="row-actions"><button class="btn small" data-tb="${b.id}">${b.active?'Hide':'Show'}</button><button class="btn small ghost" data-eb="${b.id}">Edit</button><button class="btn small danger" data-db="${b.id}">Delete</button></div></div>`}).join(''):'<div class="empty">No vendors yet.</div>';
- $('brandList').querySelectorAll('[data-tb]').forEach(x=>x.onclick=()=>{const b=brand(x.dataset.tb);b.active=!b.active;save()});$('brandList').querySelectorAll('[data-eb]').forEach(x=>x.onclick=()=>editBrand(x.dataset.eb));$('brandList').querySelectorAll('[data-db]').forEach(x=>x.onclick=()=>openDeleteVendor(x.dataset.db));
+ $('brandList').querySelectorAll('[data-tb]').forEach(x=>x.onclick=()=>{const b=brand(x.dataset.tb);if(b)setAdminVisibility('brand',b.id,!b.active,x)});$('brandList').querySelectorAll('[data-eb]').forEach(x=>x.onclick=()=>editBrand(x.dataset.eb));$('brandList').querySelectorAll('[data-db]').forEach(x=>x.onclick=()=>openDeleteVendor(x.dataset.db));
  const items=[...data.items].sort((a,b)=>(brand(a.brandId)?.name||'').localeCompare(brand(b.brandId)?.name||'')||a.name.localeCompare(b.name));
  const itemVendors=[...data.brands].filter(b=>data.items.some(i=>i.brandId===b.id)).sort((a,b)=>a.name.localeCompare(b.name));
  const vendorGroups={};
@@ -14,7 +32,7 @@ function renderAdmin(){
  const itemRows=vendorItems.map(i=>{const av=available(i);return`<div class="row"><div><div class="rtitle">${esc(i.name)} <span style="color:var(--muted);font-weight:750">${money(i.price)}</span></div><div class="rsub"><span class="badge ${i.active?'on':'off'}">${i.active?'Customer Item':'Hidden'}</span> ${av<=i.lowStock?`<span class="badge low">Low at ${i.lowStock}</span>`:''}</div></div><div><div class="stock-box"><button class="btn tiny" data-stock="${i.id}" data-d="-10">−10</button><button class="btn tiny" data-stock="${i.id}" data-d="-5">−5</button><button class="btn tiny" data-stock="${i.id}" data-d="-1">−1</button><span class="stock-num">${i.stock}</span><button class="btn tiny" data-stock="${i.id}" data-d="1">+1</button><button class="btn tiny" data-stock="${i.id}" data-d="5">+5</button><button class="btn tiny" data-stock="${i.id}" data-d="10">+10</button></div><div class="rsub">On hand: ${av}</div></div><div class="row-actions"><button class="btn small" data-ti="${i.id}">${i.active?'Hide':'Show'}</button><button class="btn small ghost" data-ei="${i.id}">Edit / Exact Qty</button><button class="btn small danger" data-di="${i.id}">Delete</button></div></div>`}).join('');
  $('itemList').innerHTML=items.length?`<div class="rr-item-vendor-picker">${vendorPicker}</div><div id="rrVendorItemDetail" class="${openVendor?'':'hidden'}" style="margin-top:14px">${openVendor?`<div class="rr-item-vendor-open-head"><strong>${esc(openVendor.name)}</strong><span>${vendorItems.length} saved item${vendorItems.length===1?'':'s'}</span></div>${itemRows}`:''}</div>`:'<div class="empty">Your item library is empty. Add your first item above.</div>';
  $('itemList').querySelectorAll('[data-item-vendor]').forEach(btn=>btn.onclick=()=>{const id=btn.dataset.itemVendor;rrItemLibraryVendorOpen=rrItemLibraryVendorOpen===id?'':id;renderAdmin()});
- $('itemList').querySelectorAll('[data-stock]').forEach(x=>x.onclick=()=>adjustStock(x.dataset.stock,Number(x.dataset.d)));$('itemList').querySelectorAll('[data-ti]').forEach(x=>x.onclick=()=>{const i=item(x.dataset.ti);i.active=!i.active;save()});$('itemList').querySelectorAll('[data-ei]').forEach(x=>x.onclick=()=>editItem(x.dataset.ei));$('itemList').querySelectorAll('[data-di]').forEach(x=>x.onclick=()=>deleteItem(x.dataset.di));
+ $('itemList').querySelectorAll('[data-stock]').forEach(x=>x.onclick=()=>adjustStock(x.dataset.stock,Number(x.dataset.d)));$('itemList').querySelectorAll('[data-ti]').forEach(x=>x.onclick=()=>{const i=item(x.dataset.ti);if(i)setAdminVisibility('item',i.id,!i.active,x)});$('itemList').querySelectorAll('[data-ei]').forEach(x=>x.onclick=()=>editItem(x.dataset.ei));$('itemList').querySelectorAll('[data-di]').forEach(x=>x.onclick=()=>deleteItem(x.dataset.di));
  renderSales();renderInventoryHistory();renderDashboard();
 }
 function adjustStock(id,delta){const i=item(id);if(!i)return;const next=Number(i.stock)+delta;i.stock=Math.max(0,next);logStock(i,delta,'Manual adjustment');save()}
