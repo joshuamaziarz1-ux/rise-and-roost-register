@@ -125,6 +125,10 @@
       data.pickups=Array.isArray(out.pickups)?out.pickups:[];
       data.settings=data.settings&&typeof data.settings==='object'?data.settings:{};
       data.settings.pickupPinLeadMinutes=Number(out.pinLeadMinutes||60);
+      data.settings.pickupPinActiveBeforeMinutes=Number(out.pinActiveBeforeMinutes||15);
+      data.settings.pickupPinGraceMinutes=Number(out.pinGraceMinutes||45);
+      data.settings.pickupSchedule=out.pickupSchedule||data.settings.pickupSchedule||{};
+      data.settings.takenPickupSlots=Array.isArray(out.takenSlots)?out.takenSlots:[];
       if(basePersist)basePersist();
       if(typeof window.RRRoostLiveRefresh==='function')window.RRRoostLiveRefresh();
       return out;
