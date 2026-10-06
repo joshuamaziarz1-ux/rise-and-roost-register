@@ -73,7 +73,10 @@
     data.pickups=[];
     data.sales=[];
     data.stockLog=[];
-    data.customers=[];
+    const activeMemberId=sessionStorage.getItem('riseRoostActiveMemberV1')||sessionStorage.getItem('riseRoostTESTActiveMemberV1')||'';
+    data.customers=Array.isArray(data.customers)&&activeMemberId
+      ? data.customers.filter(c=>c&&c.id===activeMemberId)
+      : [];
     data.cartonReturns=[];
     data.cartonRewards=[];
     data.cartonSettings=cat.cartonSettings||{cartonsPerFreeDozen:12,rewardItemId:''};
