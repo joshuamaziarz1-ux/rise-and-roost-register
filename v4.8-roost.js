@@ -31,11 +31,13 @@
   function ensureData(){
     data.customers=Array.isArray(data.customers)?data.customers:[];
     data.roostReturns=Array.isArray(data.roostReturns)?data.roostReturns:[];
-    data.roostReturnTypes=Array.isArray(data.roostReturnTypes)&&data.roostReturnTypes.length?data.roostReturnTypes:[
-      {id:'egg-carton',name:'Egg Carton',credit:1,active:true},
-      {id:'jar',name:'Jar',credit:1,active:true},
-      {id:'bottle',name:'Bottle',credit:1,active:true}
-    ];
+    const cloudTypes=data?.settings?.roostCreditSettings?.returnTypes;
+    data.roostReturnTypes=Array.isArray(cloudTypes)&&cloudTypes.length?cloudTypes:
+      (Array.isArray(data.roostReturnTypes)&&data.roostReturnTypes.length?data.roostReturnTypes:[
+        {id:'egg-carton',name:'Egg Carton',credit:1,active:true},
+        {id:'bottle-16',name:'16 oz Bottle',credit:2,active:true},
+        {id:'bottle-32',name:'32 oz Bottle',credit:5,active:true}
+      ]);
     data.customers.forEach(c=>{
       c.phone=String(c.phone||'');
       const old=Math.max(0,Number(c.cartonCredits||0));
@@ -431,6 +433,10 @@
     if(submit){submit.disabled=true;submit.textContent='SAVING RETURNS…'}
     let totalCredits=0,totalQty=0;
     try{
+      const cloudPage=/cloud-beta/i.test(location.pathname);
+      if(cloudPage && (!window.RRCloud||typeof window.RRCloud.api!=='function')){
+        throw new Error('The shared store database is still connecting. Please wait a moment and try again.');
+      }
       if(window.RRCloud&&typeof window.RRCloud.api==='function'){
         for(const t of rows){
           const qty=Number(qtyState[t.id]||0);
