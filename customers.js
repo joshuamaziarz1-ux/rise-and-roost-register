@@ -114,14 +114,14 @@ const oldShowStoreTab=showStoreTab;
 showStoreTab=function(name){
   if(name==='cartons'){
     document.querySelectorAll('.store-tab').forEach(t=>t.classList.toggle('active',t.dataset.storetab==='cartons'));
-    $('shopView').classList.add('hidden');$('pickupView').classList.add('hidden');$('cartonView').classList.remove('hidden');renderCartonStore();
+    $('shopView').classList.add('hidden');$('cartonView').classList.remove('hidden');renderCartonStore();
   }else{$('cartonView').classList.add('hidden');oldShowStoreTab(name)}
 };
 const oldShowTab=showTab;
 showTab=function(name){
   if(name==='customers'){
     document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab==='customers'));
-    ['dashboard','items','pickups','sales','inventory','settings'].forEach(n=>$(n+'Tab').classList.add('hidden'));
+    ['dashboard','items','sales','inventory','comments','settings'].forEach(n=>$(n+'Tab')?.classList.add('hidden'));
     $('customersTab').classList.remove('hidden');renderCartonAdmin();
   }else{$('customersTab').classList.add('hidden');oldShowTab(name)}
 };
