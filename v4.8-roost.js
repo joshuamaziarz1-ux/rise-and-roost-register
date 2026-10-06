@@ -23,7 +23,6 @@
     return customers().find(c=>c.id!==excludeId&&phoneDigits(c.phone)===d)||null;
   };
   const memberSales=c=>(data.sales||[]).filter(s=>!s.voided&&(s.customerId===c.id||(s.customerType==='roost-member'&&normName(s.customerName)===normName(c.name))));
-  const memberPickups=c=>(data.pickups||[]).filter(p=>p.customerId===c.id||phoneDigits(p.phone)===phoneDigits(c.phone)||normName(p.customerName)===normName(c.name));
   const legacyReturns=c=>(data.cartonReturns||[]).filter(r=>r.customerId===c.id||normName(r.customerName)===normName(c.name));
   const roostReturns=c=>(data.roostReturns||[]).filter(r=>r.customerId===c.id);
   const credits=c=>Math.max(0,Number(c.roostCredits??c.cartonCredits??0));
@@ -96,35 +95,6 @@
       .rr-history{grid-column:1/-1}.rr-history-list{display:grid;gap:8px}
       .rr-history-row{display:grid;grid-template-columns:130px 1fr auto;gap:12px;align-items:start;padding:11px 0;border-bottom:1px solid var(--line)}
       .rr-history-row:last-child{border-bottom:0}.rr-history-date{color:var(--muted);font-size:.85rem}.rr-history-total{font-weight:950}
-      .rr-pickup-row{border:1px solid var(--line);border-radius:13px;padding:14px;margin-top:10px;background:#fff}
-      .rr-pickup-top{display:flex;justify-content:space-between;gap:10px;align-items:center}
-      .rr-pickup-time{font-size:1.05rem;font-weight:950;margin-top:8px}
-      .rr-pickup-lines{display:grid;gap:5px;margin-top:10px;padding:10px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-      .rr-pickup-line{display:flex;justify-content:space-between;gap:12px}
-      .rr-pickup-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
-      .rr-pickup-meta>div{border:1px solid var(--line);border-radius:10px;padding:9px;background:#faf8f3}
-      .rr-pickup-meta span{display:block;font-size:.75rem;color:var(--muted);font-weight:800}
-      .rr-pickup-meta strong{display:block;margin-top:2px}
-      .rr-pickup-access{margin-top:10px;padding:10px 12px;border-radius:10px;background:#f7f3ea;font-weight:800}
-      .rr-pickup-note{margin-top:8px}
-      .rr-pickup-heartnote{margin-top:12px;padding:16px 18px;border:1px solid #d8c3a4;border-radius:14px;background:#f7f0e4;box-shadow:inset 0 0 0 1px rgba(255,255,255,.45)}
-      .rr-pickup-heartnote strong{display:block;margin-bottom:6px;color:#795a38;font-family:Georgia,'Times New Roman',serif;font-size:1.08rem;font-weight:700;letter-spacing:.01em}
-      .rr-pickup-heartnote p{margin:0;line-height:1.58;color:#6a5846;font-family:Georgia,'Times New Roman',serif;font-size:.96rem}
-      .rr-pickup-how{display:grid;gap:9px;margin-top:13px}
-      .rr-pickup-how>div{display:grid;grid-template-columns:30px 1fr;gap:10px;align-items:start;padding:10px 11px;border-radius:11px;background:rgba(255,255,255,.48)}
-      .rr-pickup-how>div>span{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#b89267;color:#fff;font-family:Georgia,'Times New Roman',serif;font-weight:700}
-      .rr-pickup-how p{font-size:.92rem}
-      .rr-pickup-how p strong{display:inline;color:#765738;font-size:.96rem}
-      .rr-pickup-thanks{margin-top:12px!important;font-style:italic;color:#7b654e!important}
-      .rr-pickup-scheduler{margin-top:12px;padding:12px;border:1px solid #d8c3a4;border-radius:12px;background:#fffaf2}
-      .rr-pickup-scheduler h4{margin:0 0 8px;color:#765738;font-family:Georgia,'Times New Roman',serif}
-      .rr-pickup-date-buttons,.rr-pickup-time-buttons{display:flex;gap:7px;flex-wrap:wrap}
-      .rr-pickup-date-btn,.rr-pickup-time-btn{border:1px solid #cfb795;background:#fff;border-radius:10px;padding:9px 11px;font-weight:850;color:#634c35;cursor:pointer}
-      .rr-pickup-date-btn.active{background:#8b6a46;color:#fff;border-color:#8b6a46}
-      .rr-pickup-time-buttons{margin-top:9px;padding-top:9px;border-top:1px solid #e5d7c4}
-      .rr-pickup-time-btn{background:#f6efe4}
-      .rr-pickup-time-btn:hover{background:#ece0cf}
-      @media(max-width:520px){.rr-pickup-meta{grid-template-columns:1fr}.rr-pickup-heartnote{padding:14px}.rr-pickup-how>div{grid-template-columns:28px 1fr}.rr-pickup-date-btn,.rr-pickup-time-btn{flex:1 1 auto}}
       .rr-session-note{font-size:.82rem;color:var(--muted);margin-top:10px}
       .rr-roost-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.rr-roost-tabs .btn{min-height:46px}
       .rr-roost-status{min-height:20px;font-weight:850;color:#8a322b}
@@ -195,7 +165,7 @@
         <div class="rr-roost-about-point">Keep up with special items, limited products, seasonal offerings, and sales.</div>
         <div class="rr-roost-about-point">Your purchases stay connected to your account.</div>
         <div class="rr-roost-about-point">Return reusable egg cartons, jars, and bottles to earn Roost Credits.</div>
-        <div class="rr-roost-about-point">View your purchase history, returns, credits, and pickup orders anytime.</div>
+        <div class="rr-roost-about-point">View your purchase history, returns, and credits anytime.</div>
       </div>
       <p>Joining only takes your name and phone number. No app, card, or password needed.</p>
       <button class="btn primary wide rr-roost-about-close" id="rrRoostAboutClose">GOT IT</button>
@@ -395,9 +365,6 @@
     document.getElementById('rrRoostTitle').textContent='My Roost';
     document.getElementById('rrRoostSub').textContent='';
     const body=document.getElementById('rrRoostBody');
-    const lead=Number(data.settings?.pickupPinLeadMinutes||data.settings?.pickupSchedule?.pinLeadMinutes||60);
-    const before=Number(data.settings?.pickupPinActiveBeforeMinutes||data.settings?.pickupSchedule?.pinActiveBeforeMinutes||15);
-    const grace=Number(data.settings?.pickupPinGraceMinutes||data.settings?.pickupSchedule?.pinGraceMinutes||45);
     body.innerHTML=`<div class="rr-roost-grid">
       <section class="rr-roost-section">
         <h3>Account</h3>
@@ -415,22 +382,6 @@
         <button class="btn primary wide" id="rrSubmitReturns" style="margin-top:12px">ADD RETURNS</button>
       </section>
       <section class="rr-roost-section">
-        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><h3 style="margin:0">Pickup Orders</h3><span class="badge on">Live</span></div>
-        <div class="rr-pickup-heartnote">
-          <strong>A little note about pickups</strong>
-          <p>Rise &amp; Roost is, first and foremost, a simple self-serve market where items are available on a first come, first served basis. We want to keep it that way so the store stays easy, fair, and enjoyable for everyone.</p>
-          <p style="margin-top:8px">From time to time, though, we’re happy to make a special pickup arrangement when we can. Pickups are not a way to reserve items ahead of everyone else — they’re something we arrange personally with you first.</p>
-          <div class="rr-pickup-how">
-            <div><span>1</span><p><strong>We approve the pickup first.</strong><br>Once we’ve agreed to a pickup, we’ll prepare and reserve the specific items for you.</p></div>
-            <div><span>2</span><p><strong>You choose a pickup time.</strong><br>After approval, available pickup days and times will appear here in My Roost for you to choose from.</p></div>
-            <div><span>3</span><p><strong>Your temporary door PIN is sent ${lead} minutes before pickup.</strong><br>The PIN becomes active ${before} minutes before your scheduled time, so there’s no need to arrive early.</p></div>
-            <div><span>4</span><p><strong>You have a little grace time.</strong><br>Your PIN stays active for ${grace} minutes after your scheduled pickup. If you’re going to be later than that, please contact us and, when possible, we can extend your access.</p></div>
-          </div>
-          <p class="rr-pickup-thanks">Thank you for helping us keep Rise &amp; Roost simple, personal, and fair. We truly appreciate it.</p>
-        </div>
-        <div id="rrPickupList"></div>
-      </section>
-      <section class="rr-roost-section">
         <h3>Session</h3>
         <p class="hint">Auto sign-out after 2 minutes of inactivity.</p>
         <button class="btn danger wide" id="rrLogout">LOG OUT</button>
@@ -442,7 +393,7 @@
     </div>`;
     document.getElementById('rrSaveProfile').onclick=()=>saveProfile(c);
     document.getElementById('rrLogout').onclick=()=>logout(true);
-    renderReturns(c);renderPickups(c);renderHistory(c);resetTimer();
+    renderReturns(c);renderHistory(c);resetTimer();
   }
 
   function saveProfile(c){
@@ -453,14 +404,11 @@
     if(!validPhone(phone)){status.textContent='Enter a 10-digit phone number.';return}
     const owner=phoneOwner(phone,c.id);
     if(owner){status.textContent='That phone number is already used by another My Roost account.';return}
-    const oldName=c.name;
     c.name=name;c.phone=phoneDigits(phone);c.updatedAt=new Date().toISOString();
-    (data.pickups||[]).forEach(p=>{if(p.customerId===c.id||normName(p.customerName)===normName(oldName)){p.customerId=c.id;p.customerName=c.name;p.phone=c.phone}});
     persist();status.style.color='#35613a';status.textContent='Saved.';renderShopBanner();renderHistory(c);resetTimer();
   }
 
   const qtyState={};
-  const rrPickupDayOpen={};
   function renderReturns(c){
     const box=document.getElementById('rrReturnList');if(!box)return;
     data.roostReturnTypes.filter(x=>x.active!==false).forEach(t=>{if(!(t.id in qtyState))qtyState[t.id]=0});
@@ -516,99 +464,6 @@
     }
   }
 
-  function memberPickupSlots(){
-    const s=data.settings?.pickupSchedule||{};
-    if(s.enabled===false||!Array.isArray(s.days))return [];
-    const taken=new Set((data.settings?.takenPickupSlots||[]).map(x=>new Date(x).getTime()));
-    const groups=[];
-    for(let add=0;add<=30;add++){
-      const day=new Date();day.setHours(0,0,0,0);day.setDate(day.getDate()+add);
-      const rule=s.days.find(x=>Number(x.day)===day.getDay());
-      if(!rule?.enabled||!Array.isArray(rule.times))continue;
-      const slots=[];
-      for(const tm of rule.times){
-        if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(tm)))continue;
-        const [h,m]=String(tm).split(':').map(Number),dt=new Date(day);dt.setHours(h,m,0,0);
-        if(dt.getTime()<=Date.now()||taken.has(dt.getTime()))continue;
-        slots.push({iso:dt.toISOString(),label:dt.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})});
-      }
-      if(slots.length){
-        const key=day.getFullYear()+'-'+String(day.getMonth()+1).padStart(2,'0')+'-'+String(day.getDate()).padStart(2,'0');
-        groups.push({key,label:day.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}),slots});
-      }
-    }
-    return groups;
-  }
-  function pickupScheduleChooser(p){
-    const groups=memberPickupSlots();
-    if(!groups.length)return '<div class="rr-pickup-scheduler"><h4>Choose your pickup time</h4><div class="rsub">There are no pickup times available right now. Please check back or contact us.</div></div>';
-    if(!rrPickupDayOpen[p.id]||!groups.some(g=>g.key===rrPickupDayOpen[p.id]))rrPickupDayOpen[p.id]=groups[0].key;
-    const open=groups.find(g=>g.key===rrPickupDayOpen[p.id])||groups[0];
-    return `<div class="rr-pickup-scheduler"><h4>Your pickup has been approved — choose a time</h4><div class="rsub" style="margin-bottom:9px">Choose one of the pickup times we’ve made available for this order.</div><div class="rr-pickup-date-buttons">${groups.slice(0,14).map(g=>`<button type="button" class="rr-pickup-date-btn ${g.key===open.key?'active':''}" data-pickup-day="${p.id}" data-day-key="${g.key}">${esc(g.label)}</button>`).join('')}</div><div class="rr-pickup-time-buttons">${open.slots.map(s=>`<button type="button" class="rr-pickup-time-btn" data-pickup-schedule="${p.id}" data-pickup-iso="${s.iso}">${esc(s.label)}</button>`).join('')}</div></div>`;
-  }
-  async function scheduleMemberPickup(c,pickupId,scheduledAt){
-    const when=new Date(scheduledAt);
-    if(Number.isNaN(when.getTime()))return;
-    if(!confirm('Schedule this pickup for '+when.toLocaleString([],{weekday:'long',month:'long',day:'numeric',hour:'numeric',minute:'2-digit'})+'?'))return;
-    try{
-      if(!window.RRCloud?.api)throw new Error('The shared pickup schedule is still connecting.');
-      await window.RRCloud.api('member_schedule_pickup',{customerId:c.id,phone:phoneDigits(c.phone),pickupId,scheduledAt});
-      await window.RRCloud.refreshMemberAccount?.();
-      showRoostNotice('Pickup Scheduled','Your pickup time is set. Your temporary door PIN will be sent before pickup.','success');
-    }catch(e){
-      showRoostNotice('Time Not Available',(e&&e.message)||'That time could not be scheduled. Please choose another.','warn');
-      try{await window.RRCloud?.refreshMemberAccount?.()}catch{}
-    }
-    resetTimer();
-  }
-  function renderPickups(c){
-    const box=document.getElementById('rrPickupList');if(!box)return;
-    const rank={ready:0,waiting:1,picked:2,cancelled:3};
-    const list=memberPickups(c).sort((a,b)=>{
-      const ra=rank[a.status]??9,rb=rank[b.status]??9;
-      if(ra!==rb)return ra-rb;
-      const ad=new Date(a.scheduledAt||a.created||0).getTime(),bd=new Date(b.scheduledAt||b.created||0).getTime();
-      return (a.status==='ready'||a.status==='waiting')?ad-bd:bd-ad;
-    });
-    if(!list.length){box.innerHTML='<div class="empty">No pickup orders on this account.</div>';return}
-    const lead=Number(data.settings?.pickupPinLeadMinutes||60);
-    const before=Number(data.settings?.pickupPinActiveBeforeMinutes||15);
-    const grace=Number(data.settings?.pickupPinGraceMinutes||45);
-    box.innerHTML=list.slice(0,12).map(p=>{
-      const approved=p.status==='waiting'&&!p.scheduledAt;
-      const total=(p.items||[]).reduce((s,i)=>s+Number(i.price||0)*Number(i.qty||0),0);
-      const statusLabel=p.status==='ready'?'Ready for Pickup':approved?'Pickup Approved':p.status==='waiting'?'Scheduled':p.status==='picked'?'Picked Up':'Cancelled';
-      const statusClass=(p.status==='ready'||approved)?'on':p.status==='cancelled'?'off':'';
-      const when=p.scheduledAt?new Date(p.scheduledAt):null;
-      const whenText=when&&!Number.isNaN(when.getTime())?when.toLocaleString([],{weekday:'long',month:'long',day:'numeric',hour:'numeric',minute:'2-digit'}):'Waiting for you to choose a pickup time';
-      const lines=(p.items||[]).map(i=>`<div class="rr-pickup-line"><span>${Number(i.qty||0)}× ${esc(i.itemName)}</span><strong>${money(Number(i.price||0)*Number(i.qty||0))}</strong></div>`).join('');
-      let access='';
-      if(p.status==='picked')access='Pickup completed.';
-      else if(p.status==='cancelled')access='This pickup was cancelled.';
-      else if(approved)access='We’ve approved and reserved these items for you. Please choose your pickup time below.';
-      else if(p.pinTextedAt&&p.doorPin){
-        let end=new Date(new Date(p.scheduledAt).getTime()+grace*60000);
-        if(p.accessExtendedUntil&&new Date(p.accessExtendedUntil)>end)end=new Date(p.accessExtendedUntil);
-        access=`Temporary door PIN: <strong>${esc(p.doorPin)}</strong><br><span class="rsub">Access begins ${before} minutes before pickup and is available until ${end.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}.</span>`;
-      }else access=`Your temporary door PIN will be texted about ${lead} minutes before pickup. It will become active ${before} minutes before your scheduled time and normally expire ${grace} minutes afterward.`;
-      return `<div class="rr-pickup-row">
-        <div class="rr-pickup-top"><strong>${statusLabel}</strong><span class="badge ${statusClass}">${statusLabel}</span></div>
-        <div class="rr-pickup-time">${esc(whenText)}</div>
-        <div class="rr-pickup-lines">${lines||'<div class="rsub">No item details available.</div>'}</div>
-        <div class="rr-pickup-meta">
-          <div><span>Order Total</span><strong>${money(total)}</strong></div>
-          <div><span>Payment</span><strong>${p.paid?'Paid':'Payment due'}</strong></div>
-          <div><span>Door Access</span><strong>${approved?'After you schedule':p.pinTextedAt&&p.doorPin?'PIN sent':'PIN sent before pickup'}</strong></div>
-          <div><span>Order Status</span><strong>${statusLabel}</strong></div>
-        </div>
-        <div class="rr-pickup-access">${access}</div>
-        ${approved?pickupScheduleChooser(p):''}
-        ${p.note?`<div class="rr-pickup-note rsub"><strong>Pickup note:</strong> ${esc(p.note)}</div>`:''}
-      </div>`;
-    }).join('');
-    box.querySelectorAll('[data-pickup-day]').forEach(b=>b.onclick=()=>{rrPickupDayOpen[b.dataset.pickupDay]=b.dataset.dayKey;renderPickups(c);resetTimer()});
-    box.querySelectorAll('[data-pickup-schedule]').forEach(b=>b.onclick=()=>scheduleMemberPickup(c,b.dataset.pickupSchedule,b.dataset.pickupIso));
-  }
 
   function renderHistory(c){
     const box=document.getElementById('rrHistoryList');if(!box)return;
@@ -624,7 +479,6 @@
     const c=currentMember();if(!c)return;
     const credit=document.getElementById('rrCreditCount');if(credit)credit.textContent=credits(c);
     renderShopBanner();
-    renderPickups(c);
     renderHistory(c);
   };
 
