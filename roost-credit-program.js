@@ -60,6 +60,7 @@
       .rr-member-name-btn.active{background:#526b50;color:#fff;border-color:#526b50}
       .rr-member-name-btn.active span{color:#edf3e8}
       .rr-member-detail-card{border:1px solid var(--line);border-radius:16px;background:#fff;padding:16px}
+      .rr-member-detail-closebar{display:flex;justify-content:flex-end;margin-bottom:10px}
       .rr-member-detail-top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
       .rr-member-credit-big{font-size:2rem;font-weight:950;color:#355f3a;white-space:nowrap}
       .rr-member-credit-big span{font-size:1rem;color:var(--muted)}
@@ -271,6 +272,7 @@
 
     box.innerHTML=`
       <div class="rr-member-detail-card">
+        <div class="rr-member-detail-closebar"><button class="btn ghost small" id="rrCloseMember">← Close Member</button></div>
         <div class="rr-member-detail-top">
           <div>
             <h3 style="margin:0 0 4px">${escRR(customer.name)}</h3>
@@ -296,6 +298,11 @@
       </div>
     `;
 
+    document.getElementById('rrCloseMember').onclick=()=>{
+      document.querySelectorAll('.rr-member-name-btn').forEach(x=>x.classList.remove('active'));
+      box.innerHTML='';
+      document.getElementById('rrMemberBrowser')?.scrollIntoView({behavior:'smooth',block:'start'});
+    };
     document.getElementById('rrMemberAdjust').onclick=()=>document.querySelector('[data-carton-adjust="'+id+'"]')?.click();
     document.getElementById('rrMemberEdit').onclick=()=>document.querySelector('[data-carton-edit="'+id+'"]')?.click();
     document.getElementById('rrMemberDelete').onclick=()=>document.querySelector('[data-carton-delete="'+id+'"]')?.click();
@@ -334,7 +341,13 @@
       </div>
     `).join('');
     list.querySelectorAll('[data-member-id]').forEach(btn=>btn.onclick=()=>{
+      const wasActive=btn.classList.contains('active');
       list.querySelectorAll('.rr-member-name-btn').forEach(x=>x.classList.remove('active'));
+      if(wasActive){
+        const box=document.getElementById('rrMemberDetail');
+        if(box)box.innerHTML='';
+        return;
+      }
       btn.classList.add('active');
       drawMemberDetail(btn.dataset.memberId);
       document.getElementById('rrMemberDetail')?.scrollIntoView({behavior:'smooth',block:'nearest'});
