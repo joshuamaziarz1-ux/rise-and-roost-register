@@ -154,40 +154,6 @@
     return out.result;
   }
 
-  function setupPublicPickup(){
-    const btn=document.getElementById('findPickupBtn');
-    const input=document.getElementById('pickupCodeInput');
-    const result=document.getElementById('pickupCustomerResult');
-    if(!btn||!input||!result)return;
-
-    btn.onclick=async()=>{
-      const code=input.value.trim().toUpperCase();
-      if(!code)return alert('Enter your pickup code.');
-      result.innerHTML='<div class="empty">Finding your pickup…</div>';
-      try{
-        const out=await api('pickup_lookup',{code});
-        const p=out.pickup;
-        const lines=(p.items||[]).map(i=>'<div class="pickup-line"><span>'+Number(i.qty)+'× '+safe(i.itemName)+'</span><strong>'+money2(Number(i.price)*Number(i.qty))+'</strong></div>').join('');
-        const total=(p.items||[]).reduce((s,i)=>s+Number(i.price)*Number(i.qty),0);
-        result.innerHTML='<div class="pickup-result"><div style="display:flex;justify-content:space-between;gap:10px;align-items:start"><div><h3>'+safe(p.customerName)+'</h3><div class="hint">Pickup code '+safe(p.code)+'</div></div><span class="status ready">Ready</span></div><div class="pickup-lines">'+lines+'</div><div class="total"><span>Total</span><span>'+money2(total)+'</span></div>'+(p.note?'<div class="notice">Pickup note: '+safe(p.note)+'</div>':'')+(p.paid?'<div class="notice"><strong>PAID</strong> — Your order has already been paid for.</div>':'<div class="notice">Please place <strong>'+money2(total)+'</strong> in the cash box. <strong>No change is available.</strong></div>')+'<button class="btn primary wide" id="rrCloudCompletePickup">'+(p.paid?'Complete Pickup':'I Paid — Complete Pickup')+'</button></div>';
-        document.getElementById('rrCloudCompletePickup').onclick=async()=>{
-          if(!p.paid&&!confirm('Place exactly '+money2(total)+' in the cash box, then press OK.'))return;
-          const b=document.getElementById('rrCloudCompletePickup');b.disabled=true;b.textContent='Completing…';
-          try{
-            const done=await api('pickup_complete',{code:p.code});
-            applyCatalog(done.catalog);
-            result.innerHTML='<div class="pickup-result" style="text-align:center"><h3>Thank you, '+safe(done.result.customerName)+'!</h3><p>Your pickup is complete.</p></div>';
-          }catch(e){
-            alert(e.message||'Pickup could not be completed.');
-            b.disabled=false;b.textContent=p.paid?'Complete Pickup':'I Paid — Complete Pickup';
-          }
-        };
-      }catch(e){
-        result.innerHTML='<div class="pickup-result"><strong>Pickup order not found.</strong><p class="hint">Check the code or ask Danielle for help.</p></div>';
-      }
-    };
-  }
-
   function setupPrivateCartonClub(){
     const view=document.getElementById('cartonView');
     if(!view)return;
