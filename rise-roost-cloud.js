@@ -467,6 +467,30 @@
     }
   }
 
+  async function waitForAdminSave(){
+    if(pendingSave&&!saving)await flushAdminSave();
+    while(saving)await new Promise(resolve=>setTimeout(resolve,50));
+    if(pendingSave){
+      await flushAdminSave();
+      while(saving)await new Promise(resolve=>setTimeout(resolve,50));
+    }
+  }
+
+  async function setVisibility(kind,id,active){
+    if(!adminReady)throw new Error('Admin is still connecting.');
+    await waitForAdminSave();
+    const out=await api('admin_set_visibility',{kind,id,active:!!active},true);
+    adminRevision=Number(out.revision||adminRevision);
+    adminIgnoreRealtimeUntil=Date.now()+1400;
+    const list=kind==='brand'?data.brands:data.items;
+    const row=(list||[]).find(x=>x.id===id);
+    if(row)row.active=!!active;
+    if(basePersist)basePersist();
+    if(typeof renderAll==='function')renderAll();
+    setSaveStatus('Saved');
+    return out;
+  }
+
   async function setupAdmin(){
     const adminScreen=document.getElementById('adminScreen');
     if(adminScreen)adminScreen.classList.add('hidden');
@@ -505,7 +529,7 @@
       auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
     });
 
-    window.RRCloud={api,checkout,refreshCatalog,refreshMemberAccount,refreshPublicState,client,get revision(){return publicCatalogRevision}};
+    window.RRCloud={api,checkout,refreshCatalog,refreshMemberAccount,refreshPublicState,setVisibility,client,get revision(){return publicCatalogRevision}};
 
     if(isAdminPage)await setupAdmin();
     else setupPublic();
