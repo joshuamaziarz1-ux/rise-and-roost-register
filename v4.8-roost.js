@@ -228,15 +228,34 @@
     setTimeout(()=>document.getElementById('rrPhoneSignIn')?.focus(),40);
   }
 
-  function signIn(phone){
+  async function signIn(phone){
     const status=document.getElementById('rrPhoneStatus');
     if(!validPhone(phone)){status.textContent='Enter a 10-digit phone number.';return}
-    const d=phoneDigits(phone);
-    const matches=customers().filter(c=>phoneDigits(c.phone)===d);
-    if(matches.length!==1){status.textContent=matches.length?'More than one account uses that number. Please ask Danielle for help.':'No Roost account was found with that number.';return}
-    setMember(matches[0]);
-    closeRoost();
-    goShop();
+    const btn=document.getElementById('rrPhoneGo');
+    if(btn){btn.disabled=true;btn.textContent='SIGNING IN…'}
+    status.textContent='';
+    try{
+      if(window.RRCloud&&typeof window.RRCloud.api==='function'){
+        const out=await window.RRCloud.api('member_lookup_phone',{phone:phoneDigits(phone)});
+        const m=out.member;
+        data.customers=[m];
+        persist();
+        setMember(m);
+        closeRoost();
+        goShop();
+        return;
+      }
+      const d=phoneDigits(phone);
+      const matches=customers().filter(c=>phoneDigits(c.phone)===d);
+      if(matches.length!==1){status.textContent=matches.length?'More than one account uses that number. Please ask Danielle for help.':'No Roost account was found with that number.';return}
+      setMember(matches[0]);
+      closeRoost();
+      goShop();
+    }catch(e){
+      status.textContent=(e&&e.message)||'Could not sign in right now.';
+    }finally{
+      if(btn){btn.disabled=false;btn.textContent='SIGN IN & SHOP'}
+    }
   }
 
   function openSignup(){
@@ -259,16 +278,41 @@
     document.getElementById('rrJoinSubmit').onclick=signup;
     setTimeout(()=>document.getElementById('rrJoinName')?.focus(),40);
   }
-  function signup(){
+  async function signup(){
     const name=document.getElementById('rrJoinName').value.trim();
     const phone=document.getElementById('rrJoinPhone').value;
     const status=document.getElementById('rrJoinStatus');
+    const btn=document.getElementById('rrJoinSubmit');
     if(!name){status.textContent='Enter your name.';return}
     if(!validPhone(phone)){status.textContent='Enter a 10-digit phone number.';return}
-    const existing=phoneOwner(phone);
-    if(existing){status.textContent='That phone number already has a Roost account. Go back and sign in.';return}
-    const c={id:uid('customer'),name,phone:phoneDigits(phone),cartonCredits:0,roostCredits:0,totalCartons:0,freeDozens:0,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
-    data.customers.push(c);persist();setMember(c);closeRoost();goShop();
+    status.textContent='';
+    if(btn){btn.disabled=true;btn.textContent='CREATING ACCOUNT…'}
+    try{
+      if(window.RRCloud&&typeof window.RRCloud.api==='function'){
+        const out=await window.RRCloud.api('member_signup',{
+          name,
+          phone:phoneDigits(phone),
+          email:'',
+          pickupAlerts:false,
+          storeUpdates:false
+        });
+        const m=out.member;
+        data.customers=[m];
+        persist();
+        setMember(m);
+        closeRoost();
+        goShop();
+        return;
+      }
+      const existing=phoneOwner(phone);
+      if(existing){status.textContent='That phone number already has a Roost account. Go back and sign in.';return}
+      const local={id:uid('customer'),name,phone:phoneDigits(phone),cartonCredits:0,roostCredits:0,totalCartons:0,freeDozens:0,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+      data.customers.push(local);persist();setMember(local);closeRoost();goShop();
+    }catch(e){
+      status.textContent=(e&&e.message)||'Could not create your Roost account right now.';
+    }finally{
+      if(btn){btn.disabled=false;btn.textContent='CREATE ACCOUNT & SHOP'}
+    }
   }
 
   function goShop(){
