@@ -72,7 +72,7 @@
     data.brands=Array.isArray(cat.brands)?cat.brands:[];
     data.items=Array.isArray(cat.items)?cat.items:[];
     const activeMemberId=sessionStorage.getItem('riseRoostActiveMemberV1')||sessionStorage.getItem('riseRoostTESTActiveMemberV1')||'';
-    if(!activeMemberId)data.pickups=[];
+    data.pickups=[];
     data.sales=[];
     data.stockLog=[];
     data.customers=Array.isArray(data.customers)&&activeMemberId
@@ -122,13 +122,8 @@
     try{
       const out=await api('member_account',{customerId:activeMemberId,phone});
       if(out.member)data.customers=[{...member,...out.member}];
-      data.pickups=Array.isArray(out.pickups)?out.pickups:[];
+      data.pickups=[];
       data.settings=data.settings&&typeof data.settings==='object'?data.settings:{};
-      data.settings.pickupPinLeadMinutes=Number(out.pinLeadMinutes||60);
-      data.settings.pickupPinActiveBeforeMinutes=Number(out.pinActiveBeforeMinutes||15);
-      data.settings.pickupPinGraceMinutes=Number(out.pinGraceMinutes||45);
-      data.settings.pickupSchedule=out.pickupSchedule||data.settings.pickupSchedule||{};
-      data.settings.takenPickupSlots=Array.isArray(out.takenSlots)?out.takenSlots:[];
       if(basePersist)basePersist();
       if(typeof window.RRRoostLiveRefresh==='function')window.RRRoostLiveRefresh();
       return out;
@@ -263,7 +258,6 @@
       const name=document.getElementById('joinName')?.value.trim()||'';
       const phone=document.getElementById('joinPhone')?.value.trim()||'';
       const email=(document.getElementById('joinEmail')?.value.trim()||'').toLowerCase();
-      const pickupAlerts=!!document.getElementById('joinPickupAlerts')?.checked;
       const storeUpdates=!!document.getElementById('joinStoreUpdates')?.checked;
       const digits=phone.replace(/\D/g,'');
 
@@ -276,7 +270,7 @@
       btn.textContent='Joining…';
 
       try{
-        const out=await api('member_signup',{name,phone,email,pickupAlerts,storeUpdates});
+        const out=await api('member_signup',{name,phone,email,pickupAlerts:false,storeUpdates});
         const member=out.member||{};
         const form=document.querySelector('.join-form');
         if(form)form.classList.add('hidden');
@@ -360,7 +354,6 @@
     if(adminScreen)adminScreen.classList.add('hidden');
     const pin=document.getElementById('pinOverlay');if(pin)pin.classList.add('hidden');
 
-    setupPublicPickup();
     setupPrivateCartonClub();
     setupPublicSignup();
     setupLiveUpdates();
@@ -401,11 +394,11 @@
   }
 
   function hasUsefulLocalData(d){
-    return !!((d?.items?.length||0)||(d?.customers?.length||0)||(d?.sales?.length||0)||(d?.pickups?.length||0));
+    return !!((d?.items?.length||0)||(d?.customers?.length||0)||(d?.sales?.length||0));
   }
 
   function remoteEmpty(d){
-    return !((d?.items?.length||0)||(d?.customers?.length||0)||(d?.sales?.length||0)||(d?.pickups?.length||0));
+    return !((d?.items?.length||0)||(d?.customers?.length||0)||(d?.sales?.length||0));
   }
 
   function installAdminStatus(email){
@@ -416,7 +409,7 @@
       const card=document.createElement('div');
       card.id='rrCloudAdminCard';
       card.className='card section';
-      card.innerHTML='<div class="section-head"><h2>Cloud Database</h2><span class="badge on">Connected</span></div><p class="hint">Signed in as <strong>'+safe(email||'Admin')+'</strong>. Inventory, members, sales, pickups and settings are stored in Supabase and shared across devices.</p><button class="btn" id="rrCloudSignOut">Sign Out</button><div id="rrCloudSaveStatus" class="hint" style="margin-top:8px">Saved</div>';
+      card.innerHTML='<div class="section-head"><h2>Cloud Database</h2><span class="badge on">Connected</span></div><p class="hint">Signed in as <strong>'+safe(email||'Admin')+'</strong>. Inventory, members, sales, comments, and settings are stored in Supabase and shared across devices.</p><button class="btn" id="rrCloudSignOut">Sign Out</button><div id="rrCloudSaveStatus" class="hint" style="margin-top:8px">Saved</div>';
       settings.insertBefore(card,settings.firstChild);
       document.getElementById('rrCloudSignOut').onclick=async()=>{await client.auth.signOut();location.reload()};
     }
