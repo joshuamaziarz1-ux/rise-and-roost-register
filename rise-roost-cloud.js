@@ -2,8 +2,10 @@
   const PROJECT_URL='https://vveahfizojxwfwnqiuyv.supabase.co';
   const PUBLISHABLE_KEY='sb_publishable_pQxp1PqX51kmj5gVX1xgAg_eaAESAX0';
   const API_URL=PROJECT_URL+'/functions/v1/rise-roost-api';
-  const ADMIN_PATH='admin-v5.html';
-  const isAdminPage=/\/admin-v5\.html$/i.test(location.pathname);
+  const isBeta=/cloud-beta/i.test(location.pathname);
+  const ADMIN_PATH=isBeta?'admin-cloud-beta.html':'admin-v5.html';
+  const REGISTER_PATH=isBeta?'register-cloud-beta.html':'register-v5.html';
+  const isAdminPage=/\/admin(?:-v5|-cloud-beta)\.html$/i.test(location.pathname);
   const sbLib=window.supabase;
 
   let client=null;
@@ -219,7 +221,7 @@
     o=document.createElement('div');
     o.id='rrCloudAuth';
     o.style.cssText='position:fixed;inset:0;z-index:20000;background:#f4efe5;display:grid;place-items:center;padding:20px';
-    o.innerHTML='<div class="modal" style="max-width:520px;background:white;border-radius:22px;padding:26px;box-shadow:0 12px 45px rgba(0,0,0,.14)"><h2 style="margin-top:0">Rise & Roost Admin</h2><p class="hint">Sign in with your approved admin email. Supabase will send a secure sign-in link.</p><div class="field" style="margin-top:14px"><label>Email</label><input id="rrCloudEmail" type="email" autocomplete="email" placeholder="you@example.com"></div><button class="btn primary wide" id="rrCloudSendLink" style="margin-top:14px">Send Sign-In Link</button><div id="rrCloudAuthMsg" class="hint" style="margin-top:12px"></div><a href="register-v5.html" class="btn ghost wide" style="margin-top:12px;text-decoration:none;text-align:center">Back to Register</a></div>';
+    o.innerHTML='<div class="modal" style="max-width:520px;background:white;border-radius:22px;padding:26px;box-shadow:0 12px 45px rgba(0,0,0,.14)"><h2 style="margin-top:0">Rise & Roost Admin</h2><p class="hint">Sign in with your approved admin email. Supabase will send a secure sign-in link.</p><div class="field" style="margin-top:14px"><label>Email</label><input id="rrCloudEmail" type="email" autocomplete="email" placeholder="you@example.com"></div><button class="btn primary wide" id="rrCloudSendLink" style="margin-top:14px">Send Sign-In Link</button><div id="rrCloudAuthMsg" class="hint" style="margin-top:12px"></div><a href="'+REGISTER_PATH+'" class="btn ghost wide" style="margin-top:12px;text-decoration:none;text-align:center">Back to Register</a></div>';
     document.body.appendChild(o);
     document.getElementById('rrCloudSendLink').onclick=async()=>{
       const email=document.getElementById('rrCloudEmail').value.trim();
@@ -341,6 +343,8 @@
   async function setupAdmin(){
     const adminScreen=document.getElementById('adminScreen');
     if(adminScreen)adminScreen.classList.add('hidden');
+    const exit=document.getElementById('exitAdmin');
+    if(exit)exit.onclick=()=>location.href=REGISTER_PATH;
     const pin=document.getElementById('pinOverlay');if(pin)pin.classList.add('hidden');
     authOverlay();
 
