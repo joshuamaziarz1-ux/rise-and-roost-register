@@ -70,9 +70,30 @@
     document.getElementById('rr48BackMethods').onclick=payChooser;
     const c=document.getElementById('rr48ConfirmPay'); if(c)c.onclick=()=>completePayment(method);
   }
-  function completePayment(method){
+  async function completePayment(method){
     const e=entries(); if(!e.length)return;
     for(const x of e)if(x.qty>available(x.item))return alert(`${x.item.name} no longer has enough available inventory.`);
+    const button=document.getElementById('rr48ConfirmPay');
+    if(button){button.disabled=true;button.textContent='SAVING PURCHASE…'}
+
+    if(window.RRCloud&&typeof window.RRCloud.checkout==='function'){
+      try{
+        await window.RRCloud.checkout(method,e);
+        cart={};
+        document.getElementById('payOverlay')?.classList.add('hidden');
+        const thanks=document.getElementById('thanks'); if(thanks)thanks.classList.remove('hidden');
+        renderAll();
+        const copy=document.querySelector('#thanks .rr48-thanks-copy'); if(copy)copy.textContent=`Your ${labels[method]} purchase is complete.`;
+        let n=8; const cd=document.getElementById('rr48Countdown'); if(cd)cd.textContent=`Returning to the home screen in ${n} seconds…`;
+        const timer=setInterval(()=>{n--;const el=document.getElementById('rr48Countdown');if(el)el.textContent=`Returning to the home screen in ${n} second${n===1?'':'s'}…`;if(n<=0){clearInterval(timer);document.getElementById('doneThanks')?.click()}},1000);
+        return;
+      }catch(err){
+        alert((err&&err.message)||'The purchase could not be saved. Please ask Danielle for help before trying again.');
+        if(button){button.disabled=false;button.textContent=`✓ I ${method==='cash'?'PUT '+money(total())+' IN THE CASH BOX':'SENT '+money(total())+' WITH '+(labels[method]||method).toUpperCase()}`}
+        return;
+      }
+    }
+
     const lines=e.map(x=>({itemId:x.item.id,itemName:x.item.name,brandId:x.item.brandId,brandName:brand(x.item.brandId)?.name||'Unknown',price:Number(x.item.price),qty:x.qty}));
     e.forEach(x=>{x.item.stock=Math.max(0,x.item.stock-x.qty);logStock(x.item,-x.qty,`Customer sale - ${labels[method]||method}`)});
     recordSale(lines,{payment:method,source:'store'});
@@ -96,7 +117,7 @@
     ensureSettings();
     const card=document.createElement('div');card.id='rr48PaymentAdmin';card.className='card section rr48-payment-admin';
     card.innerHTML=`<div class="section-head"><h2>Payment QR Codes</h2></div>
-      <p class="hint">Upload the official QR code for each payment method you want to offer. A payment choice only appears on the register after its QR code has been added here. The register stores the QR image only — not card numbers, wallet credentials, or secret payment keys.</p>
+      <p class="hint">Upload the official QR code for each payment method you want to offer. All payment choices stay visible on the register. Digital payment buttons remain unusable until their QR code is added here. The register stores the QR image only — not card numbers, wallet credentials, or secret payment keys.</p>
       <div class="rr48-payment-admin-grid">
         <div class="field"><label>Cash App QR Code</label><input id="rr48CashAppQr" type="file" accept="image/*"><div id="rr48CashAppQrView"></div><button class="btn small ghost" id="rr48RemoveCashApp" type="button">Remove Cash App QR</button></div>
         <div class="field"><label>PayPal QR Code</label><input id="rr48PaypalQr" type="file" accept="image/*"><div id="rr48PaypalQrView"></div><button class="btn small ghost" id="rr48RemovePaypal" type="button">Remove PayPal QR</button></div>
