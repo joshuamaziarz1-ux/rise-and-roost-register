@@ -51,6 +51,8 @@
       .rr-return-admin-list{display:grid;gap:10px;margin-top:14px}
       .rr-return-admin-row{display:grid;grid-template-columns:minmax(170px,1fr) 140px auto;gap:10px;align-items:end;border:1px solid var(--line);padding:12px;border-radius:14px;background:#fff}
       .rr-credit-save-status{margin-top:10px;font-weight:850}
+      .rr-credit-history-table{width:100%;border-collapse:collapse}.rr-credit-history-table th,.rr-credit-history-table td{padding:10px;border-bottom:1px solid var(--line);text-align:left}.rr-credit-history-table th{font-size:.82rem;color:var(--muted)}
+      .rr-credit-plus{font-weight:950;color:#355f3a}.rr-credit-minus{font-weight:950;color:#8b3a34}
       @media(max-width:650px){.rr-credit-actions,.rr-credit-admin-grid,.rr-return-admin-row{grid-template-columns:1fr}}
     `;document.head.appendChild(s);
   }
@@ -196,6 +198,48 @@
     row.querySelector('.rr-ret-remove').onclick=()=>row.remove();
     list.appendChild(row);
   }
+  function renderAdminCreditData(){
+    hideOldRewardUI();
+    adminCard();
+
+    const returns=Array.isArray(data?.roostReturns)?data.roostReturns:[];
+    const uses=Array.isArray(data?.roostCreditUses)?data.roostCreditUses:[];
+    const list=document.getElementById('cartonCustomerList');
+    if(list){
+      list.querySelectorAll('.row').forEach(row=>{
+        const adjust=row.querySelector('[data-carton-adjust]');
+        const id=adjust?.dataset?.cartonAdjust;
+        const customer=(data.customers||[]).find(x=>x.id===id);
+        if(!customer)return;
+        const earned=returns.filter(r=>r.customerId===id).reduce((s,r)=>s+Number(r.credits||0),0);
+        const redeemed=uses.filter(r=>r.customerId===id).reduce((s,r)=>s+Number(r.creditsUsed||0),0);
+        const middle=row.children[1];
+        if(middle){
+          const strong=middle.querySelector('strong');
+          const sub=middle.querySelector('.rsub');
+          if(strong)strong.textContent=balance(customer)+' credits';
+          if(sub)sub.textContent=earned+' earned · '+redeemed+' used';
+        }
+      });
+    }
+
+    const tab=document.getElementById('customersTab');
+    if(!tab)return;
+    let card=document.getElementById('rrCreditHistoryCard');
+    if(!card){
+      card=document.createElement('div');
+      card.id='rrCreditHistoryCard';
+      card.className='card section';
+      tab.appendChild(card);
+    }
+    const events=[
+      ...returns.map(r=>({date:r.date,member:r.customerName||'Member',detail:Number(r.qty||0)+' × '+(r.typeName||'Return'),amount:'+'+Number(r.credits||0)+' credits',kind:'plus'})),
+      ...uses.map(r=>({date:r.date,member:r.customerName||'Member',detail:'Used at checkout'+(r.discountAmount?(' · '+moneyRR(r.discountAmount)+' value') : ''),amount:'−'+Number(r.creditsUsed||0)+' credits',kind:'minus'}))
+    ].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,100);
+    card.innerHTML=`<div class="section-head"><h2>Roost Credit Activity</h2></div>`+
+      (events.length?`<div class="table-wrap"><table class="rr-credit-history-table"><thead><tr><th>Date</th><th>Member</th><th>Activity</th><th>Credits</th></tr></thead><tbody>${events.map(e=>`<tr><td>${new Date(e.date).toLocaleString()}</td><td>${escRR(e.member)}</td><td>${escRR(e.detail)}</td><td class="rr-credit-${e.kind}">${escRR(e.amount)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No Roost Credit activity has reached the shared database yet.</div>');
+  }
+
   async function saveAdminSettings(){
     const status=document.getElementById('rrCreditSaveStatus');
     const btn=document.getElementById('rrSaveCreditSettings');
@@ -225,7 +269,16 @@
   function apply(){
     addStyles();
     const isAdmin=/admin-cloud-beta\.html$/i.test(location.pathname);
-    if(isAdmin){hideOldRewardUI();adminCard();return}
+    if(isAdmin){
+      if(typeof renderAll==='function'&&!renderAll.__rrCreditAdminWrapped){
+        const baseRenderAll=renderAll;
+        const wrapped=function(){baseRenderAll();setTimeout(renderAdminCreditData,0)};
+        wrapped.__rrCreditAdminWrapped=true;
+        renderAll=wrapped;
+      }
+      renderAdminCreditData();
+      return;
+    }
     window.checkout=payChooser;
     const b=document.getElementById('payBtn');if(b)b.onclick=payChooser;
   }
