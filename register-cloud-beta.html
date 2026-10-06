@@ -16,9 +16,6 @@
 <section class="card shop"><h2>Shop</h2><p class="hint">Tap an item to add it to your order.</p><div id="productArea"></div></section>
 <aside class="card cart"><h2>Your Order</h2><p class="hint" id="cartHint">Nothing added yet.</p><div class="cart-list" id="cartList"></div><div class="total"><span>Total</span><span id="cartTotal">$0.00</span></div><button class="btn primary wide pay" id="payBtn" disabled>Pay</button><button class="btn ghost wide" id="clearBtn" disabled>Cancel / Clear Order</button></aside>
 </main>
-<main class="layout hidden" id="pickupView" style="grid-template-columns:1fr;display:none!important">
-<section class="card pickup-customer"><h2>Pickup Order</h2><p class="hint">Enter the pickup code Danielle gave you.</p><div class="pickup-search"><input id="pickupCodeInput" maxlength="8" autocomplete="off" placeholder="Pickup code"><button class="btn primary" id="findPickupBtn">Find Order</button></div><div id="pickupCustomerResult"></div></section>
-</main>
 <main class="layout hidden" id="cartonView" style="grid-template-columns:1fr">
 <section class="card pickup-customer"><h2>Carton Club</h2><p class="hint">Regular customers can return clean, reusable dozen-egg cartons and earn a free dozen.</p><div class="form two" style="margin-top:16px"><div class="field"><label>Your name</label><select id="cartonCustomerSelect"></select></div><div class="field"><label>How many cartons are you returning?</label><div class="qtys"><button class="qbtn" id="cartonMinus">−</button><input id="cartonQty" type="number" inputmode="numeric" min="1" step="1" value="1" style="width:90px;min-height:44px;text-align:center;border:1px solid var(--line);border-radius:10px"><button class="qbtn" id="cartonPlus">+</button></div></div></div><button class="btn primary wide" id="cartonSubmit">Return Egg Cartons</button><p class="hint">Only clean, dry, reusable dozen-egg cartons should be counted.</p><div id="cartonCustomerInfo"></div></section>
 </main>
@@ -33,29 +30,19 @@
 <section class="admin hidden" id="adminScreen">
 <div class="admin-top"><div><div class="logo">Store Admin</div><div class="sub">Rise & Roost Register v4.7.2</div></div><button class="btn" id="exitAdmin">Back to Store</button></div>
 <div class="admin-wrap">
-<div class="tabs"><button class="btn tab active" data-tab="dashboard">Dashboard</button><button class="btn tab" data-tab="items">Items & Vendors</button><button class="btn tab" data-tab="pickups">Pickup Orders</button><button class="btn tab" data-tab="customers">Roost Club</button><button class="btn tab" data-tab="sales">Sales & Vendors</button><button class="btn tab" data-tab="inventory">Inventory History</button><button class="btn tab" data-tab="settings">Settings & Backup</button></div>
+<div class="tabs"><button class="btn tab active" data-tab="dashboard">Dashboard</button><button class="btn tab" data-tab="items">Items & Vendors</button><button class="btn tab" data-tab="customers">Roost Club</button><button class="btn tab" data-tab="sales">Sales & Vendors</button><button class="btn tab" data-tab="inventory">Inventory History</button><button class="btn tab" data-tab="settings">Settings & Backup</button></div>
 
 <div id="dashboardTab">
 <div class="stats"><div class="card stat"><label>Sales Today</label><strong id="dashSalesToday">$0.00</strong></div><div class="card stat"><label>Items Sold Today</label><strong id="dashItemsToday">0</strong></div><div class="card stat"><label>Cash Expected Today</label><strong id="dashCashToday">$0.00</strong></div><div class="card stat"><label>Low / Sold Out</label><strong id="dashLowStock">0</strong></div></div>
 <div class="card section"><div class="section-head"><h2>Low Stock</h2></div><div id="lowStockList"></div></div>
-<div class="card section"><div class="section-head"><h2>Ready Pickup Orders</h2></div><div id="readyPickupList"></div></div>
 </div>
 
 <div id="itemsTab" class="hidden">
-<div class="stats"><div class="card stat"><label>Vendors / Brands</label><strong id="statBrands">0</strong></div><div class="card stat"><label>Saved Items</label><strong id="statItems">0</strong></div><div class="card stat"><label>On Hand</label><strong id="statStock">0</strong></div><div class="card stat"><label>Reserved</label><strong id="statReserved">0</strong></div></div>
+<div class="stats"><div class="card stat"><label>Vendors / Brands</label><strong id="statBrands">0</strong></div><div class="card stat"><label>Saved Items</label><strong id="statItems">0</strong></div><div class="card stat"><label>On Hand</label><strong id="statStock">0</strong></div></div>
 <div class="card section"><div class="section-head"><h2>Add Vendor / Brand</h2></div><div class="form" style="grid-template-columns:minmax(0,1fr) auto"><div class="field"><label>Vendor / brand name</label><input id="brandName" placeholder="Example: Sarah's Homestead"></div><button class="btn primary" id="addBrand">Add Vendor</button></div></div>
 <div class="card section"><div class="section-head"><h2>Vendors / Brands</h2></div><div class="list" id="brandList"></div></div>
 <div class="card section"><div class="section-head"><h2>Add Item</h2></div><div class="form"><div class="field"><label>Vendor / Brand</label><select id="itemBrand"></select></div><div class="field"><label>Item name</label><input id="itemName" placeholder="Example: Sourdough Bread"></div><div class="field"><label>Price</label><input id="itemPrice" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></div><div class="field"><label>Starting inventory</label><input id="itemStock" type="number" min="0" step="1" inputmode="numeric" placeholder="0"></div><div class="field"><label>Low-stock warning at</label><input id="itemLow" type="number" min="0" step="1" inputmode="numeric" value="2"></div><button class="btn primary" id="addItem">Add Item</button></div></div>
 <div class="card section"><div class="section-head"><h2>Saved Item Library</h2></div><div class="list" id="itemList"></div></div>
-</div>
-
-<div id="pickupsTab" class="hidden">
-<div class="card section"><div class="section-head"><h2>Create Pickup Order</h2><span class="badge">Items are reserved immediately</span></div>
-<div class="form"><div class="field"><label>Customer name</label><input id="pickupName" placeholder="Customer name"></div><div class="field"><label>Phone (optional)</label><input id="pickupPhone" type="tel" placeholder="Optional"></div><div class="field"><label>Status</label><select id="pickupStatus"><option value="ready">Ready for Pickup</option><option value="waiting">Waiting</option></select></div><div class="field"><label>Payment</label><select id="pickupPaid"><option value="no">Not paid</option><option value="yes">Already paid</option></select></div></div>
-<div class="form" style="margin-top:10px"><div class="field"><label>Item</label><select id="pickupItemSelect"></select></div><div class="field"><label>Quantity</label><input id="pickupQty" type="number" min="1" step="1" value="1"></div><button class="btn" id="addPickupLine">Add to Pickup</button><div class="field"><label>Pickup note (optional)</label><input id="pickupNote" placeholder="Example: refrigerator shelf"></div></div>
-<div id="pickupDraft" class="draft-lines"></div><div class="total" style="margin-top:12px"><span>Pickup Total</span><span id="pickupDraftTotal">$0.00</span></div><button class="btn primary wide" id="createPickupBtn">Create Pickup Order</button></div>
-<div class="card section"><div class="section-head"><h2>Active Pickup Orders</h2></div><div id="activePickupList"></div></div>
-<div class="card section"><div class="section-head"><h2>Pickup History</h2></div><div id="pickupHistory"></div></div>
 </div>
 
 <div id="customersTab" class="hidden">
@@ -78,26 +65,26 @@
 
 <div id="settingsTab" class="hidden">
 <div class="card section"><div class="section-head"><h2>Admin PIN</h2></div><p class="hint">Customers cannot access store management without the PIN.</p><button class="btn" id="changePin">Change Admin PIN</button></div>
-<div class="card section"><div class="section-head"><h2>Backup & Restore</h2></div><p class="hint">Export a backup regularly. It includes vendors, products, inventory, pickup orders, Roost Club members, carton credits and history, sales, and inventory history.</p><div class="backup-box"><button class="btn primary" id="exportBackup">Export Backup</button><input id="importBackupFile" type="file" accept="application/json,.json"><button class="btn" id="importBackup">Import Backup</button></div></div>
+<div class="card section"><div class="section-head"><h2>Backup & Restore</h2></div><p class="hint">Export a backup regularly. It includes vendors, products, inventory, Roost Club members, carton credits and history, sales, and inventory history.</p><div class="backup-box"><button class="btn primary" id="exportBackup">Export Backup</button><input id="importBackupFile" type="file" accept="application/json,.json"><button class="btn" id="importBackup">Import Backup</button></div></div>
 <div class="card section danger-zone"><div class="section-head"><h2>Version</h2></div><strong>Rise & Roost Register v4.7.2</strong><p class="hint">Data is saved on this device in the browser.</p></div>
 </div>
 </div>
 </section>
 
 <script src="test-storage.js?v=4.10.3"></script>
-<script src="core.js?v=5.0.5"></script>
-<script src="admin.js?v=4.7.2"></script>
+<script src="core.js?v=5.0.6"></script>
+<script src="admin.js?v=4.7.4"></script>
 <script src="pickup.js?v=4.9.0"></script>
-<script src="ui.js?v=4.7.2"></script>
-<script src="customers.js?v=4.7.2"></script>
-<script src="v4.js?v=4.7.2"></script>
+<script src="ui.js?v=4.7.4"></script>
+<script src="customers.js?v=4.7.3"></script>
+<script src="v4.js?v=4.7.4"></script>
 <script src="v4.8-kiosk.js?v=4.10.3"></script>
 <script src="v4.8-payments-cloud.js?v=5.1.0"></script>
 <script src="v4.8-logo.js?v=4.10.3"></script>
-<script src="v4.8-roost.js?v=5.2.0"></script>
+<script src="v4.8-roost.js?v=5.2.1"></script>
 <script src="v4.10-home.js?v=4.10.5"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="rise-roost-cloud.js?v=5.1.8"></script>
+<script src="rise-roost-cloud.js?v=5.1.9"></script>
 <script src="roost-credit-program.js?v=1.0.1"></script>
 </body>
 </html>
