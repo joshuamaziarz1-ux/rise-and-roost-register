@@ -1,154 +1,5 @@
 let rrSalesArchive={year:'',month:'',day:''};
 let rrInventoryArchive={year:'',month:'',day:''};
-let rrPickupEditItems=[];
-function pickupDraftAvailable(id){const i=item(id);const used=pickupDraft.filter(x=>x.itemId===id).reduce((s,x)=>s+x.qty,0);return Math.max(0,available(i)-used)}
-function addPickupLine(){const id=$('pickupItemSelect').value,qty=Math.floor(Number($('pickupQty').value));const i=item(id);if(!i||!Number.isFinite(qty)||qty<1)return alert('Choose an item and quantity.');const existing=pickupDraft.find(x=>x.itemId===id),current=existing?existing.qty:0;if(current+qty>available(i))return alert(`Only ${available(i)} of ${i.name} are available after other pickup reservations.`);if(existing)existing.qty+=qty;else pickupDraft.push({itemId:id,qty});$('pickupQty').value='1';renderPickupDraft()}
-function renderPickupDraft(){pickupDraft=pickupDraft.filter(x=>item(x.itemId)&&x.qty>0);$('pickupDraft').innerHTML=pickupDraft.length?pickupDraft.map(x=>{const i=item(x.itemId);return`<div class="draft-row"><div><strong>${esc(i.name)}</strong><div class="rsub">${esc(brand(i.brandId)?.name||'Unknown')} · ${money(i.price)} each</div></div><div><strong>× ${x.qty}</strong></div><button class="btn tiny danger" data-rdraft="${i.id}">Remove</button></div>`}).join(''):'<div class="empty" style="padding:16px">No items added to this pickup order yet.</div>';$('pickupDraft').querySelectorAll('[data-rdraft]').forEach(b=>b.onclick=()=>{pickupDraft=pickupDraft.filter(x=>x.itemId!==b.dataset.rdraft);renderPickupDraft()});$('pickupDraftTotal').textContent=money(pickupDraft.reduce((s,x)=>s+Number(item(x.itemId)?.price||0)*x.qty,0))}
-function generateCode(){let code;do{code=Math.random().toString(36).slice(2,7).toUpperCase()}while(data.pickups.some(p=>p.code===code&&['ready','waiting'].includes(p.status)));return code}
-function pickupScheduleDefaults(){return {enabled:true,pinLeadMinutes:60,pinActiveBeforeMinutes:15,pinGraceMinutes:45,slotMinutes:60,days:[{day:0,enabled:false,times:[]},{day:1,enabled:true,times:['10:00','12:00','14:00','16:00']},{day:2,enabled:true,times:['10:00','12:00','14:00','16:00']},{day:3,enabled:true,times:['10:00','12:00','14:00','16:00']},{day:4,enabled:true,times:['10:00','12:00','14:00','16:00']},{day:5,enabled:true,times:['10:00','12:00','14:00','16:00']},{day:6,enabled:false,times:[]}]}}
-function ensurePickupSchedule(){data.settings=data.settings&&typeof data.settings==='object'?data.settings:{};const d=pickupScheduleDefaults();const s=data.settings.pickupSchedule&&typeof data.settings.pickupSchedule==='object'?data.settings.pickupSchedule:d;s.enabled=s.enabled!==false;s.pinLeadMinutes=Math.max(0,Number(s.pinLeadMinutes||60));s.pinActiveBeforeMinutes=Math.max(0,Number(s.pinActiveBeforeMinutes||15));s.pinGraceMinutes=Math.max(0,Number(s.pinGraceMinutes||45));s.slotMinutes=Math.max(15,Number(s.slotMinutes||60));s.days=Array.isArray(s.days)?s.days:d.days;for(let i=0;i<7;i++){let row=s.days.find(x=>Number(x.day)===i);if(!row){row={day:i,enabled:false,times:[]};s.days.push(row)}row.enabled=!!row.enabled;row.times=Array.isArray(row.times)?row.times.filter(x=>/^([01]\d|2[0-3]):[0-5]\d$/.test(String(x))).sort():[]}data.settings.pickupSchedule=s;return s}
-function pickupDateTimeLabel(value){if(!value)return 'No pickup time';const d=new Date(value);if(Number.isNaN(d.getTime()))return 'No pickup time';return d.toLocaleString([],{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}
-function pickupPinStatus(p){if(!p.scheduledAt)return {text:'Waiting for member to schedule',cls:'off'};if(p.pinTextedAt)return {text:'PIN sent',cls:'on'};if(!p.doorPin)return {text:'PIN needed',cls:'low'};const lead=ensurePickupSchedule().pinLeadMinutes||60;const due=new Date(p.scheduledAt).getTime()-lead*60000;return Date.now()>=due?{text:'PIN text due',cls:'low'}:{text:'PIN scheduled',cls:''}}
-function pickupAvailableSlots(daysAhead=45,excludePickupId=''){
-  const s=ensurePickupSchedule();if(!s.enabled)return[];
-  const used=new Set((data.pickups||[]).filter(p=>p.id!==excludePickupId&&['ready','waiting'].includes(p.status)&&p.scheduledAt).map(p=>new Date(p.scheduledAt).getTime()));
-  const out=[],now=new Date();now.setSeconds(0,0);
-  for(let add=0;add<=daysAhead;add++){
-    const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()+add);
-    const rule=s.days.find(x=>Number(x.day)===d.getDay());if(!rule?.enabled)continue;
-    for(const tm of rule.times){
-      const [h,m]=tm.split(':').map(Number),dt=new Date(d);dt.setHours(h,m,0,0);
-      if(dt.getTime()<=Date.now())continue;
-      if(used.has(dt.getTime()))continue;
-      out.push({value:dt.toISOString(),label:dt.toLocaleString([],{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})});
-    }
-  }
-  return out;
-}
-function renderPickupSlotSelect(){
-  const sel=$('pickupSlot');if(!sel)return;const current=sel.value,slots=pickupAvailableSlots();
-  sel.innerHTML=slots.length?'<option value="">Choose pickup day & time</option>'+slots.map(x=>`<option value="${x.value}">${esc(x.label)}</option>`).join(''):'<option value="">No pickup times available</option>';
-  if(current&&slots.some(x=>x.value===current))sel.value=current;
-}
-function renderPickupScheduleSettings(){
-  const wrap=$('pickupScheduleSettings');if(!wrap)return;const s=ensurePickupSchedule(),names=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  wrap.innerHTML=`<div class="pickup-schedule-grid">${names.map((name,day)=>{const r=s.days.find(x=>Number(x.day)===day)||{enabled:false,times:[]};return`<div class="pickup-schedule-row"><label class="pickup-day-toggle"><input type="checkbox" data-pickup-day-enabled="${day}" ${r.enabled?'checked':''}><strong>${name}</strong></label><input data-pickup-day-times="${day}" value="${esc(r.times.join(', '))}" placeholder="10:00, 12:00, 14:00"></div>`}).join('')}</div><div class="form two" style="margin-top:12px"><div class="field"><label>Send temporary PIN before pickup (minutes)</label><input id="pickupPinLead" type="number" min="0" step="5" value="${s.pinLeadMinutes}"></div><div class="field"><label>PIN becomes active before pickup (minutes)</label><input id="pickupPinBefore" type="number" min="0" step="5" value="${s.pinActiveBeforeMinutes}"></div><div class="field"><label>PIN stays active after pickup (minutes)</label><input id="pickupPinGrace" type="number" min="0" step="5" value="${s.pinGraceMinutes}"></div><div class="field"><label>Pickup appointment length (minutes)</label><input id="pickupSlotMinutes" type="number" min="15" step="15" value="${s.slotMinutes}"></div></div><div class="hint" style="margin-top:8px">Members only see these times after you approve a pickup for them.</div><button class="btn primary" id="savePickupSchedule" style="margin-top:12px">Save Pickup Schedule</button>`;
-  $('savePickupSchedule').onclick=()=>{const next=ensurePickupSchedule();for(let day=0;day<7;day++){const row=next.days.find(x=>Number(x.day)===day);row.enabled=!!wrap.querySelector('[data-pickup-day-enabled="'+day+'"]')?.checked;row.times=String(wrap.querySelector('[data-pickup-day-times="'+day+'"]')?.value||'').split(',').map(x=>x.trim()).filter(Boolean).filter(x=>/^([01]\d|2[0-3]):[0-5]\d$/.test(x)).sort()}next.pinLeadMinutes=Math.max(0,Number($('pickupPinLead').value||60));next.pinActiveBeforeMinutes=Math.max(0,Number($('pickupPinBefore').value||15));next.pinGraceMinutes=Math.max(0,Number($('pickupPinGrace').value||45));next.slotMinutes=Math.max(15,Number($('pickupSlotMinutes').value||60));data.settings.pickupSchedule=next;save();renderPickupSlotSelect();alert('Pickup schedule saved.')}
-}
-function createPickup(){
-  const enteredName=$('pickupName').value.trim(),phone=$('pickupPhone').value.trim();
-  if(String(phone).replace(/\D/g,'').length<7)return alert('Enter the Roost member’s phone number.');
-  const digits=String(phone).replace(/\D/g,'').replace(/^1(?=\d{10}$)/,'');
-  const matches=(data.customers||[]).filter(x=>String(x.phone||'').replace(/\D/g,'').replace(/^1(?=\d{10}$)/,'')===digits);
-  if(matches.length!==1)return alert(matches.length?'More than one Roost member uses that phone number. Please fix the member record first.':'Pickup exceptions must be approved for an existing Roost member. Add or find the member first, then create the pickup.');
-  const member=matches[0],name=member.name||enteredName;
-  if(!pickupDraft.length)return alert('Add at least one item to the approved pickup.');
-  for(const x of pickupDraft){const i=item(x.itemId);if(x.qty>available(i))return alert(`${i.name} no longer has enough available inventory.`)}
-  const p={id:uid('pickup'),code:generateCode(),customerId:member.id,customerName:name,phone:member.phone||phone,note:$('pickupNote').value.trim(),status:'waiting',paid:$('pickupPaid').value==='yes',created:new Date().toISOString(),completed:null,scheduledAt:null,doorPin:'',pinTextedAt:null,accessExtendedUntil:null,items:pickupDraft.map(x=>{const i=item(x.itemId);return{itemId:i.id,itemName:i.name,brandId:i.brandId,brandName:brand(i.brandId)?.name||'Unknown',price:Number(i.price),qty:x.qty}})};
-  data.pickups.unshift(p);pickupDraft=[];$('pickupName').value='';$('pickupPhone').value='';$('pickupNote').value='';$('pickupPaid').value='no';save();
-  alert(`Pickup approved for ${p.customerName}.\n\nThe items are now reserved. The member can choose from your available pickup times in My Roost.`);
-}
-function pickupTotal(p){return p.items.reduce((s,i)=>s+Number(i.price)*Number(i.qty),0)}
-function renderPickups(){renderPickupScheduleSettings();renderPickupSlotSelect();const active=data.pickups.filter(p=>['ready','waiting'].includes(p.status)).sort((a,b)=>new Date(a.scheduledAt||a.created)-new Date(b.scheduledAt||b.created)),history=data.pickups.filter(p=>['picked','cancelled'].includes(p.status));$('activePickupList').innerHTML=active.length?active.map(p=>pickupAdminCard(p)).join(''):'<div class="empty">No active pickup orders.</div>';$('pickupHistory').innerHTML=history.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Customer</th><th>Pickup</th><th>Status</th><th>Total</th><th>Date</th></tr></thead><tbody>${history.slice(0,100).map(p=>`<tr><td><strong>${esc(p.customerName)}</strong></td><td>${esc(pickupDateTimeLabel(p.scheduledAt))}</td><td><span class="status ${p.status}">${p.status==='picked'?'Picked Up':'Cancelled'}</span></td><td class="money">${money(pickupTotal(p))}</td><td>${new Date(p.completed||p.created).toLocaleDateString()}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No pickup history yet.</div>';$('activePickupList').querySelectorAll('[data-pstatus]').forEach(b=>b.onclick=()=>setPickupStatus(b.dataset.pickup,b.dataset.pstatus));$('activePickupList').querySelectorAll('[data-pcancel]').forEach(b=>b.onclick=()=>cancelPickup(b.dataset.pcancel));$('activePickupList').querySelectorAll('[data-pcomplete]').forEach(b=>b.onclick=()=>adminCompletePickup(b.dataset.pcomplete));$('activePickupList').querySelectorAll('[data-pin-texted]').forEach(b=>b.onclick=()=>{const p=data.pickups.find(x=>x.id===b.dataset.pinTexted);if(!p)return;p.pinTextedAt=new Date().toISOString();save()});$('activePickupList').querySelectorAll('[data-set-pin]').forEach(b=>b.onclick=()=>setPickupDoorPin(b.dataset.setPin));$('activePickupList').querySelectorAll('[data-edit-pickup]').forEach(b=>b.onclick=()=>openPickupEditor(b.dataset.editPickup));$('activePickupList').querySelectorAll('[data-delete-pickup]').forEach(b=>b.onclick=()=>deletePickupOrder(b.dataset.deletePickup));$('activePickupList').querySelectorAll('[data-extend-pickup]').forEach(b=>b.onclick=()=>extendPickupAccess(b.dataset.extendPickup))}
-function pickupAccessWindow(p){
-  if(!p.scheduledAt)return '';
-  const s=ensurePickupSchedule(),at=new Date(p.scheduledAt);
-  if(Number.isNaN(at.getTime()))return '';
-  const start=new Date(at.getTime()-s.pinActiveBeforeMinutes*60000);
-  let end=new Date(at.getTime()+s.pinGraceMinutes*60000);
-  if(p.accessExtendedUntil&&new Date(p.accessExtendedUntil)>end)end=new Date(p.accessExtendedUntil);
-  return start.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+' – '+end.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
-}
-function pickupAdminCard(p){
-  const approved=p.status==='waiting'&&!p.scheduledAt,lines=p.items.map(i=>`${i.qty}× ${esc(i.itemName)}`).join(', '),pin=pickupPinStatus(p);
-  const statusLabel=p.status==='ready'?'Ready':approved?'Approved — Waiting for Member':p.status==='waiting'?'Scheduled':p.status;
-  const when=approved?'Member has not chosen a pickup time yet':pickupDateTimeLabel(p.scheduledAt);
-  const access=pickupAccessWindow(p);
-  return`<div class="row pickup-appt-row" data-pickup="${p.id}"><div><div class="rtitle">${esc(p.customerName)}</div><div class="rsub"><strong>${esc(when)}</strong> · ${esc(p.phone||'No phone')}</div><div class="rsub">${lines}${p.note?` · Note: ${esc(p.note)}`:''}</div><div class="rsub">Temporary door PIN: <strong>${p.doorPin?esc(p.doorPin):approved?'Created after scheduling':'Not entered yet'}</strong>${access?` · Access ${esc(access)}`:''}</div></div><div><span class="status ${p.status}">${esc(statusLabel)}</span> <span class="badge ${p.paid?'on':'off'}">${p.paid?'Paid':'Not Paid'}</span><div style="margin-top:6px"><span class="badge ${pin.cls}">${esc(pin.text)}</span></div><div class="rsub">${money(pickupTotal(p))}</div></div><div class="row-actions"><button class="btn small ghost" data-edit-pickup="${p.id}">Edit Order</button><button class="btn small danger" data-delete-pickup="${p.id}">Delete Order</button>${p.scheduledAt?`<button class="btn small ghost" data-set-pin="${p.id}">${p.doorPin?'Change PIN':'Set Door PIN'}</button>`:''}${p.status==='waiting'&&p.scheduledAt?`<button class="btn small" data-pstatus="ready" data-pickup="${p.id}">Mark Ready</button>`:p.status==='ready'?`<button class="btn small ghost" data-pstatus="waiting" data-pickup="${p.id}">Back to Scheduled</button>`:''}${p.doorPin&&!p.pinTextedAt?`<button class="btn small" data-pin-texted="${p.id}">Mark PIN Texted</button>`:''}${p.scheduledAt?`<button class="btn small ghost" data-extend-pickup="${p.id}">Extend Access +30 Min</button>`:''}<button class="btn small primary" data-pcomplete="${p.id}" ${p.status!=='ready'?'disabled title="Mark the order Ready before completing pickup"':''}>Complete Pickup</button><button class="btn small danger" data-pcancel="${p.id}">Cancel</button></div></div>`}
-function extendPickupAccess(id){
-  const p=data.pickups.find(x=>x.id===id);if(!p?.scheduledAt)return;
-  const s=ensurePickupSchedule(),base=new Date(p.scheduledAt).getTime()+s.pinGraceMinutes*60000;
-  const current=p.accessExtendedUntil?new Date(p.accessExtendedUntil).getTime():0;
-  p.accessExtendedUntil=new Date(Math.max(base,current)+30*60000).toISOString();
-  save();
-}
-function ensurePickupEditor(){
-  let o=document.getElementById('pickupEditOverlay');if(o)return o;
-  o=document.createElement('div');o.id='pickupEditOverlay';o.className='overlay hidden';
-  o.innerHTML='<div class="modal" style="max-width:760px"><div class="section-head"><h2>Edit Pickup Order</h2><button class="btn ghost" id="pickupEditClose">Close</button></div><div id="pickupEditBody"></div><div class="actions"><button class="btn ghost" id="pickupEditCancel">Cancel</button><button class="btn primary" id="pickupEditSave">Save Changes</button></div></div>';
-  document.body.appendChild(o);
-  $('pickupEditClose').onclick=$('pickupEditCancel').onclick=()=>o.classList.add('hidden');
-  o.addEventListener('click',e=>{if(e.target===o)o.classList.add('hidden')});
-  return o;
-}
-function pickupEditAvailable(i,p){
-  const existing=Number((p.items||[]).find(x=>x.itemId===i.id)?.qty||0);
-  return Math.max(0,available(i)+existing);
-}
-function renderPickupEditItems(p){
-  const box=$('pickupEditItems');if(!box)return;
-  const rows=(rrPickupEditItems||[]).filter(x=>Number(x.qty)>0);
-  box.innerHTML=rows.length?rows.map(x=>{const i=item(x.itemId),max=i?pickupEditAvailable(i,p):Number(x.qty);return `<div class="draft-row"><div><strong>${esc(x.itemName)}</strong><div class="rsub">${esc(x.brandName||'Unknown')} · ${money(x.price)} each · max ${max}</div></div><div class="field" style="max-width:110px"><input type="number" min="1" max="${max}" step="1" value="${x.qty}" data-edit-pickup-qty="${x.itemId}"></div><button class="btn tiny danger" data-edit-pickup-remove="${x.itemId}">Remove</button></div>`}).join(''):'<div class="empty">No items in this pickup.</div>';
-  box.querySelectorAll('[data-edit-pickup-qty]').forEach(inp=>inp.onchange=()=>{const x=rrPickupEditItems.find(y=>y.itemId===inp.dataset.editPickupQty),i=item(x?.itemId);if(!x||!i)return;const max=pickupEditAvailable(i,p),q=Math.floor(Number(inp.value||0));x.qty=Math.max(1,Math.min(max,q||1));inp.value=x.qty;updatePickupEditTotal(p)});
-  box.querySelectorAll('[data-edit-pickup-remove]').forEach(b=>b.onclick=()=>{rrPickupEditItems=rrPickupEditItems.filter(x=>x.itemId!==b.dataset.editPickupRemove);renderPickupEditItems(p);updatePickupEditTotal(p)});
-  updatePickupEditTotal(p);
-}
-function updatePickupEditTotal(p){const el=$('pickupEditTotal');if(el)el.textContent=money((rrPickupEditItems||[]).reduce((s,x)=>s+Number(x.price||0)*Number(x.qty||0),0))}
-function openPickupEditor(id){
-  const p=data.pickups.find(x=>x.id===id);if(!p||!['ready','waiting'].includes(p.status))return;
-  const o=ensurePickupEditor(),body=$('pickupEditBody');
-  rrPickupEditItems=(p.items||[]).map(x=>({...x}));
-  const slots=pickupAvailableSlots(45,p.id);
-  const current=p.scheduledAt?{value:p.scheduledAt,label:pickupDateTimeLabel(p.scheduledAt)}:null;
-  const slotRows=current&&!slots.some(x=>new Date(x.value).getTime()===new Date(current.value).getTime())?[current,...slots]:slots;
-  body.innerHTML=`<div class="form two" style="margin-top:12px">
-    <div class="field"><label>Customer name</label><input id="pickupEditName" value="${esc(p.customerName||'')}"></div>
-    <div class="field"><label>Phone Number</label><input id="pickupEditPhone" type="tel" inputmode="tel" value="${esc(p.phone||'')}"></div>
-    <div class="field"><label>Pickup day & time</label><select id="pickupEditSlot"><option value="">No time selected</option>${slotRows.map(x=>`<option value="${x.value}" ${p.scheduledAt&&new Date(x.value).getTime()===new Date(p.scheduledAt).getTime()?'selected':''}>${esc(x.label)}</option>`).join('')}</select></div>
-    <div class="field"><label>Temporary door PIN</label><input id="pickupEditPin" inputmode="numeric" maxlength="8" value="${esc(p.doorPin||'')}" placeholder="4–8 digit PIN"></div>
-    <div class="field"><label>Status</label><select id="pickupEditStatus"><option value="waiting" ${p.status==='waiting'?'selected':''}>${p.scheduledAt?'Scheduled':'Approved — Waiting for Member'}</option><option value="ready" ${p.status==='ready'?'selected':''}>Ready for Pickup</option></select></div>
-    <div class="field"><label>Payment</label><select id="pickupEditPaid"><option value="no" ${!p.paid?'selected':''}>Not paid</option><option value="yes" ${p.paid?'selected':''}>Already paid</option></select></div>
-    <div class="field" style="grid-column:1/-1"><label>Pickup note</label><input id="pickupEditNote" value="${esc(p.note||'')}" placeholder="Optional note"></div>
-  </div>
-  <div style="margin-top:16px"><div class="section-head"><h3 style="margin:0">Order Items</h3><strong id="pickupEditTotal">${money(pickupTotal(p))}</strong></div><div id="pickupEditItems" class="draft-lines"></div></div>
-  <div class="form" style="grid-template-columns:minmax(0,1fr) 120px auto;margin-top:10px">
-    <div class="field"><label>Add item</label><select id="pickupEditAddItem">${data.items.map(i=>`<option value="${i.id}">${esc(brand(i.brandId)?.name||'Unknown')} — ${esc(i.name)} (${available(i)} available)</option>`).join('')}</select></div>
-    <div class="field"><label>Qty</label><input id="pickupEditAddQty" type="number" min="1" step="1" value="1"></div>
-    <button class="btn" id="pickupEditAddBtn">Add Item</button>
-  </div>`;
-  renderPickupEditItems(p);
-  $('pickupEditAddBtn').onclick=()=>{const iid=$('pickupEditAddItem').value,i=item(iid),qty=Math.floor(Number($('pickupEditAddQty').value||0));if(!i||qty<1)return;const existing=rrPickupEditItems.find(x=>x.itemId===iid),max=pickupEditAvailable(i,p);const next=(existing?Number(existing.qty):0)+qty;if(next>max)return alert(`Only ${max} of ${i.name} can be reserved for this order.`);if(existing)existing.qty=next;else rrPickupEditItems.push({itemId:i.id,itemName:i.name,brandId:i.brandId,brandName:brand(i.brandId)?.name||'Unknown',price:Number(i.price),qty});$('pickupEditAddQty').value='1';renderPickupEditItems(p)};
-  $('pickupEditSave').onclick=()=>savePickupEdits(p);
-  o.classList.remove('hidden');
-}
-function savePickupEdits(p){
-  const name=$('pickupEditName').value.trim(),phone=$('pickupEditPhone').value.trim(),slot=$('pickupEditSlot').value,pin=$('pickupEditPin').value.trim(),items=(rrPickupEditItems||[]).filter(x=>Number(x.qty)>0);
-  if(!name)return alert('Enter the customer name.');
-  if(String(phone).replace(/\D/g,'').length<7)return alert('Enter a valid phone number.');
-  if(pin&&!/^\d{4,8}$/.test(pin))return alert('Door PIN should be 4 to 8 digits.');
-  if(!items.length)return alert('A pickup order needs at least one item.');
-  for(const x of items){const i=item(x.itemId);if(!i)return alert('One of the items is no longer available.');const max=pickupEditAvailable(i,p);if(Number(x.qty)>max)return alert(`Only ${max} of ${i.name} can be reserved for this order.`)}
-  const oldPin=p.doorPin||'',oldSlot=p.scheduledAt||'';
-  p.customerName=name;p.phone=phone;p.scheduledAt=slot||null;p.doorPin=pin;p.status=$('pickupEditStatus').value;p.paid=$('pickupEditPaid').value==='yes';p.note=$('pickupEditNote').value.trim();p.items=items.map(x=>({...x,qty:Number(x.qty)}));p.updatedAt=new Date().toISOString();
-  if(oldPin!==p.doorPin||oldSlot!==p.scheduledAt)p.pinTextedAt=null;
-  if(!p.scheduledAt){p.doorPin='';p.pinTextedAt=null;p.accessExtendedUntil=null;p.status='waiting'}
-  rrPickupEditItems=[];
-  $('pickupEditOverlay').classList.add('hidden');
-  save();
-}
-function deletePickupOrder(id){
-  const p=data.pickups.find(x=>x.id===id);if(!p||!['ready','waiting'].includes(p.status))return;
-  if(!confirm(`Delete the pickup order for ${p.customerName}?\n\nThis removes it from My Roost and releases all reserved inventory. This cannot be undone.`))return;
-  data.pickups=data.pickups.filter(x=>x.id!==id);
-  pickupDraft=pickupDraft.filter(x=>x.pickupId!==id);
-  save();
-}
-function setPickupDoorPin(id){const p=data.pickups.find(x=>x.id===id);if(!p)return;const value=prompt('Temporary door PIN (4–8 digits):',p.doorPin||'');if(value===null)return;const pin=value.trim();if(pin&&!/^\d{4,8}$/.test(pin))return alert('Door PIN should be 4 to 8 digits.');p.doorPin=pin;p.pinTextedAt=null;save()}
-function setPickupStatus(id,status){const p=data.pickups.find(x=>x.id===id);if(!p)return;p.status=status;save()}
-function cancelPickup(id){const p=data.pickups.find(x=>x.id===id);if(!p)return;if(confirm(`Cancel pickup order for ${p.customerName}?\n\nReserved inventory will become available again.`)){p.status='cancelled';p.completed=new Date().toISOString();save()}}
-function completePickup(p,customerFlow=false){if(!p||p.status!=='ready')return;for(const line of p.items){const i=item(line.itemId);if(!i||Number(i.stock)<Number(line.qty))return alert(`${line.itemName} no longer has enough on-hand inventory. Adjust inventory before completing this pickup.`)}if(!p.paid&&!customerFlow&&!confirm(`${p.customerName} owes ${money(pickupTotal(p))}.\n\nConfirm exact cash has been placed in the cash box?`))return;for(const line of p.items){const i=item(line.itemId);i.stock=Math.max(0,Number(i.stock)-Number(line.qty));logStock(i,-Number(line.qty),'Pickup order')}recordSale(p.items,{payment:p.paid?'prepaid':'cash',source:'pickup',pickupId:p.id});p.status='picked';p.completed=new Date().toISOString();persist();renderAll();if(customerFlow){$('pickupCustomerResult').innerHTML=`<div class="pickup-result" style="text-align:center"><h3>Thank you, ${esc(p.customerName)}!</h3><p>Your pickup is complete.</p></div>`}else alert('Pickup completed.')}
-function adminCompletePickup(id){completePickup(data.pickups.find(x=>x.id===id),false)}
-function findPickup(){const code=$('pickupCodeInput').value.trim().toUpperCase();if(!code)return alert('Enter your pickup code.');const p=data.pickups.find(x=>x.code.toUpperCase()===code&&x.status==='ready');if(!p){$('pickupCustomerResult').innerHTML='<div class="pickup-result"><strong>Pickup order not found.</strong><p class="hint">Check the code or ask Danielle for help.</p></div>';return}const lines=p.items.map(i=>`<div class="pickup-line"><span>${i.qty}× ${esc(i.itemName)}</span><strong>${money(Number(i.price)*Number(i.qty))}</strong></div>`).join('');$('pickupCustomerResult').innerHTML=`<div class="pickup-result"><div style="display:flex;justify-content:space-between;gap:10px;align-items:start"><div><h3>${esc(p.customerName)}</h3><div class="hint">Pickup code ${esc(p.code)}</div></div><span class="status ready">Ready</span></div><div class="pickup-lines">${lines}</div><div class="total"><span>Total</span><span>${money(pickupTotal(p))}</span></div>${p.note?`<div class="notice">Pickup note: ${esc(p.note)}</div>`:''}${p.paid?'<div class="notice"><strong>PAID</strong> — Your order has already been paid for.</div>':`<div class="notice">Please place <strong>${money(pickupTotal(p))}</strong> in the cash box. <strong>No change is available.</strong></div>`}<button class="btn primary wide" id="completeCustomerPickup">${p.paid?'Complete Pickup':'I Paid — Complete Pickup'}</button></div>`;$('completeCustomerPickup').onclick=()=>{if(!p.paid&&!confirm(`Place exactly ${money(pickupTotal(p))} in the cash box, then press OK.`))return;completePickup(p,true)}}
 function rrArchiveParts(value){
   const d=new Date(value);
   if(Number.isNaN(d.getTime()))return null;
@@ -236,7 +87,7 @@ function renderSales(){
   if(rrSalesArchive.month)html+='<div class="rr-archive-level"><strong>Day</strong>'+rrArchiveButtons(days,rrSalesArchive.day,'data-sales-day',v=>new Date(v+'T12:00:00').toLocaleDateString([],{month:'short',day:'numeric'}))+'</div>';
   if(rrSalesArchive.day){
     const daySales=parts.filter(x=>x.p.day===rrSalesArchive.day).map(x=>x.s);
-    html+=`<div class="table-wrap rr-archive-table"><table class="table"><thead><tr><th>Time</th><th>Items</th><th>Type</th><th>Total</th><th></th></tr></thead><tbody>${daySales.map(s=>{const d=new Date(s.date),lines=s.items.map(i=>`${i.qty}× ${esc(i.itemName)} <span class="muted">(${esc(i.brandName)})</span>`).join('<br>');return`<tr style="${s.voided?'opacity:.5':''}"><td>${d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}</td><td>${lines}${s.voided?'<br><strong>VOIDED</strong>':''}</td><td>${s.source==='pickup'?'Pickup':'Store'} · ${s.payment==='cash'?'Cash':s.payment==='roostcredit'?'Roost Credit':'Prepaid'}</td><td class="money">${money(s.total)}</td><td>${s.voided?'':`<button class="btn tiny danger" data-void="${s.id}">Void</button>`}</td></tr>`}).join('')}</tbody></table></div>`;
+    html+=`<div class="table-wrap rr-archive-table"><table class="table"><thead><tr><th>Time</th><th>Items</th><th>Type</th><th>Total</th><th></th></tr></thead><tbody>${daySales.map(s=>{const d=new Date(s.date),lines=s.items.map(i=>`${i.qty}× ${esc(i.itemName)} <span class="muted">(${esc(i.brandName)})</span>`).join('<br>');return`<tr style="${s.voided?'opacity:.5':''}"><td>${d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}</td><td>${lines}${s.voided?'<br><strong>VOIDED</strong>':''}</td><td>Store · ${s.payment==='cash'?'Cash':s.payment==='roostcredit'?'Roost Credit':'Prepaid'}</td><td class="money">${money(s.total)}</td><td>${s.voided?'':`<button class="btn tiny danger" data-void="${s.id}">Void</button>`}</td></tr>`}).join('')}</tbody></table></div>`;
   }
   html+='</div>';
   $('salesHistory').innerHTML=html;
@@ -245,7 +96,7 @@ function renderSales(){
   $('salesHistory').querySelectorAll('[data-sales-day]').forEach(b=>b.onclick=()=>{const v=b.dataset.salesDay;rrSalesArchive.day=rrSalesArchive.day===v?'':v;renderSales()});
   $('salesHistory').querySelectorAll('[data-void]').forEach(b=>b.onclick=()=>voidSale(b.dataset.void));
 }
-function voidSale(id){const s=data.sales.find(x=>x.id===id);if(!s||s.voided)return;if(!confirm(`Void this ${money(s.total)} sale?\n\nInventory will be added back.`))return;s.items.forEach(line=>{const i=item(line.itemId);if(i){i.stock+=Number(line.qty);logStock(i,Number(line.qty),`Voided sale ${s.id.slice(-5)}`)}});s.voided=true;s.voidedAt=new Date().toISOString();if(s.pickupId){const p=data.pickups.find(x=>x.id===s.pickupId);if(p&&p.status==='picked'){p.status='ready';p.completed=null}}save()}
+function voidSale(id){const s=data.sales.find(x=>x.id===id);if(!s||s.voided)return;if(!confirm(`Void this ${money(s.total)} sale?\n\nInventory will be added back.`))return;s.items.forEach(line=>{const i=item(line.itemId);if(i){i.stock+=Number(line.qty);logStock(i,Number(line.qty),`Voided sale ${s.id.slice(-5)}`)}});s.voided=true;s.voidedAt=new Date().toISOString()save()}
 function renderInventoryHistory(){
   const all=[...(data.stockLog||[])].sort((a,b)=>new Date(b.date)-new Date(a.date));
   if(!all.length){$('inventoryHistory').innerHTML='<div class="empty">No inventory adjustments recorded yet.</div>';return}
