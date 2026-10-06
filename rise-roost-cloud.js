@@ -82,6 +82,16 @@
     data.cartonSettings=cat.cartonSettings||{cartonsPerFreeDozen:12,rewardItemId:''};
     data.settings=data.settings&&typeof data.settings==='object'?data.settings:{};
     data.settings.paymentQrs=cat.paymentQrs||{};
+    data.settings.roostCreditSettings=cat.roostCreditSettings||data.settings.roostCreditSettings||{
+      creditValue:0.50,
+      allowFullPurchase:true,
+      returnTypes:[
+        {id:'egg-carton',name:'Egg Carton',credit:1,active:true},
+        {id:'bottle-16',name:'16 oz Bottle',credit:2,active:true},
+        {id:'bottle-32',name:'32 oz Bottle',credit:5,active:true}
+      ]
+    };
+    data.roostReturnTypes=Array.isArray(data.settings.roostCreditSettings.returnTypes)?data.settings.roostCreditSettings.returnTypes:[];
     if(basePersist)basePersist();
     if(typeof renderAll==='function')renderAll();
   }
@@ -100,11 +110,17 @@
     }
   }
 
-  async function checkout(method,entryList){
+  async function checkout(method,entryList,opts={}){
     const lines=(entryList||[]).map(x=>({itemId:x.item.id,qty:Number(x.qty)}));
     const expectedTotal=(entryList||[]).reduce((s,x)=>s+Number(x.item.price)*Number(x.qty),0);
     cloudBadge('Saving purchase…');
-    const out=await api('checkout',{payment:method,expectedTotal,lines});
+    const out=await api('checkout',{
+      payment:method,
+      expectedTotal,
+      lines,
+      customerId:opts.customerId||null,
+      useCredits:!!opts.useCredits
+    });
     applyCatalog(out.catalog);
     cloudBadge('Purchase saved');
     setTimeout(()=>cloudBadge('', 'hidden'),1800);
