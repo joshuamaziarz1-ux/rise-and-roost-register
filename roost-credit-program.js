@@ -51,9 +51,18 @@
       .rr-return-admin-list{display:grid;gap:10px;margin-top:14px}
       .rr-return-admin-row{display:grid;grid-template-columns:minmax(170px,1fr) 140px auto;gap:10px;align-items:end;border:1px solid var(--line);padding:12px;border-radius:14px;background:#fff}
       .rr-credit-save-status{margin-top:10px;font-weight:850}
+      .rr-member-detail-card{border:1px solid var(--line);border-radius:16px;background:#fff;padding:16px}
+      .rr-member-detail-top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+      .rr-member-credit-big{font-size:2rem;font-weight:950;color:#355f3a;white-space:nowrap}
+      .rr-member-credit-big span{font-size:1rem;color:var(--muted)}
+      .rr-member-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+      .rr-member-stats>div{border:1px solid var(--line);border-radius:12px;padding:12px;background:#faf8f3}
+      .rr-member-stats span{display:block;font-size:.8rem;color:var(--muted);font-weight:850}
+      .rr-member-stats strong{display:block;font-size:1.35rem;margin-top:4px}
+      .rr-member-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
       .rr-credit-history-table{width:100%;border-collapse:collapse}.rr-credit-history-table th,.rr-credit-history-table td{padding:10px;border-bottom:1px solid var(--line);text-align:left}.rr-credit-history-table th{font-size:.82rem;color:var(--muted)}
       .rr-credit-plus{font-weight:950;color:#355f3a}.rr-credit-minus{font-weight:950;color:#8b3a34}
-      @media(max-width:650px){.rr-credit-actions,.rr-credit-admin-grid,.rr-return-admin-row{grid-template-columns:1fr}}
+      @media(max-width:650px){.rr-credit-actions,.rr-credit-admin-grid,.rr-return-admin-row,.rr-member-stats{grid-template-columns:1fr}.rr-member-detail-top{flex-direction:column}}
     `;document.head.appendChild(s);
   }
 
@@ -198,46 +207,108 @@
     row.querySelector('.rr-ret-remove').onclick=()=>row.remove();
     list.appendChild(row);
   }
+  function ensureMemberBrowser(){
+    const tab=document.getElementById('customersTab');if(!tab)return null;
+    let card=document.getElementById('rrMemberBrowser');
+    if(card)return card;
+
+    const oldMembers=document.getElementById('cartonCustomerList')?.closest('.card.section');
+    if(oldMembers)oldMembers.style.display='none';
+    const addMember=document.getElementById('addCartonCustomer')?.closest('.card.section');
+    if(addMember)tab.insertBefore(addMember,oldMembers||null);
+
+    card=document.createElement('div');
+    card.id='rrMemberBrowser';
+    card.className='card section';
+    card.innerHTML=`
+      <div class="section-head"><h2>Roost Members</h2><span class="badge">Member Lookup</span></div>
+      <div class="field"><label>Select Roost Member</label><select id="rrMemberSelect"><option value="">Choose a member</option></select></div>
+      <div id="rrMemberDetail" style="margin-top:14px"></div>
+    `;
+    const creditCard=document.getElementById('rrCreditAdmin');
+    if(creditCard?.nextSibling)tab.insertBefore(card,creditCard.nextSibling);
+    else tab.appendChild(card);
+
+    document.getElementById('rrMemberSelect').onchange=e=>drawMemberDetail(e.target.value);
+    return card;
+  }
+
+  function memberEvents(customerId){
+    const returns=(Array.isArray(data?.roostReturns)?data.roostReturns:[])
+      .filter(r=>r.customerId===customerId)
+      .map(r=>({
+        date:r.date,
+        detail:Number(r.qty||0)+' × '+(r.typeName||'Return'),
+        amount:'+'+Number(r.credits||0)+' credits',
+        kind:'plus'
+      }));
+    const uses=(Array.isArray(data?.roostCreditUses)?data.roostCreditUses:[])
+      .filter(r=>r.customerId===customerId)
+      .map(r=>({
+        date:r.date,
+        detail:'Used at checkout'+(r.discountAmount?(' · '+moneyRR(r.discountAmount)+' value'):''),
+        amount:'−'+Number(r.creditsUsed||0)+' credits',
+        kind:'minus'
+      }));
+    return [...returns,...uses].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  }
+
+  function drawMemberDetail(id){
+    const box=document.getElementById('rrMemberDetail');if(!box)return;
+    const customer=(data.customers||[]).find(c=>c.id===id);
+    if(!customer){box.innerHTML='<div class="empty">Choose a member to view their account.</div>';return}
+
+    const events=memberEvents(id);
+    const earned=(data.roostReturns||[]).filter(r=>r.customerId===id).reduce((s,r)=>s+Number(r.credits||0),0);
+    const used=(data.roostCreditUses||[]).filter(r=>r.customerId===id).reduce((s,r)=>s+Number(r.creditsUsed||0),0);
+
+    box.innerHTML=`
+      <div class="rr-member-detail-card">
+        <div class="rr-member-detail-top">
+          <div>
+            <h3 style="margin:0 0 4px">${escRR(customer.name)}</h3>
+            <div class="rsub">${escRR(customer.phone||'No phone saved')}</div>
+            <div class="rsub">${escRR(customer.email||'No email')}</div>
+          </div>
+          <div class="rr-member-credit-big">${balance(customer)} <span>credits</span></div>
+        </div>
+        <div class="rr-member-stats">
+          <div><span>Credits Earned</span><strong>${earned}</strong></div>
+          <div><span>Credits Used</span><strong>${used}</strong></div>
+          <div><span>Current Balance</span><strong>${balance(customer)}</strong></div>
+        </div>
+        <div class="rr-member-actions">
+          <button class="btn" id="rrMemberAdjust">Adjust Credits</button>
+          <button class="btn ghost" id="rrMemberEdit">Edit Member</button>
+          <button class="btn danger" id="rrMemberDelete">Delete Member</button>
+        </div>
+        <div style="margin-top:18px">
+          <h3 style="margin:0 0 10px">Member Activity</h3>
+          ${events.length?`<div class="table-wrap"><table class="rr-credit-history-table"><thead><tr><th>Date</th><th>Activity</th><th>Credits</th></tr></thead><tbody>${events.map(e=>`<tr><td>${new Date(e.date).toLocaleString()}</td><td>${escRR(e.detail)}</td><td class="rr-credit-${e.kind}">${escRR(e.amount)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No Roost Credit activity for this member yet.</div>'}
+        </div>
+      </div>
+    `;
+
+    document.getElementById('rrMemberAdjust').onclick=()=>document.querySelector('[data-carton-adjust="'+id+'"]')?.click();
+    document.getElementById('rrMemberEdit').onclick=()=>document.querySelector('[data-carton-edit="'+id+'"]')?.click();
+    document.getElementById('rrMemberDelete').onclick=()=>document.querySelector('[data-carton-delete="'+id+'"]')?.click();
+  }
+
   function renderAdminCreditData(){
     hideOldRewardUI();
     adminCard();
+    ensureMemberBrowser();
 
-    const returns=Array.isArray(data?.roostReturns)?data.roostReturns:[];
-    const uses=Array.isArray(data?.roostCreditUses)?data.roostCreditUses:[];
-    const list=document.getElementById('cartonCustomerList');
-    if(list){
-      list.querySelectorAll('.row').forEach(row=>{
-        const adjust=row.querySelector('[data-carton-adjust]');
-        const id=adjust?.dataset?.cartonAdjust;
-        const customer=(data.customers||[]).find(x=>x.id===id);
-        if(!customer)return;
-        const earned=returns.filter(r=>r.customerId===id).reduce((s,r)=>s+Number(r.credits||0),0);
-        const redeemed=uses.filter(r=>r.customerId===id).reduce((s,r)=>s+Number(r.creditsUsed||0),0);
-        const middle=row.children[1];
-        if(middle){
-          const strong=middle.querySelector('strong');
-          const sub=middle.querySelector('.rsub');
-          if(strong)strong.textContent=balance(customer)+' credits';
-          if(sub)sub.textContent=earned+' earned · '+redeemed+' used';
-        }
-      });
-    }
+    const globalHistory=document.getElementById('rrCreditHistoryCard');
+    if(globalHistory)globalHistory.remove();
 
-    const tab=document.getElementById('customersTab');
-    if(!tab)return;
-    let card=document.getElementById('rrCreditHistoryCard');
-    if(!card){
-      card=document.createElement('div');
-      card.id='rrCreditHistoryCard';
-      card.className='card section';
-      tab.appendChild(card);
-    }
-    const events=[
-      ...returns.map(r=>({date:r.date,member:r.customerName||'Member',detail:Number(r.qty||0)+' × '+(r.typeName||'Return'),amount:'+'+Number(r.credits||0)+' credits',kind:'plus'})),
-      ...uses.map(r=>({date:r.date,member:r.customerName||'Member',detail:'Used at checkout'+(r.discountAmount?(' · '+moneyRR(r.discountAmount)+' value') : ''),amount:'−'+Number(r.creditsUsed||0)+' credits',kind:'minus'}))
-    ].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,100);
-    card.innerHTML=`<div class="section-head"><h2>Roost Credit Activity</h2></div>`+
-      (events.length?`<div class="table-wrap"><table class="rr-credit-history-table"><thead><tr><th>Date</th><th>Member</th><th>Activity</th><th>Credits</th></tr></thead><tbody>${events.map(e=>`<tr><td>${new Date(e.date).toLocaleString()}</td><td>${escRR(e.member)}</td><td>${escRR(e.detail)}</td><td class="rr-credit-${e.kind}">${escRR(e.amount)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No Roost Credit activity has reached the shared database yet.</div>');
+    const sel=document.getElementById('rrMemberSelect');
+    if(!sel)return;
+    const selected=sel.value;
+    const members=[...(data.customers||[])].sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+    sel.innerHTML='<option value="">Choose a member</option>'+members.map(c=>`<option value="${escRR(c.id)}">${escRR(c.name)}${c.phone?' · '+escRR(c.phone):''}</option>`).join('');
+    if(selected&&members.some(c=>c.id===selected))sel.value=selected;
+    drawMemberDetail(sel.value);
   }
 
   async function saveAdminSettings(){
