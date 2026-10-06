@@ -170,7 +170,25 @@
       list=document.getElementById('rr410CommentList');
     }
     const arr=Array.isArray(data.comments)?data.comments:[];
-    list.innerHTML=arr.length?'<div class="rr410-comment-list">'+arr.slice(0,50).map(x=>`<div class="rr410-comment-row"><strong>${esc(x.name||'Anonymous')}</strong><div class="rr410-comment-meta">${new Date(x.date).toLocaleString()}</div><p>${esc(x.text)}</p></div>`).join('')+'</div>':'<div class="empty">No customer comments yet.</div>';
+    list.innerHTML=arr.length?'<div class="rr410-comment-list">'+arr.map(x=>`<div class="rr410-comment-row"><div style="display:flex;justify-content:space-between;gap:10px;align-items:start"><div><strong>${esc(x.name||'Anonymous')}</strong><div class="rr410-comment-meta">${new Date(x.date).toLocaleString()}</div></div><button class="btn tiny danger" data-comment-delete="${esc(x.id)}">Delete</button></div><p>${esc(x.text)}</p></div>`).join('')+'</div>':'<div class="empty">No customer comments yet.</div>';
+    list.querySelectorAll('[data-comment-delete]').forEach(b=>b.onclick=()=>deleteComment(b.dataset.commentDelete));
+  }
+
+  async function deleteComment(id){
+    const comment=(data.comments||[]).find(x=>x.id===id);
+    if(!comment)return;
+    if(!confirm('Delete this customer comment? This cannot be undone.'))return;
+    try{
+      if(/admin-cloud-beta/i.test(location.pathname)){
+        if(!window.RRCloud?.api)throw new Error('Cloud connection is not ready.');
+        await window.RRCloud.api('comment_delete',{id},true);
+      }
+      data.comments=(data.comments||[]).filter(x=>x.id!==id);
+      persist();
+      renderCommentAdmin();
+    }catch(e){
+      alert((e&&e.message)||'The comment could not be deleted.');
+    }
   }
 
   function removeFillerCopy(){
