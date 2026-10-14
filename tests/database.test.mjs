@@ -66,4 +66,14 @@ test('PostgreSQL transactions, permissions and data preservation',async t=>{
     const records=[{collection:'items',id:existing.id,value:{...existing,stock:999}},{collection:'sales',id:'imported-sale-test',value:{id:'imported-sale-test',date:new Date().toISOString(),total:5,payment:'cash',source:'store',voided:false,items:[{itemId:existing.id,itemName:'Historical Eggs',brandName:'Historical Brand',price:5,qty:1}]}}];
     await rpc('admin_import',request({records}),ADMIN);const after=await state();assert.equal(after.items.find(x=>x.id===existing.id).stock,existing.stock);assert.deepEqual(after.customers,before.customers);assert.equal(after.sales.find(x=>x.id==='imported-sale-test').items[0].itemName,'Historical Eggs');
   });
+  await t.test('deleting a vendor and its products preserves historical receipts',async()=>{
+    await rpc('admin_import',request({records:[
+      {collection:'brands',id:'delete-brand-test',value:{id:'delete-brand-test',name:'Historical Vendor',active:true}},
+      {collection:'items',id:'delete-item-test',value:{id:'delete-item-test',brandId:'delete-brand-test',name:'Historical Product',price:2,stock:2,lowStock:1,active:true}},
+      {collection:'sales',id:'delete-sale-test',value:{id:'delete-sale-test',date:new Date().toISOString(),total:2,payment:'cash',source:'store',voided:false,items:[{itemId:'delete-item-test',itemName:'Historical Product',brandId:'delete-brand-test',brandName:'Historical Vendor',price:2,qty:1}]}}
+    ]}),ADMIN);
+    const d=await state(),b=d.brands.find(x=>x.id==='delete-brand-test'),i=d.items.find(x=>x.id==='delete-item-test');
+    await rpc('admin_patch',request({changes:[{collection:'items',id:i.id,before:i,after:null},{collection:'brands',id:b.id,before:b,after:null}]}),ADMIN);
+    const receipt=(await state()).sales.find(x=>x.id==='delete-sale-test');assert.equal(receipt.items[0].itemName,'Historical Product');assert.equal(receipt.items[0].brandName,'Historical Vendor');assert.equal(receipt.items[0].itemId,null);
+  });
 });

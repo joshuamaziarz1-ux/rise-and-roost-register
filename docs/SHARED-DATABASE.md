@@ -27,7 +27,7 @@ Production counts and full record fingerprints for all 16 business tables were u
 
 ## Verification
 
-**47 automated tests passed**: 16 Node/PostgreSQL/handler tests, one isolated deployment/preservation test, and 30 browser cases across desktop Chromium, iPhone WebKit and Android Chromium. PostgreSQL 17.6 runs locally with a schema fixture reconstructed from the project's schema and constraints, and synthetic records only. No live-project connection is used by default.
+**49 automated tests passed**: 18 Node/PostgreSQL/handler tests, one isolated deployment/preservation test, and 30 browser cases across desktop Chromium, iPhone WebKit and Android Chromium. PostgreSQL 17.6 runs locally with a schema fixture reconstructed from the project's schema and constraints, and synthetic records only. No live-project connection is used by default.
 
 Coverage includes hide/show, brands, price and stock changes, sold-out state, two independent Registers, concurrent last-unit checkout, stale Admin edits, server total changes, negative/fractional quantities, credit debit/restore, profile and return changes, pickup reservations/completion, rewards, backup preservation, network loss/reconnect, offline Admin retries, expired Admin sessions, signed member capability expiry/tampering, a simulated six hours open, recovery after reload, RLS and unauthorized RPC/Admin access. Mobile layouts were visually checked.
 

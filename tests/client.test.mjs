@@ -12,3 +12,6 @@ test('ordering changes do not cause writes; metadata and QR changes are included
  const before={customers:[{id:'a',name:'A'},{id:'b',name:'B'}],settings:{paymentQrs:{cashapp:'one'}}};const after={customers:[before.customers[1],before.customers[0]],settings:{paymentQrs:{cashapp:'two'}}};
  assert.equal(model.changes(before,after).length,1);assert.equal(model.changes(before,after)[0].collection,'payments');
 });
+test('vendor-and-products deletion orders children before the protected vendor',()=>{
+ const diff=model.changes({brands:[{id:'b'}],items:[{id:'i',brandId:'b'}]},{brands:[],items:[]});assert.equal(diff[0].collection,'items');assert.equal(diff[1].collection,'brands');
+});

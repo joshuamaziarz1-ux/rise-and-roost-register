@@ -24,7 +24,11 @@
     const next=new Map(documents(after).map(r=>[r.collection+':'+r.id,r]));
     const out=[];
     for (const [key,row] of next) if (!same(old.get(key)?.value,row.value)) out.push({collection:row.collection,id:row.id,before:old.get(key)?.value || null,after:row.value});
-    for (const [key,row] of old) if (!next.has(key)) out.push({collection:row.collection,id:row.id,before:row.value,after:null});
+    const removed=[];
+    for (const [key,row] of old) if (!next.has(key)) removed.push({collection:row.collection,id:row.id,before:row.value,after:null});
+    // Remove products before their vendor; historical receipt rows retain names.
+    const rank={items:0,customers:1,brands:2};
+    removed.sort((a,b)=>(rank[a.collection]??3)-(rank[b.collection]??3));out.push(...removed);
     // Inserts/updates before deletions preserves foreign keys when moving products.
     return out;
   }
