@@ -7,11 +7,20 @@ import pg from 'pg';
 export const ADMIN='11111111-1111-4111-8111-111111111111';
 export const OTHER='22222222-2222-4222-8222-222222222222';
 export async function database(){
+  let pool,stopServer;
+  if(process.env.RR_TEST_DATABASE_URL){
+    // CI uses a disposable Postgres container. Never accept a remote store URL.
+    const url=new URL(process.env.RR_TEST_DATABASE_URL);
+    if(!['127.0.0.1','localhost'].includes(url.hostname))throw Error('Test database must be on loopback');
+    const name='rise_roost_test_'+crypto.randomUUID().replaceAll('-','');
+    const control=new pg.Pool({connectionString:url.href});await control.query('create database "'+name+'"');url.pathname='/'+name;
+    pool=new pg.Pool({connectionString:url.href,max:10});
+    stopServer=async()=>{if(!/^rise_roost_test_[0-9a-f]{32}$/.test(name))throw Error('Unexpected test database name');await control.query('drop database "'+name+'"');await control.end();};
+  }else{
   const listener=net.createServer();await new Promise(r=>listener.listen(0,'127.0.0.1',r));const port=listener.address().port;await new Promise(r=>listener.close(r));
   const dir=path.resolve('work/pg-'+port);await fs.mkdir(dir,{recursive:true});
   const instance=new EmbeddedPostgres({databaseDir:dir,port,user:'postgres',password:'test-only',persistent:true,initdbFlags:['--no-sync','--encoding=UTF8'],onLog:()=>{},onError:()=>{}});
   await instance.initialise();
-  let stopServer;
   if(process.platform==='win32'){
     // pg_ctl creates a restricted Windows token. Direct postgres.exe startup
     // rejects elevated GitHub Windows runner accounts even though initdb works.
@@ -22,7 +31,8 @@ export async function database(){
     catch(e){throw new Error('Test PostgreSQL startup failed: '+e.message+' '+await fs.readFile(path.join(dir,'server.log'),'utf8').catch(()=>''));}
     stopServer=()=>run(['-D',dir,'-m','fast','-w','stop']);
   }else{await instance.start();stopServer=()=>instance.stop();}
-  const pool=new pg.Pool({host:'127.0.0.1',port,user:'postgres',password:'test-only',database:'postgres',max:10});
+  pool=new pg.Pool({host:'127.0.0.1',port,user:'postgres',password:'test-only',database:'postgres',max:10});
+  }
   try{
   await pool.query(await fs.readFile('tests/fixtures/existing-schema.sql','utf8')); 
   await pool.query(await fs.readFile('tests/fixtures/constraints.sql','utf8'));
