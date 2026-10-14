@@ -109,7 +109,7 @@ function deleteCustomer(id){
 function saveCartonSettings(){
   const n=Math.floor(Number($('cartonThreshold').value)),rewardId=$('cartonRewardItem').value;
   if(!Number.isFinite(n)||n<1)return alert('Cartons per free dozen must be at least 1.');
-  data.cartonSettings.cartonsPerFreeDozen=n;data.cartonSettings.rewardItemId=rewardId;persist();renderAll();alert('Carton Club settings saved.');
+  data.cartonSettings.cartonsPerFreeDozen=n;data.cartonSettings.rewardItemId=rewardId;persist();renderAll();alert(window.__RR_CLOUD_MODE?'Carton Club settings are saving. Check the shared-store status for confirmation.':'Carton Club settings saved.');
 }
 
 const oldShowStoreTab=showStoreTab;

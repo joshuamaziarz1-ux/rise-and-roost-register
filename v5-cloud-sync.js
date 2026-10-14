@@ -144,7 +144,7 @@
     const parsed=JSON.parse(await file.text()),incoming=parsed.data||parsed,records=model.documents(incoming);
     if(!confirm('Import missing records from '+records.length+' backup entries? Existing IDs, balances, inventory and history will be preserved. Imported sales do not deduct stock again.'))return;
     lockAdmin(true);await api('admin_import',{records});await loadAdmin();status('Missing backup records imported. Existing records preserved.');
-  }catch(e){alert('Import could not be prepared: '+e.message);}}
+  }catch(e){status('Import not confirmed — retry the same backup after reconnecting.');alert('Import not confirmed: '+e.message);}finally{lockAdmin(!!pending);}}
   async function findPickupCloud(){const code=document.getElementById('pickupCodeInput').value.trim();if(!code)return;const box=document.getElementById('pickupCustomerResult');try{
     const {pickup:p}=await api('pickup_lookup',{code});box.innerHTML='<div class="pickup-result"><h3>'+esc(p.customerName)+'</h3><p>'+p.items.map(i=>Number(i.qty)+' × '+esc(i.itemName)).join('<br>')+'</p><p>'+money(pickupTotal(p))+(p.paid?' · Paid':' · Place exact cash in the cash box')+'</p><button class="btn primary wide" id="rrCompletePickup">Complete Pickup</button></div>';
     const requestId=crypto.randomUUID();document.getElementById('rrCompletePickup').onclick=async()=>{if(!confirm('Confirm payment and complete this pickup?'))return;try{await api('pickup_complete',{code,requestId});box.textContent='Pickup complete. Thank you!';await refresh();}catch(e){alert(e.message);}};
