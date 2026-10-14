@@ -69,9 +69,11 @@
       if(memberToken&&sessionStorage.getItem('riseRoostActiveMemberV1'))try{applyMember(await api('member_account'));}catch(e){if(e.status===401||e.status===403){forgetMember();document.dispatchEvent(new Event('rr:member-expired'));}else throw e;}
     }connection(true,'Connected to shared store');}catch(e){status(e.message);}finally{loading=false;}
   }
-  async function loadAdmin(){
+  async function loadAdmin(force=false){
     const out=await api('admin_load',{},true);
-    if(!ready||!lastAdminData||!model.same(lastAdminData,out.data)){lastAdminData=clone(out.data);suppress=true;data=migrate(out.data);renderAll();baseline=clone(data);suppress=false;}
+    // A read started before a form opened must not replace its version baseline.
+    if(!force&&ready&&(pending||saving||typeof edit!=='undefined'&&edit||document.activeElement?.matches('input,textarea,select')&&document.activeElement.closest('#adminScreen')))return;
+    if(force||!ready||!lastAdminData||!model.same(lastAdminData,out.data)){lastAdminData=clone(out.data);suppress=true;data=migrate(out.data);renderAll();baseline=clone(data);suppress=false;}
     ready=true;lockAdmin(false);document.getElementById('rrCloudGate')?.remove();document.getElementById('pinOverlay')?.classList.add('hidden');document.getElementById('adminScreen').classList.remove('hidden');
     document.getElementById('changePin')?.closest('.card')?.remove();
     if(!document.getElementById('rrCloudAdminCard')){const card=document.createElement('div');card.id='rrCloudAdminCard';card.className='card section';card.innerHTML='<h2>Shared Cloud Database</h2><p class="hint">Changes are saved to Supabase and shared across devices.</p><button class="btn" id="rrCloudSignOut">Sign Out</button><button class="btn" id="rrExportDraft">Export Unsaved Draft</button><button class="btn" id="rrExportPrevious">Export Previous Device Data</button>';document.getElementById('settingsTab').prepend(card);
@@ -98,9 +100,9 @@
   }
   async function flush(){
     if(saving||!pending)return;saving=true;
-    try{await api('admin_patch',pending,true);pending=null;retry=1000;await loadAdmin();status('Saved to shared store');}
+    try{await api('admin_patch',pending,true);pending=null;retry=1000;await loadAdmin(true);status('Saved to shared store');}
     catch(e){if(e.conflict||(e.status>=400&&e.status<500&&e.status!==401)){
-      window.RRCloud.conflictedDraft=clone(data);pending=null;await loadAdmin();status('Edit was not saved: '+e.message);alert(e.message+' Your attempted edit is available with Export Unsaved Draft in Settings.');
+      window.RRCloud.conflictedDraft=clone(data);pending=null;await loadAdmin(true);status('Edit was not saved: '+e.message);alert(e.message+' Your attempted edit is available with Export Unsaved Draft in Settings.');
     }else{status('Not confirmed — retrying the same change when connected.');clearTimeout(timer);timer=setTimeout(flush,retry);retry=Math.min(retry*2,30000);}}finally{saving=false;lockAdmin(!!pending);}
   }
   async function checkout(method,entryList,opts={}){
@@ -122,7 +124,7 @@
   }
   persist=persistCloud;
   if(!admin)available=i=>Math.max(0,Number(i?.stock||0)); // Catalog stock already excludes all pickup reservations.
-  window.RRCloud={api,checkout,recoverPending,refreshCatalog:refresh,refreshAdmin:loadAdmin,applyMember,forgetMember,get client(){return client;},get ready(){return ready&&online;},get pendingCheckout(){return !!sessionStorage.getItem('rr.pendingCheckout');},conflictedDraft:null};
+  window.RRCloud={api,checkout,recoverPending,refreshCatalog:refresh,refreshAdmin:()=>loadAdmin(true),applyMember,forgetMember,get client(){return client;},get ready(){return ready&&online;},get pendingCheckout(){return !!sessionStorage.getItem('rr.pendingCheckout');},conflictedDraft:null};
   window.addEventListener('beforeunload',e=>{if(pending||sessionStorage.getItem('rr.pendingCheckout')){e.preventDefault();e.returnValue='An operation still needs cloud confirmation.';}});
   async function start(){
     if(!window.supabase){connection(false,'Cloud library unavailable. Reconnect to load the register.');return;}
