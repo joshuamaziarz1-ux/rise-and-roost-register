@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import net from 'node:net';
+import {spawn} from 'node:child_process';
 import EmbeddedPostgres from 'embedded-postgres';
 import pg from 'pg';
 export const ADMIN='11111111-1111-4111-8111-111111111111';
@@ -9,7 +10,18 @@ export async function database(){
   const listener=net.createServer();await new Promise(r=>listener.listen(0,'127.0.0.1',r));const port=listener.address().port;await new Promise(r=>listener.close(r));
   const dir=path.resolve('work/pg-'+port);await fs.mkdir(dir,{recursive:true});
   const instance=new EmbeddedPostgres({databaseDir:dir,port,user:'postgres',password:'test-only',persistent:true,initdbFlags:['--no-sync','--encoding=UTF8'],onLog:()=>{},onError:()=>{}});
-  await instance.initialise();await instance.start();
+  await instance.initialise();
+  let stopServer;
+  if(process.platform==='win32'){
+    // pg_ctl creates a restricted Windows token. Direct postgres.exe startup
+    // rejects elevated GitHub Windows runner accounts even though initdb works.
+    const {pg_ctl}=await import('@embedded-postgres/windows-x64');
+    // Detached server handles must not keep execFile's stdout pipes open.
+    const run=args=>new Promise((resolve,reject)=>{const child=spawn(pg_ctl,args,{stdio:'ignore',windowsHide:true});child.once('error',reject);child.once('exit',code=>code===0?resolve():reject(Error('pg_ctl exited with '+code)));});
+    try{await run(['-D',dir,'-l',path.join(dir,'server.log'),'-o','-p '+port+' -h 127.0.0.1','-w','start']);}
+    catch(e){throw new Error('Test PostgreSQL startup failed: '+e.message+' '+await fs.readFile(path.join(dir,'server.log'),'utf8').catch(()=>''));}
+    stopServer=()=>run(['-D',dir,'-m','fast','-w','stop']);
+  }else{await instance.start();stopServer=()=>instance.stop();}
   const pool=new pg.Pool({host:'127.0.0.1',port,user:'postgres',password:'test-only',database:'postgres',max:10});
   try{
   await pool.query(await fs.readFile('tests/fixtures/existing-schema.sql','utf8')); 
@@ -25,9 +37,9 @@ export async function database(){
   const migration=(await fs.readdir('supabase/migrations')).find(x=>x.endsWith('_shared_database_sync.sql'));
   await pool.query(await fs.readFile('supabase/migrations/'+migration,'utf8'));
   if(await snapshot()!==preserved)throw Error('Migration altered pre-existing records');
-  }catch(e){await pool.end();await instance.stop();throw e;}
+  }catch(e){await pool.end();await stopServer();throw e;}
   const rpc=async(action,payload={},actor=null,member=null)=>{
     const conn=await pool.connect();try{await conn.query('begin');await conn.query('set local role service_role');const {rows}=await conn.query('select public.rr_sync($1,$2::jsonb,$3::uuid,$4::text) as result',[action,JSON.stringify(payload),actor,member]);await conn.query('commit');return rows[0].result;}catch(e){await conn.query('rollback');throw e;}finally{conn.release();}
   };
-  return {pool,rpc,stop:async()=>{await pool.end();await instance.stop();}};
+  return {pool,rpc,stop:async()=>{await pool.end();await stopServer();}};
 }
