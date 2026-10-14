@@ -1,5 +1,6 @@
 (()=>{
   let selectedPayment=null;
+  let paymentEntries=[],paymentGross=0,paymentDue=0,useCredits=false;
   const labels={cash:'Cash',cashapp:'Cash App',paypal:'PayPal',applepay:'Apple Pay',googlepay:'Google Pay'};
   const ensureSettings=()=>{ data.settings=data.settings&&typeof data.settings==='object'?data.settings:{}; data.settings.paymentQrs=data.settings.paymentQrs&&typeof data.settings.paymentQrs==='object'?data.settings.paymentQrs:{}; return data.settings.paymentQrs; };
   const qrFor=m=>ensureSettings()[m]||'';
@@ -24,12 +25,16 @@
     `;document.head.appendChild(s);
   }
   function payChooser(){
+    if(window.__RR_CLOUD_MODE && !window.RRCloud?.ready)return alert("Reconnect before paying.");
+    if(window.RRCloud?.pendingCheckout)return window.RRCloud.recoverPending();
     selectedPayment=null;
+    if(!window.RRCloud?.pendingCheckout){paymentEntries=entries().map(x=>({item:{...x.item},qty:x.qty}));paymentGross=paymentEntries.reduce((s,x)=>s+Number(x.item.price)*x.qty,0);useCredits=false;paymentDue=paymentGross;}
     const o=document.getElementById('payOverlay'); if(!o)return;
     o.innerHTML=`<div class="modal rr48-payment-modal">
-      <div class="rr48-pay-logo"><img src="assets/rise-roost-logo.webp?v=4.8.6" alt="Rise & Roost"></div>
+      <div class="rr48-pay-logo"><img src="assets/rise-roost-logo.svg?v=4.8.6" alt="Rise & Roost"></div>
       <div class="rr48-payment-question">CHOOSE PAYMENT</div>
-      <div class="big rr48-pay-total">${money(total())}</div>
+      <div class="big rr48-pay-total" id="rrPaymentDue">${money(paymentDue)}</div>
+      ${data.customers?.find(c=>c.id===sessionStorage.getItem('riseRoostActiveMemberV1')&&c.cartonCredits>0)?'<label class="hint"><input type="checkbox" id="rrUseCredits"> Use available Roost credits</label>':''}
       <div class="rr48-pay-methods">
         <button class="rr48-pay-method cash" data-method="cash">CASH</button>
         <button class="rr48-pay-method cashapp" data-method="cashapp">CASH APP</button>
@@ -41,14 +46,15 @@
     </div>`;
     o.classList.remove('hidden');
     o.querySelectorAll('[data-method]').forEach(b=>b.onclick=()=>showMethod(b.dataset.method));
+    const creditBox=document.getElementById('rrUseCredits');if(creditBox){creditBox.checked=useCredits;creditBox.onchange=()=>{useCredits=creditBox.checked;const m=data.customers.find(c=>c.id===sessionStorage.getItem('riseRoostActiveMemberV1')),cfg=data.settings.roostCreditSettings||{},value=Number(cfg.creditValue||0.5);let count=Math.floor(paymentGross/value);if(cfg.allowFullPurchase===false&&count*value>=paymentGross)count=Math.max(0,count-1);paymentDue=useCredits?Math.max(0,paymentGross-Math.min(count,Number(m.cartonCredits))*value):paymentGross;document.getElementById('rrPaymentDue').textContent=money(paymentDue);};}
     document.getElementById('rr48BackCart').onclick=()=>o.classList.add('hidden');
   }
   function showMethod(method){
     selectedPayment=method;
-    const o=document.getElementById('payOverlay'),amt=money(total()),qr=qrFor(method);
+    const o=document.getElementById('payOverlay'),amt=money(paymentDue),qr=qrFor(method);
     if(method==='cash'){
       o.innerHTML=`<div class="modal rr48-payment-modal">
-        <div class="rr48-pay-logo"><img src="assets/rise-roost-logo.webp?v=4.8.6" alt=""></div>
+        <div class="rr48-pay-logo"><img src="assets/rise-roost-logo.svg?v=4.8.6" alt=""></div>
         <div class="rr48-pay-kicker">PLEASE PUT</div><div class="big rr48-pay-total">${amt}</div>
         <div class="rr48-pay-box">IN THE CASH BOX</div>
         <div class="rr48-pay-help">Exact cash only — no change is available.</div>
@@ -57,7 +63,7 @@
     } else {
       const brand=labels[method];
       o.innerHTML=`<div class="modal rr48-payment-modal">
-        <div class="rr48-pay-logo"><img src="assets/rise-roost-logo.webp?v=4.8.6" alt=""></div>
+        <div class="rr48-pay-logo"><img src="assets/rise-roost-logo.svg?v=4.8.6" alt=""></div>
         <div class="rr48-payment-question">PAY WITH ${brand.toUpperCase()}</div>
         <div class="rr48-send-total">Send exactly <strong>${amt}</strong></div>
         <div class="rr48-digital-pay">
@@ -68,17 +74,17 @@
       </div>`;
     }
     document.getElementById('rr48BackMethods').onclick=payChooser;
+    if(window.RR_CONFIG?.preview){const note=document.createElement('p');note.className='notice';note.textContent='TEST PURCHASE — do not send payment or place cash in the box.';o.querySelector('.modal').prepend(note);}
     const c=document.getElementById('rr48ConfirmPay'); if(c)c.onclick=()=>completePayment(method);
   }
   async function completePayment(method){
-    const e=entries(); if(!e.length)return;
-    for(const x of e)if(x.qty>available(x.item))return alert(`${x.item.name} no longer has enough available inventory.`);
+    const e=paymentEntries; if(!e.length)return;
     const button=document.getElementById('rr48ConfirmPay');
     if(button){button.disabled=true;button.textContent='SAVING PURCHASE…'}
 
     if(window.RRCloud&&typeof window.RRCloud.checkout==='function'){
       try{
-        await window.RRCloud.checkout(method,e);
+        await window.RRCloud.checkout(method,e,{useCredits,expectedDue:paymentDue});
         cart={};
         document.getElementById('payOverlay')?.classList.add('hidden');
         const thanks=document.getElementById('thanks'); if(thanks)thanks.classList.remove('hidden');
@@ -94,17 +100,10 @@
       }
     }
 
-    const lines=e.map(x=>({itemId:x.item.id,itemName:x.item.name,brandId:x.item.brandId,brandName:brand(x.item.brandId)?.name||'Unknown',price:Number(x.item.price),qty:x.qty}));
-    e.forEach(x=>{x.item.stock=Math.max(0,x.item.stock-x.qty);logStock(x.item,-x.qty,`Customer sale - ${labels[method]||method}`)});
-    recordSale(lines,{payment:method,source:'store'});
-    cart={};persist();
-    document.getElementById('payOverlay')?.classList.add('hidden');
-    const thanks=document.getElementById('thanks'); if(thanks)thanks.classList.remove('hidden');
-    renderAll();
-    const copy=document.querySelector('#thanks .rr48-thanks-copy'); if(copy)copy.textContent=`Your ${labels[method]} purchase is complete.`;
-    let n=8; const cd=document.getElementById('rr48Countdown'); if(cd)cd.textContent=`Returning to the home screen in ${n} seconds…`;
-    const timer=setInterval(()=>{n--;const el=document.getElementById('rr48Countdown');if(el)el.textContent=`Returning to the home screen in ${n} second${n===1?'':'s'}…`;if(n<=0){clearInterval(timer);document.getElementById('doneThanks')?.click()}},1000);
+    alert('Cloud service is still loading. Reconnect before completing your purchase.');
+    if(button)button.disabled=false;
   }
+
   async function qrData(file){
     if(!file)return '';
     const src=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file)});
@@ -179,6 +178,7 @@
     const old=window.renderDashboard;
     if(old&&!old.__rr48pay){const wrapped=function(){old();injectDashboard()};wrapped.__rr48pay=true;window.renderDashboard=wrapped}
   }
+  if(window.__RR_CLOUD_MODE){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',apply,{once:true});else apply();}
   window.addEventListener('load',()=>{let n=0;const t=setInterval(()=>{apply();if(++n>=8)clearInterval(t)},500)});
   if(document.readyState==='complete')apply();
 })();

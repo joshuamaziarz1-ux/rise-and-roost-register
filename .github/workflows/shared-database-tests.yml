@@ -1,0 +1,25 @@
+name: Shared database tests
+on:
+  pull_request:
+  push:
+    branches: [fix/cross-device-supabase-sync]
+permissions:
+  contents: read
+jobs:
+  isolated-tests:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install chromium webkit
+      - run: npm run test:all
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-failure-traces
+          path: test-results/

@@ -27,7 +27,7 @@
     selectedPayment=null;
     const o=document.getElementById('payOverlay'); if(!o)return;
     o.innerHTML=`<div class="modal rr48-payment-modal">
-      <div class="rr48-pay-logo"><img src="assets/rise-roost-logo.webp?v=4.8.6" alt="Rise & Roost"></div>
+      <div class="rr48-pay-logo"><img src="assets/rise-roost-logo.svg?v=4.8.6" alt="Rise & Roost"></div>
       <div class="rr48-payment-question">CHOOSE PAYMENT</div>
       <div class="big rr48-pay-total">${money(total())}</div>
       <div class="rr48-pay-methods">
@@ -48,7 +48,7 @@
     const o=document.getElementById('payOverlay'),amt=money(total()),qr=qrFor(method);
     if(method==='cash'){
       o.innerHTML=`<div class="modal rr48-payment-modal">
-        <div class="rr48-pay-logo"><img src="assets/rise-roost-logo.webp?v=4.8.6" alt=""></div>
+        <div class="rr48-pay-logo"><img src="assets/rise-roost-logo.svg?v=4.8.6" alt=""></div>
         <div class="rr48-pay-kicker">PLEASE PUT</div><div class="big rr48-pay-total">${amt}</div>
         <div class="rr48-pay-box">IN THE CASH BOX</div>
         <div class="rr48-pay-help">Exact cash only — no change is available.</div>
@@ -57,7 +57,7 @@
     } else {
       const brand=labels[method];
       o.innerHTML=`<div class="modal rr48-payment-modal">
-        <div class="rr48-pay-logo"><img src="assets/rise-roost-logo.webp?v=4.8.6" alt=""></div>
+        <div class="rr48-pay-logo"><img src="assets/rise-roost-logo.svg?v=4.8.6" alt=""></div>
         <div class="rr48-payment-question">PAY WITH ${brand.toUpperCase()}</div>
         <div class="rr48-send-total">Send exactly <strong>${amt}</strong></div>
         <div class="rr48-digital-pay">

@@ -1,1 +1,269 @@
-(async()=>{try{const b64="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";const chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';let out=[],val=0,bits=0;for(const ch of b64.replace(/=+$/,'')){val=(val<<6)|chars.indexOf(ch);bits+=6;if(bits>=8){bits-=8;out.push((val>>bits)&255)}}const ds=new DecompressionStream('gzip');const src=await new Response(new Blob([new Uint8Array(out)]).stream().pipeThrough(ds)).text();eval(src)}catch(e){console.error('Rise & Roost v4.8 failed to load',e)}})();
+(()=>{
+const BUILD='6.0.0';
+const TEST=!!window.__RR_TEST_MODE;
+const MEMBER_KEY=TEST?'riseRoostTESTActiveMemberV1':'riseRoostActiveMemberV1';
+const GUEST_KEY=TEST?'riseRoostTESTGuestShoppingV1':'riseRoostGuestShoppingV1';
+const LOGO='assets/rise-roost-logo.svg';
+let activeCategory='all';
+let thanksTimer=null;
+const categoryLabel={all:'ALL',eggs:'EGGS',baked:'BAKED GOODS',other:'OTHER'};
+const categoryIcon={eggs:'🥚',baked:'🍞',other:'🫙'};
+
+function inferCategory(i){
+  const n=String(i?.name||'').toLowerCase();
+  if(/\begg|dozen/.test(n))return 'eggs';
+  if(/sourdough|bread|roll|cookie|muffin|brownie|cake|pie|biscuit|bun|pastry/.test(n))return 'baked';
+  return 'other';
+}
+function ensureItemExtras(){
+  let changed=false;
+  (data.items||[]).forEach(i=>{
+    if(!['eggs','baked','other'].includes(i.category)){i.category=inferCategory(i);changed=true}
+    if(typeof i.photo!=='string'){i.photo='';changed=true}
+  });
+  if(changed)persist();
+}
+function showView(id){
+  ['kioskHome','shopView','pickupView','cartonView','roostHub','joinView','myRoostView','feedbackView'].forEach(x=>$(x)?.classList.add('hidden'));
+  $(id)?.classList.remove('hidden');
+  window.scrollTo(0,0);
+}
+function setVersion(){
+  document.title=`Rise & Roost Register v${BUILD}`;
+  document.querySelectorAll('.version').forEach(x=>x.textContent=`Rise & Roost Register v${BUILD}`);
+  const adminSub=document.querySelector('#adminScreen .admin-top .sub');
+  if(adminSub)adminSub.textContent=`Rise & Roost Register v${BUILD}`;
+  const versionStrong=document.querySelector('#settingsTab .danger-zone strong');
+  if(versionStrong)versionStrong.textContent=`Rise & Roost Register v${BUILD}`;
+}
+function polishTop(){
+  const holder=document.querySelector('.top>div:first-child');
+  if(!holder||holder.querySelector('.rr48-topbrand'))return;
+  holder.innerHTML=`<div class="rr48-topbrand"><img src="${LOGO}" alt="Rise & Roost logo"><div><strong>Rise & Roost</strong><span>Self-Serve Farm Store</span></div></div>`;
+}
+function refreshMemberLink(){
+  const b=$('rr48MemberLink');if(!b)return;
+  const id=sessionStorage.getItem(MEMBER_KEY),c=(data.customers||[]).find(x=>x.id===id);
+  b.textContent=c?`✓ ${c.name} checked in · Change`:'Roost member? Check in';
+}
+function rebuildHome(){
+  const home=$('kioskHome');if(!home)return;
+  const h=home.querySelector('h1');
+  if(h&&!h.classList.contains('rr48-home-brand')){
+    h.className='rr48-home-brand';
+    h.innerHTML=`<img class="rr48-home-logo" src="${LOGO}" alt="Rise & Roost">`;
+  }
+  const grid=home.querySelector('.kiosk-grid');
+  if(!grid||grid.classList.contains('rr48-main-actions')){refreshMemberLink();return}
+  const legacy=document.createElement('div');legacy.className='rr48-legacy';
+  ['goShop','goPickup','goRoost'].forEach(id=>{const el=$(id);if(el)legacy.appendChild(el)});
+  home.appendChild(legacy);
+  grid.className='kiosk-grid rr48-main-actions';
+  grid.innerHTML=`
+    <button class="rr48-main-btn shop" id="rr48StartShop"><span class="rr48-icon">🛒</span><span>START SHOPPING</span><span class="rr48-arrow">›</span></button>
+    <button class="rr48-main-btn pickup" id="rr48Pickup"><span class="rr48-icon">📦</span><span>PICK UP AN ORDER</span><span class="rr48-arrow">›</span></button>
+    <button class="rr48-main-btn cartons" id="rr48Cartons"><span class="rr48-icon">🥚</span><span>RETURN EGG CARTONS</span><span class="rr48-arrow">›</span></button>`;
+  const note=document.createElement('div');note.className='rr48-cash-note';note.textContent='CASH ONLY • EXACT CHANGE PLEASE';grid.after(note);
+  const links=document.createElement('div');links.className='rr48-home-links';
+  links.innerHTML='<button class="rr48-text-link" id="rr48MemberLink">Roost member? Check in</button><button class="rr48-text-link" id="rr48RoostLink">My Roost / Rewards</button>';
+  note.after(links);
+
+  $('rr48StartShop').onclick=()=>{
+    home.classList.remove('rr48-checkin-open');
+    if(!sessionStorage.getItem(MEMBER_KEY))sessionStorage.setItem(GUEST_KEY,'1');
+    const b=$('goShop');if(b)b.click();else showView('shopView');
+    setTimeout(()=>{$('shopView')?.classList.remove('rr48-cart-open');renderStore();renderCart();window.scrollTo(0,0)},20);
+  };
+  $('rr48Pickup').onclick=()=>{const b=$('goPickup');if(b)b.click();else showView('pickupView')};
+  $('rr48Cartons').onclick=()=>{const b=$('goCartons');if(b)b.click();else showView('cartonView')};
+  $('rr48RoostLink').onclick=()=>{const b=$('goMyRoost')||$('goRoost');if(b)b.click();else showView('roostHub')};
+  $('rr48MemberLink').onclick=()=>{
+    sessionStorage.removeItem(GUEST_KEY);
+    home.classList.add('rr48-checkin-open');
+    const card=$('memberCheckin');
+    setTimeout(()=>{card?.scrollIntoView({behavior:'smooth',block:'center'});$('memberNameInput')?.focus()},20);
+    if(card&&!$('rr48CheckinClose')){
+      const c=document.createElement('button');c.id='rr48CheckinClose';c.className='btn ghost rr48-checkin-close';c.textContent='Close';
+      c.onclick=()=>home.classList.remove('rr48-checkin-open');card.appendChild(c);
+    }
+  };
+  refreshMemberLink();
+}
+function ensureShopChrome(){
+  const shop=document.querySelector('#shopView .shop');if(!shop)return;
+  if(!$('rr48ShopHead')){
+    const head=document.createElement('div');head.id='rr48ShopHead';head.className='rr48-shop-head';
+    head.innerHTML=`<div><div class="rr48-shop-title">Shop Our Products</div><div class="hint">Tap + to add an item.</div></div><img class="rr48-shop-logo" src="${LOGO}" alt="">`;
+    shop.prepend(head);
+  }
+  if(!$('rr48Categories')){
+    const cats=document.createElement('div');cats.id='rr48Categories';cats.className='rr48-categories';
+    cats.innerHTML=Object.entries(categoryLabel).map(([k,v])=>`<button class="rr48-cat ${k==='all'?'active':''}" data-rr-cat="${k}">${v}</button>`).join('');
+    $('productArea').before(cats);
+    cats.querySelectorAll('[data-rr-cat]').forEach(b=>b.onclick=()=>{
+      activeCategory=b.dataset.rrCat;
+      cats.querySelectorAll('.rr48-cat').forEach(x=>x.classList.toggle('active',x===b));
+      renderStore();
+    });
+  }
+  if(!$('rr48CartBar')){
+    const bar=document.createElement('button');bar.id='rr48CartBar';bar.className='rr48-cartbar';bar.disabled=true;bar.textContent='CART • 0 ITEMS • $0.00';
+    bar.onclick=()=>{$('shopView').classList.add('rr48-cart-open');renderCart();window.scrollTo(0,0)};
+    shop.appendChild(bar);
+  }
+  const cart=document.querySelector('#shopView .cart');
+  if(cart&&!$('rr48CartTop')){
+    const top=document.createElement('div');top.id='rr48CartTop';top.className='rr48-cart-top';top.innerHTML='<button class="btn ghost" id="rr48KeepShopping">← KEEP SHOPPING</button>';
+    cart.prepend(top);$('rr48KeepShopping').onclick=()=>{$('shopView').classList.remove('rr48-cart-open');window.scrollTo(0,0)};
+    cart.querySelector('h2').textContent='Your Cart';
+  }
+}
+function photoMarkup(i){
+  if(i.photo)return `<img src="${i.photo}" alt="${esc(i.name)}">`;
+  return `<span class="rr48-photo-placeholder">${categoryIcon[i.category]||'🛍️'}</span>`;
+}
+
+const baseAddToCart=addToCart;
+const baseChangeQty=changeQty;
+addToCart=function(id){baseAddToCart(id);renderStore()};
+changeQty=function(id,d){baseChangeQty(id,d);renderStore()};
+
+renderStore=function(){
+  ensureItemExtras();ensureShopChrome();
+  const items=(data.items||[]).filter(i=>i.active&&brand(i.brandId)?.active&&(activeCategory==='all'||i.category===activeCategory));
+  $('productArea').innerHTML=items.length?`<section class="vendor"><div class="grid">${items.map(i=>{
+    const av=available(i),q=Number(cart[i.id]||0),sold=av===0;
+    return `<div class="rr48-product ${sold?'sold':''}">
+      <div class="rr48-photo">${photoMarkup(i)}</div>${sold?'<div class="rr48-soldout">SOLD OUT</div>':''}
+      <div class="rr48-product-body"><div class="rr48-product-name">${esc(i.name)}</div><div class="rr48-product-brand">${esc(brand(i.brandId)?.name||'Rise & Roost')}</div><div class="rr48-product-price">${money(i.price)}</div><div class="rr48-stock">${sold?'Sold out':av<=i.lowStock?`Only ${av} left`:`${av} available`}</div>
+      <div class="rr48-qtyline"><button class="rr48-qtybtn" data-rr-minus="${i.id}" ${q<=0?'disabled':''}>−</button><div class="rr48-qtyvalue">${q}</div><button class="rr48-qtybtn plus" data-rr-plus="${i.id}" ${sold||q>=av?'disabled':''}>+</button></div></div>
+    </div>`}).join('')}</div></section>`:'<div class="empty">No items are available in this category right now.</div>';
+  $('productArea').querySelectorAll('[data-rr-plus]').forEach(b=>b.onclick=()=>addToCart(b.dataset.rrPlus));
+  $('productArea').querySelectorAll('[data-rr-minus]').forEach(b=>b.onclick=()=>changeQty(b.dataset.rrMinus,-1));
+  updateCartBar();
+};
+
+renderCart=function(){
+  ensureShopChrome();
+  const e=entries(),units=e.reduce((n,x)=>n+x.qty,0),sum=total();
+  $('cartHint').textContent=e.length?'Check your quantities, then check out.':'Your cart is empty.';
+  $('cartList').innerHTML=e.length?e.map(x=>`<div class="cart-row"><div class="rr48-cart-thumb">${photoMarkup(x.item)}</div><div><div class="cname">${esc(x.item.name)}</div><div class="cbrand">${money(x.item.price)} each</div><button class="remove" data-remove="${x.item.id}">REMOVE</button></div><div><div class="cline">${money(Number(x.item.price)*x.qty)}</div><div class="qtys"><button class="qbtn" data-q="${x.item.id}" data-d="-1">−</button><span class="qnum">${x.qty}</span><button class="qbtn" data-q="${x.item.id}" data-d="1">+</button></div></div></div>`).join(''):'<div class="empty">Tap KEEP SHOPPING and add a product.</div>';
+  $('cartList').querySelectorAll('[data-q]').forEach(x=>x.onclick=()=>changeQty(x.dataset.q,Number(x.dataset.d)));
+  $('cartList').querySelectorAll('[data-remove]').forEach(x=>x.onclick=()=>{delete cart[x.dataset.remove];renderCart();renderStore()});
+  $('cartTotal').textContent=money(sum);$('payBtn').disabled=!e.length;$('clearBtn').disabled=!e.length;
+  $('payBtn').textContent=e.length?`CHECK OUT — ${money(sum)}`:'CHECK OUT';$('clearBtn').textContent='CLEAR ORDER';
+  updateCartBar();
+};
+function updateCartBar(){
+  const b=$('rr48CartBar');if(!b)return;const e=entries(),units=e.reduce((n,x)=>n+x.qty,0);
+  b.disabled=!units;b.textContent=`🛒 CART • ${units} ITEM${units===1?'':'S'} • ${money(total())}`;
+}
+
+function polishCheckout(){
+  const o=$('payOverlay');
+  if(o&&!o.dataset.rr48){
+    o.dataset.rr48='1';
+    o.innerHTML=`<div class="modal"><div class="rr48-pay-logo"><img src="${LOGO}" alt=""></div><div class="rr48-pay-kicker">PLEASE PUT</div><div class="big rr48-pay-total" id="payTotal">$0.00</div><div class="rr48-pay-box">IN THE CASH BOX</div><div class="rr48-pay-help">Exact cash only — no change is available.</div><div class="rr48-pay-actions"><button class="btn primary rr48-confirm-cash" id="finishSale">I PUT THE MONEY IN THE BOX</button><button class="btn ghost" id="backPay">← BACK TO CART</button></div></div>`;
+  }
+  const t=$('thanks');
+  if(t&&!t.dataset.rr48){
+    t.dataset.rr48='1';
+    t.innerHTML=`<div class="modal"><img class="rr48-thanks-logo" src="${LOGO}" alt=""><h2 class="rr48-thanks-title">THANK YOU!</h2><p class="rr48-thanks-copy">Your purchase is complete.</p><p>We appreciate your support. Come back soon!</p><button class="btn primary wide" id="doneThanks">DONE</button><div class="rr48-countdown" id="rr48Countdown"></div></div>`;
+  }
+}
+checkout=function(){
+  for(const x of entries())if(x.qty>available(x.item))return alert(`${x.item.name} no longer has enough available inventory. Please adjust the order.`);
+  polishCheckout();const amt=money(total());$('payTotal').textContent=amt;$('finishSale').textContent=`✓ I PUT ${amt} IN THE BOX`;$('payOverlay').classList.remove('hidden');
+};
+const baseFinish=finish;
+finish=function(){baseFinish();if(!$('thanks')?.classList.contains('hidden'))startThanksCountdown()};
+function clearCustomerSession(){
+  sessionStorage.removeItem('riseRoostActiveMemberV1');sessionStorage.removeItem('riseRoostGuestShoppingV1');
+  sessionStorage.removeItem('riseRoostTESTActiveMemberV1');sessionStorage.removeItem('riseRoostTESTGuestShoppingV1');
+}
+function goHomeAfterSale(){
+  if(thanksTimer){clearInterval(thanksTimer);thanksTimer=null}
+  $('thanks')?.classList.add('hidden');$('payOverlay')?.classList.add('hidden');$('shopView')?.classList.remove('rr48-cart-open');clearCustomerSession();refreshMemberLink();
+  showView('kioskHome');$('kioskHome')?.classList.remove('rr48-checkin-open');
+}
+function startThanksCountdown(){
+  if(thanksTimer)clearInterval(thanksTimer);let n=8;
+  const draw=()=>{if($('rr48Countdown'))$('rr48Countdown').textContent=`Returning to the home screen in ${n} second${n===1?'':'s'}…`};draw();
+  thanksTimer=setInterval(()=>{n--;if(n<=0){clearInterval(thanksTimer);thanksTimer=null;goHomeAfterSale()}else draw()},1000);
+}
+function wireCheckout(){
+  polishCheckout();$('payBtn').onclick=checkout;$('backPay').onclick=()=>$('payOverlay').classList.add('hidden');$('finishSale').onclick=finish;$('doneThanks').onclick=goHomeAfterSale;
+  $('clearBtn').onclick=()=>{if(confirm('Clear this order?')){cart={};renderCart();renderStore()}};
+}
+
+function compressPhoto(file){
+  return new Promise((resolve,reject)=>{
+    if(!file)return resolve('');
+    const reader=new FileReader();reader.onerror=()=>reject(new Error('Could not read photo'));
+    reader.onload=()=>{
+      const img=new Image();img.onerror=()=>reject(new Error('Could not open photo'));
+      img.onload=()=>{
+        const max=700,scale=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight)),w=Math.max(1,Math.round(img.naturalWidth*scale)),h=Math.max(1,Math.round(img.naturalHeight*scale));
+        const c=document.createElement('canvas');c.width=w;c.height=h;const ctx=c.getContext('2d');ctx.drawImage(img,0,0,w,h);resolve(c.toDataURL('image/jpeg',.72));
+      };
+      img.src=reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function categoryOptions(selected='other'){
+  return `<option value="eggs" ${selected==='eggs'?'selected':''}>Eggs</option><option value="baked" ${selected==='baked'?'selected':''}>Baked Goods</option><option value="other" ${selected==='other'?'selected':''}>Other</option>`;
+}
+function injectAdminPhotoFields(){
+  const form=$('itemName')?.closest('.form');if(!form)return;
+  if(!$('itemCategory')){
+    const f=document.createElement('div');f.className='field';f.innerHTML=`<label>Category</label><select id="itemCategory">${categoryOptions('other')}</select>`;form.insertBefore(f,$('addItem'));
+  }
+  if(!$('itemPhoto')){
+    const f=document.createElement('div');f.className='field rr48-admin-photo-field';f.innerHTML='<label>Product photo</label><input id="itemPhoto" type="file" accept="image/*"><div class="hint">Take or choose a real product photo. It is resized automatically and included in backups.</div><img id="itemPhotoPreview" class="rr48-photo-preview hidden" alt="">';form.insertBefore(f,$('addItem'));
+    $('itemPhoto').onchange=()=>{const file=$('itemPhoto').files[0],p=$('itemPhotoPreview');if(!file){p.classList.add('hidden');return}p.src=URL.createObjectURL(file);p.classList.remove('hidden')};
+  }
+  $('addItem').onclick=addItem48;
+}
+async function addItem48(){
+  const brandId=$('itemBrand').value,name=$('itemName').value.trim(),price=Number($('itemPrice').value),stock=Math.floor(Number($('itemStock').value||0)),low=Math.floor(Number($('itemLow').value||0)),category=$('itemCategory')?.value||'other';
+  if(!brandId)return alert('Add a vendor first.');if(!name)return alert('Enter an item name.');if(!Number.isFinite(price)||price<0)return alert('Enter a valid price.');if(!Number.isFinite(stock)||stock<0)return alert('Enter a valid inventory amount.');if(!Number.isFinite(low)||low<0)return alert('Enter a valid low-stock amount.');
+  let photo='';try{photo=await compressPhoto($('itemPhoto')?.files?.[0])}catch(e){return alert('That product photo could not be saved. Try another picture.')}
+  const i={id:uid('item'),brandId,name,price,stock,lowStock:low,active:true,category,photo};data.items.push(i);if(stock)logStock(i,stock,'Starting inventory');
+  $('itemName').value='';$('itemPrice').value='';$('itemStock').value='';if($('itemPhoto'))$('itemPhoto').value='';$('itemPhotoPreview')?.classList.add('hidden');save();
+}
+editItem=function(id){
+  const i=item(id);if(!i)return;edit={type:'item',id};$('editTitle').textContent='Edit Item';
+  $('editBody').innerHTML=`<div class="form two" style="margin-top:15px"><div class="field"><label>Vendor / Brand</label><select id="editItemBrand">${data.brands.map(b=>`<option value="${b.id}" ${b.id===i.brandId?'selected':''}>${esc(b.name)}</option>`).join('')}</select></div><div class="field"><label>Item name</label><input id="editItemName" value="${esc(i.name)}"></div><div class="field"><label>Price</label><input id="editItemPrice" type="number" min="0" step="0.01" value="${Number(i.price).toFixed(2)}"></div><div class="field"><label>Category</label><select id="editItemCategory">${categoryOptions(i.category||inferCategory(i))}</select></div><div class="field"><label>Exact inventory quantity</label><input id="editItemStock" type="number" min="${reserved(i.id)}" step="1" value="${i.stock}"></div><div class="field"><label>Low-stock warning at</label><input id="editItemLow" type="number" min="0" step="1" value="${i.lowStock}"></div><div class="field rr48-admin-photo-field"><label>Replace product photo</label><input id="editItemPhoto" type="file" accept="image/*">${i.photo?`<img class="rr48-photo-preview" src="${i.photo}" alt="${esc(i.name)}"><label class="check"><input id="removeItemPhoto" type="checkbox"> Remove current photo</label>`:'<div class="hint">No product photo yet.</div>'}</div></div><p class="hint">${reserved(i.id)} currently reserved for pickup orders.</p>`;
+  $('editOverlay').classList.remove('hidden');$('editSave').onclick=saveEdit;
+};
+saveEdit=async function(){
+  if(!edit)return;
+  if(edit.type==='brand'){
+    const b=brand(edit.id),name=$('editBrandName').value.trim();if(!name)return alert('Enter a vendor name.');b.name=name;
+  }else{
+    const i=item(edit.id),name=$('editItemName').value.trim(),price=Number($('editItemPrice').value),stock=Math.floor(Number($('editItemStock').value)),low=Math.floor(Number($('editItemLow').value||0)),oldStock=i.stock;
+    if(!name||!Number.isFinite(price)||price<0||!Number.isFinite(stock)||stock<reserved(i.id)||!Number.isFinite(low)||low<0)return alert('Check the item name, price, inventory, and low-stock amount.');
+    i.brandId=$('editItemBrand').value;i.name=name;i.price=price;i.stock=stock;i.lowStock=low;i.category=$('editItemCategory')?.value||inferCategory(i);
+    if($('removeItemPhoto')?.checked)i.photo='';
+    const file=$('editItemPhoto')?.files?.[0];if(file){try{i.photo=await compressPhoto(file)}catch(e){return alert('That product photo could not be saved. Try another picture.')}}
+    if(stock!==oldStock)logStock(i,stock-oldStock,'Exact quantity adjustment');
+  }
+  $('editOverlay').classList.add('hidden');edit=null;save();
+};
+function enhanceAdminRows(){
+  $('itemList')?.querySelectorAll('[data-ei]').forEach(btn=>{
+    const i=item(btn.dataset.ei),row=btn.closest('.row'),cell=row?.children?.[0];
+    if(i?.photo&&cell&&!cell.querySelector('.rr48-admin-thumb')){const im=document.createElement('img');im.className='rr48-admin-thumb';im.src=i.photo;im.alt='';cell.prepend(im)}
+  });
+}
+const baseRenderAdmin=renderAdmin;
+renderAdmin=function(){baseRenderAdmin();injectAdminPhotoFields();enhanceAdminRows()};
+const baseRenderAll=renderAll;
+renderAll=function(){ensureItemExtras();baseRenderAll();setTimeout(()=>{rebuildHome();ensureShopChrome();injectAdminPhotoFields();enhanceAdminRows();refreshMemberLink();setVersion()},0)};
+
+function init(){
+  ensureItemExtras();polishTop();rebuildHome();ensureShopChrome();polishCheckout();wireCheckout();injectAdminPhotoFields();setVersion();renderStore();renderCart();enhanceAdminRows();refreshMemberLink();
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+})();

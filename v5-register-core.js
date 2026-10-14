@@ -24,7 +24,7 @@ function migrate(d){
   d.brands.forEach(b=>b.active=b.active!==false);
   return d;
 }
-function load(){
+function load(){if(window.__RR_CLOUD_MODE)return migrate({});
   try{const d=JSON.parse(localStorage.getItem(V2));if(d)return migrate(d)}catch(e){}
   try{
     const old=JSON.parse(localStorage.getItem(V1));
@@ -36,7 +36,7 @@ function load(){
 }
 
 let data=load(),cart={};
-function persist(){localStorage.setItem(V2,JSON.stringify(data))}
+function persist(){if(!window.__RR_CLOUD_MODE)localStorage.setItem(V2,JSON.stringify(data))}
 function save(){persist();renderAll()}
 function brand(id){return data.brands.find(b=>b.id===id)}
 function item(id){return data.items.find(i=>i.id===id)}

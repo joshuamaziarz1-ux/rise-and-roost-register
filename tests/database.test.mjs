@@ -1,0 +1,69 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import {database,ADMIN,OTHER} from './database.mjs';
+const request=payload=>({requestId:crypto.randomUUID(),...payload});
+test('PostgreSQL transactions, permissions and data preservation',async t=>{
+  const db=await database();t.after(()=>db.stop());const {rpc,pool}=db;
+  const state=async()=>(await rpc('admin_load',{},ADMIN)).data;
+  const patch=async(collection,before,after)=>rpc('admin_patch',request({changes:[{collection,id:(after||before).id,before,after}]}),ADMIN);
+  await t.test('hide and show; revision changes; inactive brand removes its items',async()=>{
+    let d=await state(),item=d.items.find(x=>x.id==='item-test');const rev=(await rpc('catalog')).revision;
+    await patch('items',item,{...item,active:false});assert(!(await rpc('catalog')).items.some(x=>x.id===item.id));assert((await rpc('catalog')).revision>rev);
+    d=await state();item=d.items.find(x=>x.id===item.id);await patch('items',item,{...item,active:true});assert((await rpc('catalog')).items.some(x=>x.id===item.id));
+    const b=(await state()).brands[0];await patch('brands',b,{...b,active:false});assert.equal((await rpc('catalog')).items.length,0);await patch('brands',(await state()).brands[0],{...(await state()).brands[0],active:true});
+  });
+  await t.test('prices, inventory, sold out, stale edits and unrelated row edits',async()=>{
+    let item=(await state()).items.find(x=>x.id==='item-test');await patch('items',item,{...item,price:6,stock:0});let cat=await rpc('catalog');assert.equal(cat.items.find(x=>x.id===item.id).stock,0);assert.equal(cat.items.find(x=>x.id===item.id).price,6);
+    await assert.rejects(()=>patch('items',item,{...item,price:8}),/DATA_CONFLICT/);
+    item=(await state()).items.find(x=>x.id==='item-test');await patch('items',item,{...item,price:5,stock:2});
+    const d=await state();await patch('items',d.items[0],{...d.items[0],name:'Updated name'});await patch('items',d.items[1],{...d.items[1],name:'Updated second name'});
+  });
+  await t.test('two concurrent Registers cannot sell the same last units',async()=>{
+    let item=(await state()).items.find(x=>x.id==='item-test');await patch('items',item,{...item,stock:1});
+    const payload=()=>request({payment:'cash',expectedTotal:5,lines:[{itemId:'item-test',qty:1}]});
+    const results=await Promise.allSettled([rpc('checkout',payload()),rpc('checkout',payload())]);assert.equal(results.filter(x=>x.status==='fulfilled').length,1);assert.equal((await state()).items.find(x=>x.id==='item-test').stock,0);
+  });
+  await t.test('lost response retry returns original sale and does not decrement twice',async()=>{
+    let item=(await state()).items.find(x=>x.id==='item-test');await patch('items',item,{...item,stock:10});
+    const payload=request({payment:'cash',expectedTotal:5,lines:[{itemId:'item-test',qty:1}]});const a=await rpc('checkout',payload),b=await rpc('checkout',payload);assert.deepEqual(a,b);assert.equal((await state()).items.find(x=>x.id==='item-test').stock,9);
+    await assert.rejects(()=>rpc('checkout',{...payload,payment:'paypal'}),/different operation/);
+  });
+  await t.test('atomic credit checkout, insufficient stock rollback, void restores credits once',async()=>{
+    const before=await state(),m=before.customers.find(x=>x.id==='member-test');
+    const sale=await rpc('checkout',request({payment:'cash',expectedTotal:5,expectedDue:0,useCredits:true,lines:[{itemId:'item-test',qty:1}]}),null,m.id);
+    assert.equal(sale.result.creditsUsed,10);assert.equal((await state()).customers.find(x=>x.id===m.id).cartonCredits,m.cartonCredits-10);
+    await rpc('admin_void',request({id:sale.result.saleId}),ADMIN);await rpc('admin_void',request({id:sale.result.saleId}),ADMIN);assert.equal((await state()).customers.find(x=>x.id===m.id).cartonCredits,m.cartonCredits);
+    const d=await state();await assert.rejects(()=>rpc('checkout',request({payment:'cash',expectedTotal:500,lines:[{itemId:'item-test',qty:100}],useCredits:true}),null,m.id),/inventory/);assert.deepEqual((await state()).customers,d.customers);
+  });
+  await t.test('member signup, profile versions, returns and concurrent credit changes',async()=>{
+    const out=await rpc('member_signup',request({name:'Synthetic New Member',phone:'2025550111'}));const m=(await rpc('member_account',{},null,out.result.id)).member;
+    await rpc('member_profile',request({name:'Updated Synthetic',phone:'2025550111',version:m._version}),null,m.id);
+    await assert.rejects(()=>rpc('member_profile',request({name:'Stale',phone:m.phone,version:m._version}),null,m.id),/DATA_CONFLICT/);
+    await Promise.all([rpc('roost_return',request({returns:[{typeId:'egg-carton',qty:2}]}),null,m.id),rpc('roost_return',request({returns:[{typeId:'egg-carton',qty:3}]}),null,m.id)]);
+    assert.equal((await rpc('member_account',{},null,m.id)).member.cartonCredits,5);
+    await assert.rejects(()=>rpc('roost_return',request({returns:[{typeId:'egg-carton',qty:2}]})),/UNAUTHORIZED/);
+  });
+  await t.test('invalid quantities and changed totals are rejected without writes',async()=>{
+    const d=await state();for(const qty of [-1,0,1.5])await assert.rejects(()=>rpc('checkout',request({payment:'cash',expectedTotal:5,lines:[{itemId:'item-test',qty}]})),/quantity/);
+    await assert.rejects(()=>rpc('checkout',request({payment:'cash',expectedTotal:0,lines:[{itemId:'item-test',qty:1}]})),/total changed/);assert.deepEqual(await state(),d);
+  });
+  await t.test('pickup reservations, completion, free-dozen rewards and voids stay atomic',async()=>{
+    let d=await state();const p={id:'pickup-test',code:'TEST1',customerName:'Test Member',status:'ready',paid:false,items:[{itemId:'item-test',qty:2}],created:new Date().toISOString()};
+    await patch('pickups',null,p);const stock=d.items.find(x=>x.id==='item-test').stock;assert.equal((await rpc('catalog')).items.find(x=>x.id==='item-test').stock,stock-2);
+    const reservedItem=(await state()).items.find(x=>x.id==='item-test');await assert.rejects(()=>patch('items',reservedItem,{...reservedItem,stock:1}),/reserved/);
+    const done=request({code:'TEST1'});await rpc('pickup_complete',done);await rpc('pickup_complete',done);assert.equal((await state()).items.find(x=>x.id==='item-test').stock,stock-2);
+    const reward=await rpc('reward_redeem',request({}),null,'member-test');assert.equal((await state()).customers.find(x=>x.id==='member-test').cartonCredits,0);
+    await rpc('admin_void',request({id:reward.result.saleId}),ADMIN);assert.equal((await state()).customers.find(x=>x.id==='member-test').cartonCredits,12);
+  });
+  await t.test('RLS and service-only functions reject anon and unauthorized authenticated accounts',async()=>{
+    await assert.rejects(()=>rpc('admin_load',{},OTHER),/UNAUTHORIZED/);
+    await assert.rejects(()=>pool.query("select public.rr_admin_replace_state(0,'{}')"),/whole-store saves are disabled/);
+    const conn=await pool.connect();try{for(const role of ['anon','authenticated']){await conn.query('begin');await conn.query('set local role '+role);const rows=await conn.query('select * from customers');assert.equal(rows.rowCount,0);await assert.rejects(()=>conn.query("select rr_sync('admin_load','{}',null,null)"),/permission denied/);await conn.query('rollback');}}finally{conn.release();}
+  });
+  await t.test('backup import adds missing history and never overwrites existing balances or stock',async()=>{
+    const before=await state(),existing=before.items.find(x=>x.id==='item-test');
+    const records=[{collection:'items',id:existing.id,value:{...existing,stock:999}},{collection:'sales',id:'imported-sale-test',value:{id:'imported-sale-test',date:new Date().toISOString(),total:5,payment:'cash',source:'store',voided:false,items:[{itemId:existing.id,itemName:'Historical Eggs',brandName:'Historical Brand',price:5,qty:1}]}}];
+    await rpc('admin_import',request({records}),ADMIN);const after=await state();assert.equal(after.items.find(x=>x.id===existing.id).stock,existing.stock);assert.deepEqual(after.customers,before.customers);assert.equal(after.sales.find(x=>x.id==='imported-sale-test').items[0].itemName,'Historical Eggs');
+  });
+});

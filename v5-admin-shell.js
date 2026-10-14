@@ -14,7 +14,7 @@
     }
 
     const adminBtn=document.getElementById('adminBtn');
-    if(adminBtn && document.getElementById('adminScreen')?.classList.contains('hidden')){
+    if(!window.__RR_CLOUD_MODE && adminBtn && document.getElementById('adminScreen')?.classList.contains('hidden')){
       adminBtn.click();
     }
   }

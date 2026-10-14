@@ -1,32 +1,15 @@
 # Rise & Roost Register
 
-Self-service cash register, inventory, pickup, vendor, and customer rewards system for Rise & Roost.
+Self-service Register and authenticated Admin with Supabase as the shared store database.
 
-Current version: **v5**
+This branch replaces local-only persistence with transactional cloud writes, automatic updates, conflict protection and idempotent checkout. It preserves the kiosk design, members, pickups, inventory history and cash/QR payment methods.
 
-## v5 features
+Read [rollout and test results](docs/SHARED-DATABASE.md) before deploying. Production has not been merged or changed. The private preview uses isolated synthetic records in the existing RiseAndRoost project.
 
-- Simple kiosk-style home screen with Shop, Pickup Order, and The Roost
-- Self-serve tap-to-buy checkout and exact-cash checkout
-- Vendors / brands, inventory, low-stock tracking, sales history, and pickup orders
-- **The Roost** member signup with name, phone number, and email
-- Required member notification preference: **Text, Email, or Both**
-- Optional store-news / specials preference
-- Egg-carton return tracking and configurable cartons-per-free-dozen reward threshold
-- Automatic detection when a member crosses a free-dozen reward threshold
-- Automatic **Roost Alert** creation for earned rewards
-- Reward alerts show the member, date/time, notification preference, delivery state, and redemption state
-- Reward redemption continues to reduce egg inventory automatically
-- Separate **Danielle** and **Ivan** admin identities with individual PINs
-- Inventory adjustments and carton-credit corrections record the signed-in admin
-- Admin dashboard includes Roost alert counts and recent admin activity
-- Notification connection settings for automatic email/text delivery
-- Backup and restore includes member preferences, Roost alerts, notification logs, and admin audit history
+```powershell
+npm ci
+npx playwright install chromium webkit
+npm run test:all
+```
 
-## Notification delivery
-
-The register automatically creates reward notifications and queues the channels selected by the member. External email/text delivery requires a notification endpoint to be connected under **Admin → Settings & Backup → Member Notifications**. Until an endpoint is connected, the alert remains visible in **Roost Alerts** as **Not Connected** instead of falsely reporting that a message was sent.
-
-This keeps the register honest and preserves every reward alert while the free notification service is being connected.
-
-Live site: https://joshuamaziarz1-ux.github.io/rise-and-roost-register/
+Real pages: `register-v5.html` and `admin-v5.html`. Historical demo/test pages remain local sandboxes and are not production entrypoints.
