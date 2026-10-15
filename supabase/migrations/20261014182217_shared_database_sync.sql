@@ -400,7 +400,7 @@ begin
   row_doc:=private.rr_document('customers',to_jsonb(m));
   cfg:=d->'cartonSettings';
   row_doc:=row_doc||jsonb_build_object('threshold',coalesce(cfg->'cartonsPerFreeDozen','12'), 'reward',(select jsonb_build_object('itemId',i.id,'itemName',i.name,'available',greatest(0,i.stock-coalesce((select sum(pi.qty) from public.pickup_items pi join public.pickups p on p.id=pi.pickup_id where pi.item_id=i.id and p.status in ('ready','waiting')),0))) from public.items i where i.id=cfg->>'rewardItemId' and i.active));
-  return jsonb_build_object('member',row_doc,'revision',state->'revision','sales',coalesce((select jsonb_agg(x) from jsonb_array_elements(d->'sales') x where x->>'customerId'=m.id),'[]'),'roostReturns',coalesce((select jsonb_agg(x) from jsonb_array_elements(d->'roostReturns') x where x->>'customerId'=m.id),'[]'),'cartonReturns',coalesce((select jsonb_agg(x) from jsonb_array_elements(d->'cartonReturns') x where x->>'customerId'=m.id),'[]'),'pickups',coalesce((select jsonb_agg(x-array['doorPin','pinTextedAt','accessExtendedUntil']) from jsonb_array_elements(d->'pickups') x where x->>'customerId'=m.id),'[]'));
+  return jsonb_build_object('member',row_doc,'revision',state->'revision','sales',coalesce((select jsonb_agg(x) from jsonb_array_elements(d->'sales') x where x->>'customerId'=m.id),'[]'),'roostReturns',coalesce((select jsonb_agg(x) from jsonb_array_elements(d->'roostReturns') x where x->>'customerId'=m.id),'[]'),'cartonReturns',coalesce((select jsonb_agg(x) from jsonb_array_elements(d->'cartonReturns') x where x->>'customerId'=m.id),'[]'),'cartonRewards',coalesce((select jsonb_agg(x) from jsonb_array_elements(d->'cartonRewards') x where x->>'customerId'=m.id),'[]'),'pickups',coalesce((select jsonb_agg(x-array['doorPin','pinTextedAt','accessExtendedUntil']) from jsonb_array_elements(d->'pickups') x where x->>'customerId'=m.id),'[]'));
  end if;
  request_id:=(p_payload->>'requestId')::uuid;
  if request_id is null then raise exception 'Request ID required'; end if;
@@ -485,7 +485,7 @@ begin
   end if;
   result:=jsonb_build_object('voided',true);
  elsif p_action='comment_submit' then
-  insert into public.customer_comments(customer_name,comment_text) values(left(p_payload->>'name',120),left(p_payload->>'text',2000)) returning to_jsonb(customer_comments.*) into result;
+  insert into public.customer_comments(customer_name,comment_text,rr_extra) values(left(p_payload->>'name',120),left(p_payload->>'text',2000),jsonb_build_object('type',case when p_payload->>'type' in ('comment','product-request','suggestion','other') then p_payload->>'type' else 'comment' end,'status','new')) returning to_jsonb(customer_comments.*) into result;
  else raise exception 'Unknown action'; end if;
  result:=jsonb_build_object('result',result,'revision',private.bump_data_revision());
  insert into private.rr_requests(request_id,scope,action,payload,result) values(request_id,scope,p_action,p_payload,result);

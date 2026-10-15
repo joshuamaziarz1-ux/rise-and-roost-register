@@ -15,3 +15,7 @@ test('ordering changes do not cause writes; metadata and QR changes are included
 test('vendor-and-products deletion orders children before the protected vendor',()=>{
  const diff=model.changes({brands:[{id:'b'}],items:[{id:'i',brandId:'b'}]},{brands:[],items:[]});assert.equal(diff[0].collection,'items');assert.equal(diff[1].collection,'brands');
 });
+test('original Comments & Requests backups keep their IDs, type, text and history',()=>{
+ const rows=model.documents({customerMessages:[{id:'msg-existing',message:'A request',type:'product-request',status:'handled',handledAt:'2026-10-01'}]});
+ assert.equal(rows.length,1);assert.equal(rows[0].collection,'comments');assert.equal(rows[0].id,'msg-existing');assert.equal(rows[0].value.text,'A request');assert.equal(rows[0].value.type,'product-request');assert.equal(rows[0].value.handledAt,'2026-10-01');
+});

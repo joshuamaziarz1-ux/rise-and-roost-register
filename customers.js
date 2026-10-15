@@ -49,7 +49,7 @@ async function submitCartons(){
   if(!c)return alert('Choose your name first.');
   if(!Number.isFinite(qty)||qty<1)return alert('Enter how many reusable egg cartons you are returning.');
   if(!confirm(`Return ${qty} clean, reusable egg carton${qty===1?'':'s'} for ${c.name}?`))return;
-  if(window.__RR_CLOUD_MODE){try{const isAdmin=location.pathname.includes('admin');const out=await window.RRCloud.api(isAdmin?'admin_return':'carton_return',{id:c.id,qty});if(isAdmin)await window.RRCloud.refreshAdmin();else window.RRCloud.applyMember(out);renderAll();alert('Carton return saved to shared store.');}catch(e){alert(e.message);}return;}
+  if(window.__RR_CLOUD_MODE){try{const isAdmin=window.RRCloud.isAdmin;const out=await window.RRCloud.api(isAdmin?'admin_return':'carton_return',{id:c.id,qty});if(isAdmin)await window.RRCloud.refreshAdmin();else window.RRCloud.applyMember(out);renderAll();alert('Carton return saved to shared store.');}catch(e){alert(e.message);}return;}
   c.cartonCredits+=qty;c.totalCartons+=qty;c.updatedAt=new Date().toISOString();
   data.cartonReturns.unshift({id:uid('carton'),date:new Date().toISOString(),customerId:c.id,customerName:c.name,qty});
   if(data.cartonReturns.length>2000)data.cartonReturns.length=2000;
@@ -63,7 +63,7 @@ async function redeemReward(customerId){
   if(!ri)return alert('Danielle needs to select which egg item is used for the free-dozen reward in Admin.');
   if(available(ri)<1)return alert(`${ri.name} is currently sold out.`);
   if(!confirm(`Use ${need} carton credits for 1 free dozen of ${ri.name}?`))return;
-  if(window.__RR_CLOUD_MODE){try{const isAdmin=location.pathname.includes('admin');const out=await window.RRCloud.api(isAdmin?'admin_reward':'reward_redeem',{id:c.id});if(isAdmin)await window.RRCloud.refreshAdmin();else{window.RRCloud.applyMember(out);await window.RRCloud.refreshCatalog();}renderAll();alert('Reward saved to shared store.');}catch(e){alert(e.message);}return;}
+  if(window.__RR_CLOUD_MODE){try{const isAdmin=window.RRCloud.isAdmin;const out=await window.RRCloud.api(isAdmin?'admin_reward':'reward_redeem',{id:c.id});if(isAdmin)await window.RRCloud.refreshAdmin();else{window.RRCloud.applyMember(out);await window.RRCloud.refreshCatalog();}renderAll();alert('Reward saved to shared store.');}catch(e){alert(e.message);}return;}
   c.cartonCredits-=need;c.freeDozens+=1;c.updatedAt=new Date().toISOString();
   ri.stock=Math.max(0,Number(ri.stock)-1);logStock(ri,-1,`Carton Club free dozen — ${c.name}`);
   data.cartonRewards.unshift({id:uid('reward'),date:new Date().toISOString(),customerId:c.id,customerName:c.name,itemId:ri.id,itemName:ri.name,creditsUsed:need});

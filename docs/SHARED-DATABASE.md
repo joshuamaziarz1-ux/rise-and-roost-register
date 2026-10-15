@@ -4,10 +4,12 @@ The application on this branch uses the existing RiseAndRoost Supabase project (
 
 ## Ready for real-device testing
 
-Private preview deployed October 14, 2026, at **3:09 PM America/New_York**:
+The private preview now uses the original live GitHub Pages layout selected by the owner:
 
-- [Admin](https://rise-roost-sync-testing.mysticchub64.chatgpt.site/admin-v5.html)
-- [Register](https://rise-roost-sync-testing.mysticchub64.chatgpt.site/register-v5.html)
+- [Original Admin](https://rise-roost-sync-testing.mysticchub64.chatgpt.site/?admin=1)
+- [Original Register](https://rise-roost-sync-testing.mysticchub64.chatgpt.site/)
+
+The earlier preview links also redirect to these restored screens. The live page's HTML body, styles, member check-in, four home choices, store/cart arrangement, cash confirmation, Admin navigation, member history and Comments & Requests are retained. Supabase connects to the existing controls. Administrator email/password authentication replaces the device PIN. Checking in by name verifies the last four phone digits without publishing the member directory. The separate v5 implementation and its QR payment methods remain supported in the repository.
 
 Open these as the owning ChatGPT account. Admin also requires an existing approved Supabase email/password account. The preview uses `rise-roost-sync-preview`, permanently bound to the isolated `rr_preview` schema in the existing project. The approved admin allowlist is checked against `public.admins`. Products and members in the preview are synthetic. No real payments should be made. Example member phone: `2025550100`.
 
@@ -24,10 +26,13 @@ Production counts and full record fingerprints for all 16 business tables were u
 - Restored shared pickup completion, member profile editing, returns, credit spending and free-dozen redemption. The existing cash and four QR payment methods retain their self-confirmation flow. QR uploads remain Admin-only.
 - Backup import adds missing IDs, including history, and skips existing records. Imported historical sales do not deduct inventory again. Export Previous Device Data preserves access to older local records for deliberate migration.
 - Decoded the existing compressed kiosk script into reviewable source and restored the complete existing logo from its committed base64 chunks.
+- Restored the original `index.html` instead of redirecting to the different v5 kiosk. Added cloud adapters for its existing checkout, member signup/check-in, carton returns and Comments & Requests. Returning from Admin clears private store records from the public session. Original message backups retain IDs and history.
 
 ## Verification
 
-**49 automated tests passed**: 18 Node/PostgreSQL/handler tests, one isolated deployment/preservation test, and 30 browser cases across desktop Chromium, iPhone WebKit and Android Chromium. PostgreSQL 17.6 runs locally with a schema fixture reconstructed from the project's schema and constraints, and synthetic records only. No live-project connection is used by default.
+The suite contains **68 automated checks**: 19 Node/PostgreSQL/handler tests, one isolated deployment/preservation test, and 48 browser cases across desktop Chromium, iPhone WebKit and Android Chromium. PostgreSQL 17.6 runs locally with a schema fixture reconstructed from the project's schema and constraints, and synthetic records only. No live-project connection is used by default.
+
+The browser suite compares button positions, dimensions, colors and fonts against the original live-source commit `c94d4b6508b4870a028fed8bb594cc3f4e76e636` at identical viewports: home, member card, store, cash confirmation and seven Admin tabs. Both pages receive identical synthetic records. This catches layout regressions as well as data-sync failures.
 
 Coverage includes hide/show, brands, price and stock changes, sold-out state, two independent Registers, concurrent last-unit checkout, stale Admin edits, server total changes, negative/fractional quantities, credit debit/restore, profile and return changes, pickup reservations/completion, rewards, backup preservation, network loss/reconnect, offline Admin retries, expired Admin sessions, signed member capability expiry/tampering, a simulated six hours open, recovery after reload, RLS and unauthorized RPC/Admin access. Mobile layouts were visually checked.
 

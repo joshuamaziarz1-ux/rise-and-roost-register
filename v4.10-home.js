@@ -87,8 +87,7 @@
     comment.textContent='ADD COMMENT';
     comment.onclick=openComment;
 
-    const pickup=document.createElement('button');pickup.type='button';pickup.className='rr410-secondary-btn rr410-comment';pickup.textContent='PICKUP ORDER';pickup.onclick=()=>document.getElementById('goPickup')?.click();
-    secondary.append(roost,comment,pickup);
+    secondary.append(roost,comment);
     main.append(primary,secondary);
     home.dataset.rr410Clean='1';
     return true;

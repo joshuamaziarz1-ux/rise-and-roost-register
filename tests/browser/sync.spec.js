@@ -13,7 +13,7 @@ test('Admin hide/show, price, inventory and two Registers synchronize without re
 test('checkout writes shared inventory; lost response is safely replayed',async({page,context})=>{
  await shop(page);await page.locator('[data-rr-plus="item-test"]').click();await page.locator('#rr48CartBar').click();await page.locator('#payBtn').click();await page.locator('[data-method="cash"]').click();
  let lost=true;await page.route('**/functions/v1/rise-roost-sync',async route=>{const body=route.request().postDataJSON();if(body.action==='checkout'&&lost){lost=false;await route.fetch();await route.abort('failed');}else await route.continue();});
-  page.on('dialog',d=>d.accept());await page.locator('#rr48ConfirmPay').click();await expect(page.locator('body')).toHaveAttribute('data-cloud','offline');await expect(page.locator('#rr48ConfirmPay')).toBeEnabled();await expect(page.locator('#thanks')).toBeHidden();
+  page.on('dialog',d=>d.accept());const failure=page.waitForEvent('dialog');await page.locator('#rr48ConfirmPay').click();await failure;await expect(page.locator('#rr48ConfirmPay')).toBeEnabled();await expect(page.locator('#thanks')).toBeHidden();expect(await page.evaluate(()=>RRCloud.pendingCheckout)).toBe(true);
   await page.evaluate(()=>window.RRCloud.refreshCatalog());await expect(page.locator('body')).toHaveAttribute('data-cloud','online');await page.locator('#rr48ConfirmPay').click();await expect(page.locator('#thanks')).toBeVisible();
  const receipt=await page.evaluate(()=>sessionStorage.getItem('rr.pendingCheckout'));expect(receipt).toBeNull();
 });

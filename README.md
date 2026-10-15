@@ -12,4 +12,4 @@ npx playwright install chromium webkit
 npm run test:all
 ```
 
-Real pages: `register-v5.html` and `admin-v5.html`. Historical demo/test pages remain local sandboxes and are not production entrypoints.
+The original live GitHub Pages layout is restored at `index.html`. Its existing Admin button opens the embedded Admin; `index.html?admin=1` opens it directly. The separate v5 pages remain supported with their existing cash/QR checkout. Historical demo/test pages remain local sandboxes.

@@ -2,7 +2,8 @@
 (()=>{
   'use strict';
   const cfg=window.RR_CONFIG,model=window.RRModel,clone=model.clone;
-  const admin=/\/admin(?:-v5|-cloud-beta)\.html$/i.test(location.pathname);
+  const embedded=!/\/(?:admin|register)(?:-v5|-cloud-beta)\.html$/i.test(location.pathname);
+  let admin=!embedded&&/\/admin(?:-v5|-cloud-beta)\.html$/i.test(location.pathname);
   const reads=new Set(['catalog','admin_load','member_account','member_lookup_phone','member_lookup','pickup_lookup']);
   let client,baseline,pending,saving=false,loading=false,ready=false,online=false,suppress=true,timer,retry=1000;
   let refreshPromise,lastCatalog,lastAdminData;
@@ -43,11 +44,11 @@
       return out;
     }catch(e){if(!e.status||e.status>=500)connection(false,'Connection lost — operations need cloud confirmation.');throw e;}finally{clearTimeout(timeout);}
   }
-  function forgetMember(){memberToken='';sessionStorage.removeItem('rr.memberToken');data.customers=[];data.sales=[];data.roostReturns=[];data.cartonReturns=[];}
+  function forgetMember(){memberToken='';sessionStorage.removeItem('rr.memberToken');data.customers=[];data.sales=[];data.pickups=[];data.roostReturns=[];data.cartonReturns=[];data.cartonRewards=[];}
   function applyMember(out){
     if(!out?.member)return;const existing=data.customers?.find(x=>x.id===out.member.id);
     if(existing)Object.assign(existing,out.member);else data.customers=[out.member];
-    for(const name of ['sales','pickups','roostReturns','cartonReturns'])if(out[name])data[name]=out[name];
+    for(const name of ['sales','pickups','roostReturns','cartonReturns','cartonRewards'])if(out[name])data[name]=out[name];
     document.dispatchEvent(new CustomEvent('rr:member-sync',{detail:out.member}));
   }
   function applyCatalog(cat){
@@ -75,8 +76,7 @@
     if(!force&&ready&&(pending||saving||typeof edit!=='undefined'&&edit||document.activeElement?.matches('input,textarea,select')&&document.activeElement.closest('#adminScreen')))return;
     if(force||!ready||!lastAdminData||!model.same(lastAdminData,out.data)){lastAdminData=clone(out.data);suppress=true;data=migrate(out.data);renderAll();baseline=clone(data);suppress=false;}
     ready=true;lockAdmin(false);document.getElementById('rrCloudGate')?.remove();document.getElementById('pinOverlay')?.classList.add('hidden');document.getElementById('adminScreen').classList.remove('hidden');
-    document.getElementById('changePin')?.closest('.card')?.remove();
-    if(!document.getElementById('rrCloudAdminCard')){const card=document.createElement('div');card.id='rrCloudAdminCard';card.className='card section';card.innerHTML='<h2>Shared Cloud Database</h2><p class="hint">Changes are saved to Supabase and shared across devices.</p><button class="btn" id="rrCloudSignOut">Sign Out</button><button class="btn" id="rrExportDraft">Export Unsaved Draft</button><button class="btn" id="rrExportPrevious">Export Previous Device Data</button>';document.getElementById('settingsTab').prepend(card);
+    if(!document.getElementById('rrCloudAdminCard')){const card=document.getElementById('changePin')?.closest('.card')||document.createElement('div');card.id='rrCloudAdminCard';card.className='card section';card.innerHTML='<div class="section-head"><h2>Admin Account</h2></div><p class="hint">Your approved administrator account protects store management.</p><div class="backup-box"><button class="btn" id="rrCloudSignOut">Sign Out</button><button class="btn" id="rrExportDraft">Export Unsaved Draft</button><button class="btn" id="rrExportPrevious">Export Previous Device Data</button></div>';if(!card.parentNode)document.getElementById('settingsTab').prepend(card);
       document.getElementById('rrCloudSignOut').onclick=async()=>{await client.auth.signOut();gate();};
       document.getElementById('rrExportDraft').onclick=()=>download(window.RRCloud.conflictedDraft||data,'rise-roost-unsaved-draft.json');
       document.getElementById('rrExportPrevious').onclick=()=>{let previous;try{previous=JSON.parse(localStorage.getItem('riseRoostRegisterDataV2')||localStorage.getItem('riseRoostRegisterDataV1')||'null');}catch{}if(!previous)return alert('No previous device records were found.');download({version:3,data:previous},'rise-roost-previous-device-backup.json');};
@@ -88,7 +88,7 @@
     ready=false;lockAdmin(true);document.getElementById('pinOverlay')?.classList.add('hidden');
     let panel=document.getElementById('rrCloudGate');if(panel){document.getElementById('rrGateError').textContent=message;return;}
     panel=document.createElement('div');panel.id='rrCloudGate';panel.style.cssText='position:fixed;inset:0;z-index:100000;background:#f4efe5;display:grid;place-items:center;padding:20px';
-    panel.innerHTML='<form class="modal" style="width:min(400px,100%);padding:26px;background:white"><h2>Rise & Roost Admin</h2><p class="hint">Sign in with your approved administrator account.</p><label>Email<input type="email" required autocomplete="username" class="wide"></label><label>Password<input type="password" required autocomplete="current-password" class="wide"></label><button class="btn primary wide" type="submit">Sign In</button><p id="rrGateError" role="alert"></p><a href="register-v5.html">Open Register</a></form>';
+    panel.innerHTML='<form class="modal" style="width:min(400px,100%);padding:26px;background:white"><h2>Rise & Roost Admin</h2><p class="hint">Sign in with your approved administrator account.</p><label>Email<input type="email" required autocomplete="username" class="wide"></label><label>Password<input type="password" required autocomplete="current-password" class="wide"></label><button class="btn primary wide" type="submit">Sign In</button><p id="rrGateError" role="alert"></p><a href="'+(embedded?'index.html':'register-v5.html')+'">Back to Store</a></form>';
     document.body.append(panel);document.getElementById('rrGateError').textContent=message;
     panel.querySelector('form').onsubmit=async e=>{e.preventDefault();const button=panel.querySelector('button');button.disabled=true;try{const fields=panel.querySelectorAll('input');const {error}=await client.auth.signInWithPassword({email:fields[0].value,password:fields[1].value});if(error)throw error;if(pending)await flush();else await loadAdmin();}catch(error){document.getElementById('rrGateError').textContent=error.message;}finally{button.disabled=false;}};
   }
@@ -118,13 +118,13 @@
     let panel=document.getElementById('rrRecoverPurchase');if(panel)return;
     panel=document.createElement('div');panel.id='rrRecoverPurchase';panel.className='overlay';panel.style.zIndex='100002';
     panel.innerHTML='<div class="modal"><h2>Confirm your previous purchase</h2><p>A purchase still needs cloud confirmation. Confirm it before starting another order. Do not pay again.</p><button class="btn primary wide" id="rrRecoverConfirm">Check / Confirm Previous Purchase</button><button class="btn wide hidden" id="rrRecoverSignIn">Sign In to Original Roost Account</button><button class="btn wide hidden" id="rrRecoverDismiss">Review Cart Again</button><p role="status" id="rrRecoverStatus"></p></div>';document.body.append(panel);
-    document.getElementById('rrRecoverSignIn').onclick=()=>{panel.classList.add('hidden');window.RRRoost.logout(false);window.RRRoost.open();};
+    document.getElementById('rrRecoverSignIn').onclick=()=>{panel.classList.add('hidden');if(window.RRRoost){window.RRRoost.logout(false);window.RRRoost.open();}else{window.RRLegacy.clearIdentity();document.querySelector('#shopView .back-home')?.click();document.getElementById('memberNameInput')?.focus();}};
     document.getElementById('rrRecoverDismiss').onclick=()=>panel.remove();
     document.getElementById('rrRecoverConfirm').onclick=async()=>{const button=document.getElementById('rrRecoverConfirm');button.disabled=true;try{await refresh();await checkout(receipt.payment,[],receipt);cart={};renderAll();panel.remove();document.getElementById('payOverlay').classList.add('hidden');document.getElementById('thanks').classList.remove('hidden');}catch(e){document.getElementById('rrRecoverStatus').textContent=e.message;if(e.status===401)document.getElementById('rrRecoverSignIn').classList.remove('hidden');if(!sessionStorage.getItem('rr.pendingCheckout'))document.getElementById('rrRecoverDismiss').classList.remove('hidden');}finally{button.disabled=false;}};
   }
   persist=persistCloud;
-  if(!admin)available=i=>Math.max(0,Number(i?.stock||0)); // Catalog stock already excludes all pickup reservations.
-  window.RRCloud={api,checkout,recoverPending,refreshCatalog:refresh,refreshAdmin:()=>loadAdmin(true),applyMember,forgetMember,get client(){return client;},get ready(){return ready&&online;},get pendingCheckout(){return !!sessionStorage.getItem('rr.pendingCheckout');},conflictedDraft:null};
+  available=i=>Math.max(0,Number(i?.stock||0)-(admin?reserved(i?.id):0)); // Public catalog stock already excludes pickup reservations.
+  window.RRCloud={api,checkout,recoverPending,refreshCatalog:refresh,refreshAdmin:()=>loadAdmin(true),applyMember,forgetMember,get isAdmin(){return admin;},get client(){return client;},get ready(){return ready&&online;},get pendingAdmin(){return !!pending;},get pendingCheckout(){return !!sessionStorage.getItem('rr.pendingCheckout');},conflictedDraft:null};
   window.addEventListener('beforeunload',e=>{if(pending||sessionStorage.getItem('rr.pendingCheckout')){e.preventDefault();e.returnValue='An operation still needs cloud confirmation.';}});
   async function start(){
     if(!window.supabase){connection(false,'Cloud library unavailable. Reconnect to load the register.');return;}
@@ -135,12 +135,13 @@
     setInterval(()=>{if(!document.hidden){if(pending)flush();else refresh();}},cfg.pollMs);
     window.addEventListener('online',()=>pending?flush():refresh());window.addEventListener('offline',()=>connection(false,'Offline — reconnect to confirm operations.'));
     window.addEventListener('focus',()=>pending?flush():refresh());document.addEventListener('visibilitychange',()=>{if(!document.hidden){client.auth.startAutoRefresh();if(pending)flush();else refresh();}});
-    document.getElementById('adminBtn').onclick=()=>location.href='admin-v5.html';document.getElementById('exitAdmin').onclick=()=>location.href='register-v5.html';
+    document.getElementById('adminBtn').onclick=async()=>{if(!embedded){location.href='admin-v5.html';return;}admin=true;gate();try{const {data:{session}}=await client.auth.getSession();if(session)await loadAdmin();}catch(e){gate(e.message);}};
+    document.getElementById('exitAdmin').onclick=async()=>{if(!embedded){location.href='register-v5.html';return;}if(pending)return;admin=false;baseline=null;lastAdminData=null;lastCatalog=null;data=migrate({});document.getElementById('adminScreen').classList.add('hidden');ready=true;await refresh();window.RRLegacy?.refresh();};
     document.getElementById('findPickupBtn').onclick=findPickupCloud;document.getElementById('pickupCodeInput').onkeydown=e=>{if(e.key==='Enter')findPickupCloud();};
-    if(admin){window.voidSale=async id=>{if(!confirm('Void this sale and return inventory and credits?'))return;try{await api('admin_void',{id});await loadAdmin();}catch(e){alert(e.message);}};
+    window.voidSale=async id=>{if(!confirm('Void this sale and return inventory and credits?'))return;try{await api('admin_void',{id});await loadAdmin();}catch(e){alert(e.message);}};
       window.adminCompletePickup=async id=>{const p=data.pickups.find(x=>x.id===id);if(!p||!confirm('Complete pickup '+p.code+'? Confirm payment was received.'))return;try{await api('pickup_complete',{code:p.code},true);await loadAdmin();}catch(e){alert(e.message);}};
       document.getElementById('importBackup').onclick=importMissing;
-    }
+    if(embedded&&new URLSearchParams(location.search).get('admin')==='1')document.getElementById('adminBtn').click();
   }
   async function importMissing(){const file=document.getElementById('importBackupFile').files[0];if(!file)return alert('Choose a backup first.');try{
     const parsed=JSON.parse(await file.text()),incoming=parsed.data||parsed,records=model.documents(incoming);
@@ -148,8 +149,10 @@
     lockAdmin(true);await api('admin_import',{records});await loadAdmin();status('Missing backup records imported. Existing records preserved.');
   }catch(e){status('Import not confirmed — retry the same backup after reconnecting.');alert('Import not confirmed: '+e.message);}finally{lockAdmin(!!pending);}}
   async function findPickupCloud(){const code=document.getElementById('pickupCodeInput').value.trim();if(!code)return;const box=document.getElementById('pickupCustomerResult');try{
-    const {pickup:p}=await api('pickup_lookup',{code});box.innerHTML='<div class="pickup-result"><h3>'+esc(p.customerName)+'</h3><p>'+p.items.map(i=>Number(i.qty)+' × '+esc(i.itemName)).join('<br>')+'</p><p>'+money(pickupTotal(p))+(p.paid?' · Paid':' · Place exact cash in the cash box')+'</p><button class="btn primary wide" id="rrCompletePickup">Complete Pickup</button></div>';
-    const requestId=crypto.randomUUID();document.getElementById('rrCompletePickup').onclick=async()=>{if(!confirm('Confirm payment and complete this pickup?'))return;try{await api('pickup_complete',{code,requestId});box.textContent='Pickup complete. Thank you!';await refresh();}catch(e){alert(e.message);}};
+    const {pickup:p}=await api('pickup_lookup',{code});
+    const lines=p.items.map(i=>`<div class="pickup-line"><span>${i.qty}× ${esc(i.itemName)}</span><strong>${money(Number(i.price)*Number(i.qty))}</strong></div>`).join('');
+    box.innerHTML=`<div class="pickup-result"><div style="display:flex;justify-content:space-between;gap:10px;align-items:start"><div><h3>${esc(p.customerName)}</h3><div class="hint">Pickup code ${esc(p.code)}</div></div><span class="status ready">Ready</span></div><div class="pickup-lines">${lines}</div><div class="total"><span>Total</span><span>${money(pickupTotal(p))}</span></div>${p.note?`<div class="notice">Pickup note: ${esc(p.note)}</div>`:''}${p.paid?'<div class="notice"><strong>PAID</strong> — Your order has already been paid for.</div>':`<div class="notice">Please place <strong>${money(pickupTotal(p))}</strong> in the cash box. <strong>No change is available.</strong></div>`}<button class="btn primary wide" id="completeCustomerPickup">${p.paid?'Complete Pickup':'I Paid — Complete Pickup'}</button></div>`;
+    const requestId=crypto.randomUUID();document.getElementById('completeCustomerPickup').onclick=async()=>{if(!p.paid&&!confirm(`Place exactly ${money(pickupTotal(p))} in the cash box, then press OK.`))return;try{await api('pickup_complete',{code,requestId});box.innerHTML=`<div class="pickup-result" style="text-align:center"><h3>Thank you, ${esc(p.customerName)}!</h3><p>Your pickup is complete.</p></div>`;await refresh();}catch(e){alert(e.message);}};
   }catch(e){box.textContent=e.message;}}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })();

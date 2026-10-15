@@ -11,7 +11,10 @@
   }
   function documents(state) {
     const rows=[];
-    for (const collection of collections) for (const row of state[collection] || []) rows.push({collection,id:row.id,value:row});
+    for (const collection of collections) {
+      const records=collection==='comments'?(state.comments??state.customerMessages??[]).map(row=>row.text===undefined&&row.message!==undefined?{...row,text:row.message}:row):state[collection]||[];
+      for (const row of records) rows.push({collection,id:row.id,value:row});
+    }
     for (const [id,value] of Object.entries(state.settings || {})) {
       if (id === 'paymentQrs') for (const [method,qr] of Object.entries(value || {})) rows.push({collection:'payments',id:method,value:{id:method,qr}});
       else rows.push({collection:'settings',id,value:{id,value}});

@@ -16,6 +16,7 @@ test('member IDs, forged capabilities, expired tokens and cross-member credit re
  assert.equal((await h(req({action:'checkout',useCredits:true,customerId:'member-two',requestId:crypto.randomUUID(),memberToken:signed.memberToken}))).status,200);
  const before=called;assert.equal((await h(req({action:'member_account',memberToken:signed.memberToken+'x'}))).status,401);assert.equal(called,before);
  time=7201000;assert.equal((await h(req({action:'member_account',memberToken:signed.memberToken}))).status,401);
+ assert.equal((await h(req({action:'checkout',requestId:crypto.randomUUID(),memberToken:signed.memberToken}))).status,401);
 });
 test('network errors, invalid payloads and CORS fail closed',async()=>{
  const h=createHandler({...base,rpc:async()=>{throw Error('network');}});

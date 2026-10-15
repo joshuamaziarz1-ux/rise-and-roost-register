@@ -12,7 +12,7 @@
   add();
   const oldRender=window.renderAll;
   if(typeof oldRender==='function')window.renderAll=function(){oldRender();add()};
-  if(!document.getElementById('rr45Features')){
+  if(!window.__RR_CLOUD_MODE&&!document.getElementById('rr45Features')){
     const s=document.createElement('script');
     s.id='rr45Features';
     s.src='v4.5-features.js?v=4.7.2';

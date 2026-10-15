@@ -2,6 +2,7 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import {execFileSync} from 'node:child_process';
 import {database,ADMIN,OTHER} from './database.mjs';
 import {createHandler} from '../supabase/functions/rise-roost-sync/handler.mjs';
 const db=await database();
@@ -10,6 +11,12 @@ const mime={'.js':'text/javascript','.html':'text/html','.css':'text/css','.svg'
 const server=http.createServer(async(req,res)=>{
  try{
   const url=new URL(req.url,'http://127.0.0.1:4173');
+  if(url.pathname.startsWith('/original/')){
+   const name=url.pathname.slice('/original/'.length);
+   if(!/^[\w./-]+$/.test(name)||name.includes('..'))throw Error('Invalid baseline path');
+   const bytes=execFileSync('git',['show','c94d4b6508b4870a028fed8bb594cc3f4e76e636:'+name],{maxBuffer:4_000_000,windowsHide:true});
+   res.writeHead(200,{'Content-Type':mime[path.extname(name)]||'application/octet-stream','Cache-Control':'no-store'});res.end(bytes);return;
+  }
   if(url.pathname==='/functions/v1/rise-roost-sync'){
    const chunks=[];for await(const chunk of req)chunks.push(chunk);const response=await handler(new Request(url,{method:req.method,headers:req.headers,body:req.method==='POST'?Buffer.concat(chunks):undefined}));res.writeHead(response.status,Object.fromEntries(response.headers));res.end(await response.text());return;
   }

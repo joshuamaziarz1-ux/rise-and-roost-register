@@ -41,6 +41,7 @@ export function createHandler({rpc,getUser,secret,origins,now=()=>Date.now(),log
       }
       const member=await verifyMember(body.memberToken);
       if(MEMBER_ACTIONS.has(action) && !member) return json({error:'Member session expired. Sign in to The Roost again.'},401);
+      if(action==='checkout'&&body.memberToken&&!member)return json({error:'Member session expired. Sign in to The Roost again.'},401);
       if(action==='checkout' && (body.useCredits || body.customerId) && !member) return json({error:'Member sign-in required'},401);
       const payload={...body}; delete payload.action; delete payload.memberToken; delete payload.customerId;
       if(!READS.has(action) && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.requestId||'')) return json({error:'Valid request ID required'},400);
