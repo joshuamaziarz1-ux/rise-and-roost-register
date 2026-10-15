@@ -1,9 +1,9 @@
 (()=>{
-  const CLEAN='assets/rise-roost-logo.webp?v=4.8.6';
+  const CLEAN='assets/rise-roost-logo.svg?v=4.8.6';
   const fixImg=img=>{
     if(!(img instanceof HTMLImageElement))return;
     const src=img.getAttribute('src')||'';
-    if(src.includes('rise-roost-logo')&&!src.includes('rise-roost-logo.webp')){
+    if(src.includes('rise-roost-logo')&&!src.includes('rise-roost-logo.svg')){
       img.src=CLEAN;
     }
   };

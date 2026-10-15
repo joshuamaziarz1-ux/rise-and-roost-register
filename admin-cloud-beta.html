@@ -10,7 +10,8 @@
 body > header.top,.store-tabs,#shopView,#pickupView,#cartonView,.version{display:none!important}
 body{background:#f4efe5}
 #adminScreen{min-height:100vh}
-</style></head>
+</style><script src="cloud-config.js?v=6.0.1"></script>
+</head>
 <body>
 <header class="top"><div><div class="logo">Rise & Roost</div><div class="sub">Self-Serve Market</div></div><button class="btn ghost" id="adminBtn">Admin</button></header>
 <div class="store-tabs"><button class="btn store-tab active" data-storetab="shop">Shop</button><button class="btn store-tab" data-storetab="pickup">Pickup Order</button><button class="btn store-tab" data-storetab="cartons">Egg Carton Returns</button></div>
@@ -81,19 +82,20 @@ body{background:#f4efe5}
 <div id="settingsTab" class="hidden">
 <div class="card section"><div class="section-head"><h2>Admin PIN</h2></div><p class="hint">Customers cannot access store management without the PIN.</p><button class="btn" id="changePin">Change Admin PIN</button></div>
 <div class="card section"><div class="section-head"><h2>Backup & Restore</h2></div><p class="hint">Export a backup regularly. It includes vendors, products, inventory, pickup orders, The Roost members, carton credits and history, sales, and inventory history.</p><div class="backup-box"><button class="btn primary" id="exportBackup">Export Backup</button><input id="importBackupFile" type="file" accept="application/json,.json"><button class="btn" id="importBackup">Import Backup</button></div></div>
-<div class="card section danger-zone"><div class="section-head"><h2>Version</h2></div><strong>Rise & Roost Admin v5.0.7</strong><p class="hint">Data is saved on this device in the browser.</p></div>
+<div class="card section danger-zone"><div class="section-head"><h2>Version</h2></div><strong>Rise & Roost Admin v5.0.7</strong><p class="hint">Store records are saved in the shared Supabase database.</p></div>
 </div>
 </div>
 </section>
-<script src="core.js?v=4.7.2"></script>
-<script src="admin.js?v=4.7.2"></script>
-<script src="pickup.js?v=4.7.2"></script>
-<script src="ui.js?v=4.7.2"></script>
-<script src="customers.js?v=4.7.2"></script>
-<script src="v4.js?v=4.7.2"></script>
-<script src="v4.8-payments-cloud.js?v=5.1.0"></script>
-<script src="v5-admin-shell.js?v=5.0.3"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="rise-roost-cloud.js?v=5.1.2"></script>
+<script src="core.js?v=6.0.1"></script>
+<script src="admin.js?v=6.0.1"></script>
+<script src="pickup.js?v=6.0.1"></script>
+<script src="ui.js?v=6.0.1"></script>
+<script src="customers.js?v=6.0.1"></script>
+<script src="v4.js?v=6.0.1"></script>
+<script src="v4.8-payments-cloud.js?v=6.0.1"></script>
+<script src="v5-admin-shell.js?v=6.0.1"></script>
+<script src="vendor/supabase.js?v=2.117.3"></script>
+<script src="cloud-model.js?v=6.0.1"></script>
+<script src="v5-cloud-sync.js?v=6.0.1"></script>
 </body>
 </html>

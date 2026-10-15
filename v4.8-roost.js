@@ -124,6 +124,7 @@
     renderShopBanner();
   }
   function logout(goHome=true){
+    if(window.__RR_CLOUD_MODE)window.RRCloud?.forgetMember();
     sessionStorage.removeItem(MEMBER_KEY);
     sessionStorage.setItem(GUEST_KEY,'1');
     if(sessionTimer){clearTimeout(sessionTimer);sessionTimer=null}
@@ -145,7 +146,7 @@
   function ensureOverlay(){
     if(document.getElementById('rrRoostV2Overlay'))return;
     const o=document.createElement('div');o.id='rrRoostV2Overlay';o.className='overlay hidden rr-roost-overlay';
-    o.innerHTML=`<div class="modal"><div class="rr-roost-head"><div class="rr-roost-brand"><img src="assets/rise-roost-logo.webp?v=4.10.2" alt="Rise & Roost"><div class="rr-roost-brand-copy"><div class="rr-roost-brand-sub">Rise & Roost</div><h2 id="rrRoostTitle">The Roost</h2><div class="rsub" id="rrRoostSub"></div></div></div><div class="rr-roost-head-actions"><button class="rr-roost-about-btn" id="rrRoostAbout" type="button">WHAT IS THE ROOST?</button><button class="btn ghost" id="rrRoostClose">Close</button></div></div><div id="rrRoostBody" class="rr-roost-body"></div></div>`;
+    o.innerHTML=`<div class="modal"><div class="rr-roost-head"><div class="rr-roost-brand"><img src="assets/rise-roost-logo.svg?v=4.10.2" alt="Rise & Roost"><div class="rr-roost-brand-copy"><div class="rr-roost-brand-sub">Rise & Roost</div><h2 id="rrRoostTitle">The Roost</h2><div class="rsub" id="rrRoostSub"></div></div></div><div class="rr-roost-head-actions"><button class="rr-roost-about-btn" id="rrRoostAbout" type="button">WHAT IS THE ROOST?</button><button class="btn ghost" id="rrRoostClose">Close</button></div></div><div id="rrRoostBody" class="rr-roost-body"></div></div>`;
     document.body.appendChild(o);
     document.getElementById('rrRoostClose').onclick=closeRoost;
     document.getElementById('rrRoostAbout').onclick=openRoostAbout;
@@ -159,7 +160,7 @@
     o.id='rrRoostAboutOverlay';
     o.className='overlay hidden rr-roost-about-overlay';
     o.innerHTML=`<div class="modal rr-roost-about">
-      <img src="assets/rise-roost-logo.webp?v=4.10.2" alt="Rise & Roost">
+      <img src="assets/rise-roost-logo.svg?v=4.10.2" alt="Rise & Roost">
       <h2>Welcome to The Roost</h2>
       <p>The Roost is our simple member program for Rise & Roost customers.</p>
       <div class="rr-roost-about-points">
@@ -398,9 +399,10 @@
     document.getElementById('rrSaveProfile').onclick=()=>saveProfile(c);
     document.getElementById('rrLogout').onclick=()=>logout(true);
     renderReturns(c);renderPickups(c);renderHistory(c);resetTimer();
+    if(window.__RR_CLOUD_MODE && credits(c)>=Number(data.cartonSettings?.cartonsPerFreeDozen||12) && data.cartonSettings?.rewardItemId){const button=document.createElement('button');button.className='btn wide';button.textContent='REDEEM ONE FREE DOZEN';button.onclick=async()=>{if(!confirm('Redeem carton credits for one free dozen?'))return;try{const out=await window.RRCloud.api('reward_redeem');window.RRCloud.applyMember(out);await window.RRCloud.refreshCatalog();renderPortal(currentMember());}catch(e){showRoostNotice('Reward Not Confirmed',e.message,'warn');}};document.getElementById('rrSubmitReturns').after(button);}
   }
 
-  function saveProfile(c){
+  async function saveProfile(c){
     const name=document.getElementById('rrProfileName').value.trim();
     const phone=document.getElementById('rrProfilePhone').value;
     const status=document.getElementById('rrProfileStatus');
@@ -408,6 +410,9 @@
     if(!validPhone(phone)){status.textContent='Enter a 10-digit phone number.';return}
     const owner=phoneOwner(phone,c.id);
     if(owner){status.textContent='That phone number is already used by another My Roost account.';return}
+    if(window.__RR_CLOUD_MODE){
+      try{const out=await window.RRCloud.api('member_profile',{name,phone:phoneDigits(phone),version:c._version});window.RRCloud.applyMember(out);status.textContent='Saved to shared store.';renderShopBanner();resetTimer();}catch(e){status.textContent=e.message;}return;
+    }
     const oldName=c.name;
     c.name=name;c.phone=phoneDigits(phone);c.updatedAt=new Date().toISOString();
     (data.pickups||[]).forEach(p=>{if(p.customerId===c.id||normName(p.customerName)===normName(oldName)){p.customerId=c.id;p.customerName=c.name;p.phone=c.phone}});
@@ -424,9 +429,13 @@
     document.getElementById('rrSubmitReturns').onclick=()=>submitReturns(c);
   }
   function changeReturnQty(id,d){qtyState[id]=Math.max(0,Number(qtyState[id]||0)+d);const el=document.getElementById('rrRetQty_'+id);if(el)el.textContent=qtyState[id];resetTimer()}
-  function submitReturns(c){
+  async function submitReturns(c){
     const rows=data.roostReturnTypes.filter(t=>t.active!==false&&Number(qtyState[t.id]||0)>0);
     if(!rows.length){showRoostNotice('Nothing Selected','Choose at least one item you are returning.','warn');return}
+    if(window.__RR_CLOUD_MODE){
+      const button=document.getElementById('rrSubmitReturns');button.disabled=true;
+      try{const out=await window.RRCloud.api('roost_return',{returns:rows.map(t=>({typeId:t.id,qty:Number(qtyState[t.id])}))});window.RRCloud.applyMember(out);rows.forEach(t=>qtyState[t.id]=0);renderReturns(c);renderHistory(c);document.getElementById('rrCreditCount').textContent=credits(c);showRoostNotice('Returns Added','Your returns and credits are saved to the shared store.','success');}catch(e){showRoostNotice('Returns Not Confirmed',e.message,'warn');}finally{button.disabled=false;}return;
+    }
     let totalCredits=0,totalQty=0;
     rows.forEach(t=>{
       const qty=Number(qtyState[t.id]||0),earned=qty*Number(t.credit||1);
@@ -518,6 +527,8 @@
     recordSale=wrapped;
   }
 
+  document.addEventListener('rr:member-expired',()=>logout(true));
+  document.addEventListener('rr:member-sync',()=>{renderShopBanner();const c=currentMember();if(c&&document.getElementById('rrCreditCount')){document.getElementById('rrCreditCount').textContent=credits(c);renderHistory(c);}});
   function setup(){
     ensureData();styles();ensureGuest();ensureOverlay();hookRecordSale();
     document.getElementById('memberCheckin')?.remove();

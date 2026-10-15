@@ -31,6 +31,7 @@ function ensureGlobal(){
   return box;
 }
 function signOut(){
+  window.RRCloud?.forgetMember();
   sessionStorage.removeItem(MEMBER_KEY);sessionStorage.removeItem(GUEST_KEY);
   try{cart={};renderCart()}catch(e){}
   document.getElementById('payOverlay')?.classList.add('hidden');
@@ -86,6 +87,7 @@ function findMember(raw){
   return {error:'Name not found. Try your phone number, shop as a guest, or join The Roost.'};
 }
 function checkIn(){
+  if(window.__RR_CLOUD_MODE)return window.RRLegacyCloud?.checkIn();
   const input=$('memberNameInput');if(!input)return;
   const result=findMember(input.value);
   if(result.error){setStatus(result.error);input.focus();return}
