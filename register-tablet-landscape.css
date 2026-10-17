@@ -1,0 +1,222 @@
+/*
+  Rise & Roost register — landscape tablet fit.
+  Loaded on the customer Register only. No colors, wording, navigation,
+  business logic, or Admin UI are changed.
+*/
+@media (orientation: landscape) and (min-width: 800px) {
+  html,body{font-size:16px}
+
+  /* Home: preserve the current design, use the landscape height better. */
+  .kiosk-home{
+    width:min(1120px,calc(100% - 24px))!important;
+    margin:4px auto 12px!important;
+  }
+  .rr48-home-logo{
+    width:min(145px,18vh)!important;
+    max-height:145px!important;
+    margin:0 auto 4px!important;
+  }
+  .rr410-home-actions{
+    gap:9px!important;
+    margin-top:4px!important;
+  }
+  .rr410-primary,.rr410-secondary{
+    width:min(900px,100%)!important;
+  }
+  .rr410-primary .rr48-main-btn{
+    min-height:92px!important;
+    padding:12px 20px!important;
+    font-size:clamp(1.4rem,2.5vw,1.75rem)!important;
+  }
+  .rr410-secondary{
+    gap:9px!important;
+  }
+  .rr410-secondary-btn{
+    min-height:68px!important;
+    padding:10px 18px!important;
+    font-size:clamp(1rem,1.8vw,1.2rem)!important;
+  }
+
+  /* Shopping: keep generous touch targets while reducing wasted height. */
+  #shopView{
+    width:min(1360px,calc(100% - 18px))!important;
+    margin:5px auto 10px!important;
+  }
+  #shopView .shop{
+    padding:9px 12px!important;
+  }
+  .rr48-shop-head{
+    margin-bottom:5px!important;
+  }
+  .rr48-shop-title{
+    font-size:clamp(1.35rem,2.4vw,1.7rem)!important;
+  }
+  .rr48-shop-logo{
+    width:46px!important;
+    height:46px!important;
+  }
+  .rr48-categories{
+    gap:6px!important;
+    margin:4px 0 8px!important;
+  }
+  .rr48-cat{
+    min-height:46px!important;
+    padding:7px 10px!important;
+    font-size:.98rem!important;
+  }
+  #productArea .grid{
+    grid-template-columns:repeat(auto-fit,minmax(190px,1fr))!important;
+    gap:8px!important;
+  }
+  .rr48-product{
+    min-height:224px!important;
+    border-radius:16px!important;
+  }
+  .rr48-photo{
+    height:104px!important;
+  }
+  .rr48-product-body{
+    padding:9px 10px!important;
+    gap:4px!important;
+  }
+  .rr48-product-name{
+    font-size:1.02rem!important;
+    line-height:1.12!important;
+  }
+  .rr48-product-brand{
+    font-size:.75rem!important;
+  }
+  .rr48-product-price{
+    font-size:1.26rem!important;
+  }
+  .rr48-qtyline{
+    grid-template-columns:48px 1fr 48px!important;
+    gap:7px!important;
+  }
+  .rr48-qtybtn{
+    height:48px!important;
+    min-height:48px!important;
+  }
+  .rr48-qtyvalue{
+    font-size:1.18rem!important;
+  }
+  .rr48-soldout{
+    top:9px!important;
+    right:9px!important;
+    padding:6px 10px!important;
+    font-size:.78rem!important;
+  }
+  .rr48-cartbar{
+    min-height:58px!important;
+    margin-top:7px!important;
+    bottom:calc(5px + env(safe-area-inset-bottom))!important;
+    font-size:1.12rem!important;
+  }
+
+  /* Cart remains large enough to read but uses less vertical space. */
+  #shopView .cart{
+    max-width:1100px!important;
+    padding:12px 16px!important;
+  }
+  .rr48-cart-top{
+    margin-bottom:5px!important;
+  }
+  .rr48-cart-top .btn{
+    min-height:48px!important;
+  }
+  .cart h2{
+    font-size:1.7rem!important;
+  }
+  .cart-list{
+    gap:6px!important;
+    margin:8px 0!important;
+  }
+  .cart-row{
+    grid-template-columns:62px minmax(0,1fr) auto!important;
+    gap:6px 10px!important;
+    padding:7px 0!important;
+  }
+  .rr48-cart-thumb{
+    width:62px!important;
+    height:52px!important;
+  }
+  .cart-row .qbtn{
+    width:46px!important;
+    height:46px!important;
+  }
+  .cart .total{
+    font-size:1.45rem!important;
+    padding-top:9px!important;
+  }
+  .cart .pay{
+    min-height:60px!important;
+    font-size:1.22rem!important;
+  }
+  .cart #clearBtn{
+    min-height:48px!important;
+  }
+
+  /* Payment screens fit without shrinking their important text. */
+  #payOverlay .modal,
+  #thanks .modal{
+    max-height:calc(100dvh - 18px)!important;
+    overflow:auto!important;
+    padding:16px 22px!important;
+  }
+  #payOverlay .rr48-pay-logo{
+    width:62px!important;
+    height:62px!important;
+    margin-bottom:5px!important;
+  }
+  .rr48-pay-total{
+    font-size:clamp(3.1rem,10vh,4.7rem)!important;
+    margin:4px 0!important;
+  }
+  .rr48-pay-box{
+    font-size:1.3rem!important;
+  }
+  .rr48-pay-help{
+    margin:6px 0 10px!important;
+  }
+  .rr48-confirm-cash{
+    min-height:60px!important;
+  }
+  .rr48-pay-actions .btn{
+    min-height:50px!important;
+  }
+
+  /* Roost/comment modals: use the available width and avoid page scrolling. */
+  .overlay{
+    padding:9px!important;
+  }
+  .modal,
+  .rr410-modal{
+    max-height:calc(100dvh - 18px)!important;
+  }
+}
+
+/* Short landscape tablets (roughly 1024x600 CSS pixels). */
+@media (orientation: landscape) and (min-width: 800px) and (max-height: 650px) {
+  .rr48-home-logo{
+    width:min(105px,17vh)!important;
+    max-height:105px!important;
+  }
+  .rr410-primary .rr48-main-btn{
+    min-height:76px!important;
+  }
+  .rr410-secondary-btn{
+    min-height:58px!important;
+  }
+  .rr48-product{
+    min-height:205px!important;
+  }
+  .rr48-photo{
+    height:86px!important;
+  }
+  .rr48-cat{
+    min-height:44px!important;
+  }
+  .rr48-cartbar{
+    min-height:54px!important;
+  }
+}
