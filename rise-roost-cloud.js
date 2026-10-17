@@ -7,6 +7,7 @@
   const REGISTER_PATH=isBeta?'register-cloud-beta.html':'register-v5.html';
   const isAdminPage=/\/admin(?:-v5|-cloud-beta)\.html$/i.test(location.pathname);
   const sbLib=window.supabase;
+  const persistence=window.RRData||null;
 
   let client=null;
   let adminRevision=0;
@@ -67,6 +68,7 @@
 
   function applyCatalog(cat){
     if(!cat)return;
+    if(persistence?.saveCatalog)persistence.saveCatalog(cat);
     publicCatalogRevision=Number(cat.revision||0);
     data.brands=Array.isArray(cat.brands)?cat.brands:[];
     data.items=Array.isArray(cat.items)?cat.items:[];
@@ -312,6 +314,9 @@
     if(adminScreen)adminScreen.classList.add('hidden');
     const pin=document.getElementById('pinOverlay');if(pin)pin.classList.add('hidden');
 
+    const cached=persistence?.getCatalog?.();
+    if(cached?.value)applyCatalog(cached.value);
+
     setupPublicPickup();
     setupPrivateCartonClub();
     setupPublicSignup();
@@ -402,6 +407,7 @@
     data.settings=out.data?.settings||{paymentQrs:{}};
     if(basePersist)basePersist();
     if(typeof renderAll==='function')renderAll();
+    if(persistence?.saveAdmin)persistence.saveAdmin(data,adminRevision);
     suppressSave=false;
 
     adminReady=true;
@@ -423,6 +429,7 @@
 
   function queueAdminSave(){
     pendingSave=true;
+    if(persistence?.setPendingAdmin)persistence.setPendingAdmin(data,adminRevision);
     setSaveStatus('Saving…');
     clearTimeout(saveTimer);
     saveTimer=setTimeout(flushAdminSave,700);
@@ -432,16 +439,20 @@
     if(saving||!pendingSave)return;
     pendingSave=false;
     saving=true;
-    const snapshot=clone(data);
-    const revisionAtStart=adminRevision;
+    const queued=persistence?.getPendingAdmin?.();
+    const snapshot=queued?.value?clone(queued.value):clone(data);
+    const revisionAtStart=queued?.value?Number(queued.revision||0):adminRevision;
     try{
       adminIgnoreRealtimeUntil=Date.now()+2500;
       const out=await api('admin_save',{revision:revisionAtStart,data:snapshot},true);
       adminRevision=Number(out.revision||adminRevision);
       adminIgnoreRealtimeUntil=Date.now()+1200;
+      if(persistence?.clearPendingAdmin)persistence.clearPendingAdmin();
+      if(persistence?.saveAdmin)persistence.saveAdmin(snapshot,adminRevision);
       setSaveStatus('Saved');
     }catch(e){
       if(e.conflict||e.status===409){
+        if(persistence?.archivePendingConflict)persistence.archivePendingConflict('revision-conflict');
         setSaveStatus('Reloading latest store data…');
         alert('The store changed on another device while you were editing. I reloaded the newest data so a sale is not overwritten. Please repeat your last change.');
         await loadAdmin();
@@ -457,6 +468,29 @@
     }
   }
 
+  function resumePendingAdminSave(){
+    const queued=persistence?.getPendingAdmin?.();
+    if(!queued?.value)return;
+
+    if(Number(queued.revision||0)===adminRevision){
+      suppressSave=true;
+      data=migrate(clone(queued.value));
+      data.customers=Array.isArray(queued.value?.customers)?queued.value.customers:[];
+      data.cartonReturns=Array.isArray(queued.value?.cartonReturns)?queued.value.cartonReturns:[];
+      data.cartonRewards=Array.isArray(queued.value?.cartonRewards)?queued.value.cartonRewards:[];
+      data.cartonSettings=queued.value?.cartonSettings||{cartonsPerFreeDozen:12,rewardItemId:''};
+      data.settings=queued.value?.settings||{paymentQrs:{}};
+      if(basePersist)basePersist();
+      if(typeof renderAll==='function')renderAll();
+      suppressSave=false;
+    }
+
+    pendingSave=true;
+    setSaveStatus('Saving…');
+    clearTimeout(saveTimer);
+    saveTimer=setTimeout(flushAdminSave,150);
+  }
+
   async function setupAdmin(){
     const adminScreen=document.getElementById('adminScreen');
     if(adminScreen)adminScreen.classList.add('hidden');
@@ -467,7 +501,7 @@
 
     const {data:{session}}=await client.auth.getSession();
     if(session){
-      try{await loadAdmin()}catch(e){
+      try{await loadAdmin();resumePendingAdminSave()}catch(e){
         console.error(e);
         if(e.status===401){
           await client.auth.signOut();
@@ -481,7 +515,7 @@
     setupLiveUpdates();
 
     client.auth.onAuthStateChange((_event,newSession)=>{
-      if(newSession&&!adminReady)setTimeout(()=>loadAdmin().catch(console.error),50);
+      if(newSession&&!adminReady)setTimeout(()=>loadAdmin().then(resumePendingAdminSave).catch(console.error),50);
     });
   }
 
