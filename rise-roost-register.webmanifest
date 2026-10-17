@@ -1,0 +1,22 @@
+{
+  "name": "Rise & Roost Register",
+  "short_name": "Rise & Roost",
+  "start_url": "./register-cloud-beta.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": [
+    "fullscreen",
+    "standalone"
+  ],
+  "orientation": "landscape",
+  "background_color": "#f4efe5",
+  "theme_color": "#35543a",
+  "icons": [
+    {
+      "src": "assets/rise-roost-logo.webp",
+      "sizes": "any",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    }
+  ]
+}
