@@ -1,4 +1,5 @@
 {
+  "id": "./register-cloud-beta.html",
   "name": "Rise & Roost Register",
   "short_name": "Rise & Roost",
   "start_url": "./register-cloud-beta.html",
@@ -13,10 +14,22 @@
   "theme_color": "#35543a",
   "icons": [
     {
+      "src": "assets/rise-roost-logo.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/rise-roost-logo.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
       "src": "assets/rise-roost-logo.webp",
       "sizes": "any",
       "type": "image/webp",
-      "purpose": "any maskable"
+      "purpose": "maskable"
     }
   ]
 }
