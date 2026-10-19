@@ -12,6 +12,7 @@ Environment: Windows, Node 24.16.0, pinned Supabase JS 2.117.3, PostgreSQL 17.6,
 | `npm run test:preview` | 1 passed, 0 failed; isolated-schema rehearsal preserves canonical rows and public function ACLs |
 | `npm run test:browser -- --reporter=line --max-failures=1` | 58 passed, 0 failed in 4.3 minutes |
 | `npm run test:browser -- tests/browser/recovery.spec.js tests/browser/sync.spec.js --reporter=line --max-failures=1 --output=work/final-browser-validation` | 54 affected cases rerun after stronger receipt/save confirmation validation; 54 passed, 0 failed in 2.1 minutes |
+| `npm run test:browser -- tests/browser/recovery.spec.js --grep 'unconfirmed Admin edits' --reporter=line --output=work/final-status-validation` | 3 passed, 0 failed; both the badge and existing Settings save status accurately report an unconfirmed save |
 | `RR_PREVIEW_ONLY=1 node tests/live-preview.mjs` | Passed against the existing isolated preview endpoint; 4 actual Realtime events, idempotent sale, shared member credits, rejected unauthorized requests |
 | Read-only production fingerprint comparison | All 18 tables unchanged before/after isolated preview writes |
 | Read-only deployed-source comparison | Register, Admin, data adapter, cloud adapter, landscape CSS and manifest each returned HTTP 200 and matched the pinned main source |
