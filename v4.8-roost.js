@@ -22,9 +22,9 @@
     const d=phoneDigits(phone); if(!d)return null;
     return customers().find(c=>c.id!==excludeId&&phoneDigits(c.phone)===d)||null;
   };
-  const memberSales=c=>(data.sales||[]).filter(s=>!s.voided&&(s.customerId===c.id||(s.customerType==='roost-member'&&normName(s.customerName)===normName(c.name))));
-  const memberPickups=c=>(data.pickups||[]).filter(p=>p.customerId===c.id||phoneDigits(p.phone)===phoneDigits(c.phone)||normName(p.customerName)===normName(c.name));
-  const legacyReturns=c=>(data.cartonReturns||[]).filter(r=>r.customerId===c.id||normName(r.customerName)===normName(c.name));
+  const memberSales=c=>(data.sales||[]).filter(s=>!s.voided&&s.customerId===c.id);
+  const memberPickups=c=>(data.pickups||[]).filter(p=>p.customerId===c.id);
+  const legacyReturns=c=>(data.cartonReturns||[]).filter(r=>r.customerId===c.id);
   const roostReturns=c=>(data.roostReturns||[]).filter(r=>r.customerId===c.id);
   const credits=c=>Math.max(0,Number(c.roostCredits??c.cartonCredits??0));
 
@@ -124,6 +124,7 @@
     renderShopBanner();
   }
   function logout(goHome=true){
+    if(window.__RR_CLOUD_MODE)window.RRCloud?.forgetMember();
     sessionStorage.removeItem(MEMBER_KEY);
     sessionStorage.setItem(GUEST_KEY,'1');
     if(sessionTimer){clearTimeout(sessionTimer);sessionTimer=null}
@@ -238,13 +239,14 @@
       if(window.RRCloud&&typeof window.RRCloud.api==='function'){
         const out=await window.RRCloud.api('member_lookup_phone',{phone:phoneDigits(phone)});
         const m=out.member;
-        data.customers=[m];
+        window.RRCloud.applyMember(out);
         persist();
         setMember(m);
         closeRoost();
         goShop();
         return;
       }
+      if(window.__RR_CLOUD_MODE)throw new Error('Cloud connection required.');
       const d=phoneDigits(phone);
       const matches=customers().filter(c=>phoneDigits(c.phone)===d);
       if(matches.length!==1){status.textContent=matches.length?'More than one account uses that number. Please ask Danielle for help.':'No Roost account was found with that number.';return}
@@ -297,13 +299,14 @@
           storeUpdates:false
         });
         const m=out.member;
-        data.customers=[m];
+        window.RRCloud.applyMember(out);
         persist();
         setMember(m);
         closeRoost();
         goShop();
         return;
       }
+      if(window.__RR_CLOUD_MODE)throw new Error('Cloud connection required.');
       const existing=phoneOwner(phone);
       if(existing){status.textContent='That phone number already has a Roost account. Go back and sign in.';return}
       const local={id:uid('customer'),name,phone:phoneDigits(phone),cartonCredits:0,roostCredits:0,totalCartons:0,freeDozens:0,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
@@ -400,7 +403,7 @@
     renderReturns(c);renderPickups(c);renderHistory(c);resetTimer();
   }
 
-  function saveProfile(c){
+  async function saveProfile(c){
     const name=document.getElementById('rrProfileName').value.trim();
     const phone=document.getElementById('rrProfilePhone').value;
     const status=document.getElementById('rrProfileStatus');
@@ -408,6 +411,9 @@
     if(!validPhone(phone)){status.textContent='Enter a 10-digit phone number.';return}
     const owner=phoneOwner(phone,c.id);
     if(owner){status.textContent='That phone number is already used by another My Roost account.';return}
+    if(window.__RR_CLOUD_MODE){
+      try{const out=await window.RRCloud.api('member_profile',{name,phone:phoneDigits(phone),version:c._version});window.RRCloud.applyMember(out);status.textContent='Saved to shared store.';renderShopBanner();resetTimer();}catch(e){status.textContent=e.message;}return;
+    }
     const oldName=c.name;
     c.name=name;c.phone=phoneDigits(phone);c.updatedAt=new Date().toISOString();
     (data.pickups||[]).forEach(p=>{if(p.customerId===c.id||normName(p.customerName)===normName(oldName)){p.customerId=c.id;p.customerName=c.name;p.phone=c.phone}});
@@ -424,9 +430,13 @@
     document.getElementById('rrSubmitReturns').onclick=()=>submitReturns(c);
   }
   function changeReturnQty(id,d){qtyState[id]=Math.max(0,Number(qtyState[id]||0)+d);const el=document.getElementById('rrRetQty_'+id);if(el)el.textContent=qtyState[id];resetTimer()}
-  function submitReturns(c){
+  async function submitReturns(c){
     const rows=data.roostReturnTypes.filter(t=>t.active!==false&&Number(qtyState[t.id]||0)>0);
     if(!rows.length){showRoostNotice('Nothing Selected','Choose at least one item you are returning.','warn');return}
+    if(window.__RR_CLOUD_MODE){
+      const button=document.getElementById('rrSubmitReturns');button.disabled=true;
+      try{const out=await window.RRCloud.api('roost_return',{returns:rows.map(t=>({typeId:t.id,qty:Number(qtyState[t.id])}))});window.RRCloud.applyMember(out);rows.forEach(t=>qtyState[t.id]=0);renderReturns(c);renderHistory(c);document.getElementById('rrCreditCount').textContent=credits(c);showRoostNotice('Returns Added','Your returns and credits are saved to the shared store.','success');}catch(e){showRoostNotice('Returns Not Confirmed',e.message,'warn');}finally{button.disabled=false;}return;
+    }
     let totalCredits=0,totalQty=0;
     rows.forEach(t=>{
       const qty=Number(qtyState[t.id]||0),earned=qty*Number(t.credit||1);
@@ -518,6 +528,8 @@
     recordSale=wrapped;
   }
 
+  document.addEventListener('rr:member-expired',()=>logout(true));
+  document.addEventListener('rr:member-sync',()=>{renderShopBanner();const c=currentMember();if(c&&document.getElementById('rrCreditCount')){document.getElementById('rrCreditCount').textContent=credits(c);renderHistory(c);}});
   function setup(){
     ensureData();styles();ensureGuest();ensureOverlay();hookRecordSale();
     document.getElementById('memberCheckin')?.remove();

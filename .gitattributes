@@ -1,0 +1,2 @@
+# Preserve the pinned generated SDK verbatim, including whitespace in templates.
+vendor/** linguist-vendored=true -whitespace

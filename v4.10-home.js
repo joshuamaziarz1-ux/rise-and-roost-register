@@ -130,10 +130,11 @@
     setTimeout(()=>w.classList.add('hidden'),2600);
   }
 
-  function submitComment(){
+  async function submitComment(){
     const text=document.getElementById('rr410CommentText').value.trim();
     const name=document.getElementById('rr410CommentName').value.trim();
     if(!text){toast('Add a Comment','Type your comment first.');return}
+    if(window.__RR_CLOUD_MODE){try{await window.RRCloud.api('comment_submit',{name,text});document.getElementById('rr410CommentOverlay').classList.add('hidden');toast('Thank You','Your comment has been saved.');}catch(e){toast('Comment Not Confirmed',e.message);}return;}
     data.comments=Array.isArray(data.comments)?data.comments:[];
     data.comments.unshift({id:typeof uid==='function'?uid('comment'):'comment_'+Date.now(),date:new Date().toISOString(),name,text});
     if(data.comments.length>500)data.comments.length=500;

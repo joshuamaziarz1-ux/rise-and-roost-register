@@ -1,5 +1,6 @@
 (()=>{
   let selectedPayment=null;
+  let paymentEntries=[],paymentDue=0,paymentBusy=false;
   const labels={cash:'Cash',cashapp:'Cash App',paypal:'PayPal',applepay:'Apple Pay',googlepay:'Google Pay'};
   const ensureSettings=()=>{ data.settings=data.settings&&typeof data.settings==='object'?data.settings:{}; data.settings.paymentQrs=data.settings.paymentQrs&&typeof data.settings.paymentQrs==='object'?data.settings.paymentQrs:{}; return data.settings.paymentQrs; };
   const qrFor=m=>ensureSettings()[m]||'';
@@ -24,12 +25,16 @@
     `;document.head.appendChild(s);
   }
   function payChooser(){
+    if(window.__RR_CLOUD_MODE&&!window.RRCloud?.ready)return alert('Reconnect before paying.');
+    if(window.RRCloud?.pendingCheckout)return window.RRCloud.recoverPending();
     selectedPayment=null;
+    paymentEntries=entries().map(x=>({item:{...x.item},qty:x.qty}));
+    paymentDue=paymentEntries.reduce((sum,x)=>sum+Number(x.item.price)*Number(x.qty),0);
     const o=document.getElementById('payOverlay'); if(!o)return;
     o.innerHTML=`<div class="modal rr48-payment-modal">
       <div class="rr48-pay-logo"><img src="assets/rise-roost-logo.webp?v=4.8.6" alt="Rise & Roost"></div>
       <div class="rr48-payment-question">CHOOSE PAYMENT</div>
-      <div class="big rr48-pay-total">${money(total())}</div>
+      <div class="big rr48-pay-total">${money(paymentDue)}</div>
       <div class="rr48-pay-methods">
         <button class="rr48-pay-method cash" data-method="cash">CASH</button>
         <button class="rr48-pay-method cashapp" data-method="cashapp">CASH APP</button>
@@ -45,7 +50,7 @@
   }
   function showMethod(method){
     selectedPayment=method;
-    const o=document.getElementById('payOverlay'),amt=money(total()),qr=qrFor(method);
+    const o=document.getElementById('payOverlay'),amt=money(paymentDue),qr=qrFor(method);
     if(method==='cash'){
       o.innerHTML=`<div class="modal rr48-payment-modal">
         <div class="rr48-pay-logo"><img src="assets/rise-roost-logo.webp?v=4.8.6" alt=""></div>
@@ -71,15 +76,16 @@
     const c=document.getElementById('rr48ConfirmPay'); if(c)c.onclick=()=>completePayment(method);
   }
   async function completePayment(method){
-    const e=entries(); if(!e.length)return;
-    for(const x of e)if(x.qty>available(x.item))return alert(`${x.item.name} no longer has enough available inventory.`);
+    if(paymentBusy)return;
+    const e=paymentEntries; if(!e.length)return;
+    paymentBusy=true;
     const button=document.getElementById('rr48ConfirmPay');
     if(button){button.disabled=true;button.textContent='SAVING PURCHASE…'}
 
     if(window.RRCloud&&typeof window.RRCloud.checkout==='function'){
       try{
-        await window.RRCloud.checkout(method,e);
-        cart={};
+        await window.RRCloud.checkout(method,e,{expectedDue:paymentDue});
+        paymentBusy=false;cart={};
         document.getElementById('payOverlay')?.classList.add('hidden');
         const thanks=document.getElementById('thanks'); if(thanks)thanks.classList.remove('hidden');
         renderAll();
@@ -88,22 +94,14 @@
         const timer=setInterval(()=>{n--;const el=document.getElementById('rr48Countdown');if(el)el.textContent=`Returning to the home screen in ${n} second${n===1?'':'s'}…`;if(n<=0){clearInterval(timer);document.getElementById('doneThanks')?.click()}},1000);
         return;
       }catch(err){
+        paymentBusy=false;
         alert((err&&err.message)||'The purchase could not be saved. Please ask Danielle for help before trying again.');
-        if(button){button.disabled=false;button.textContent=`✓ I ${method==='cash'?'PUT '+money(total())+' IN THE CASH BOX':'SENT '+money(total())+' WITH '+(labels[method]||method).toUpperCase()}`}
+        if(button){button.disabled=false;button.textContent=`✓ I ${method==='cash'?'PUT '+money(paymentDue)+' IN THE CASH BOX':'SENT '+money(paymentDue)+' WITH '+(labels[method]||method).toUpperCase()}`}
         return;
       }
     }
 
-    const lines=e.map(x=>({itemId:x.item.id,itemName:x.item.name,brandId:x.item.brandId,brandName:brand(x.item.brandId)?.name||'Unknown',price:Number(x.item.price),qty:x.qty}));
-    e.forEach(x=>{x.item.stock=Math.max(0,x.item.stock-x.qty);logStock(x.item,-x.qty,`Customer sale - ${labels[method]||method}`)});
-    recordSale(lines,{payment:method,source:'store'});
-    cart={};persist();
-    document.getElementById('payOverlay')?.classList.add('hidden');
-    const thanks=document.getElementById('thanks'); if(thanks)thanks.classList.remove('hidden');
-    renderAll();
-    const copy=document.querySelector('#thanks .rr48-thanks-copy'); if(copy)copy.textContent=`Your ${labels[method]} purchase is complete.`;
-    let n=8; const cd=document.getElementById('rr48Countdown'); if(cd)cd.textContent=`Returning to the home screen in ${n} seconds…`;
-    const timer=setInterval(()=>{n--;const el=document.getElementById('rr48Countdown');if(el)el.textContent=`Returning to the home screen in ${n} second${n===1?'':'s'}…`;if(n<=0){clearInterval(timer);document.getElementById('doneThanks')?.click()}},1000);
+    paymentBusy=false;alert('Cloud connection required before confirming a purchase.');if(button)button.disabled=false;
   }
   async function qrData(file){
     if(!file)return '';
@@ -179,6 +177,8 @@
     const old=window.renderDashboard;
     if(old&&!old.__rr48pay){const wrapped=function(){old();injectDashboard()};wrapped.__rr48pay=true;window.renderDashboard=wrapped}
   }
+  // Install after kiosk initialization; checkout is safe even before window load.
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',apply,{once:true});else apply();
   window.addEventListener('load',()=>{let n=0;const t=setInterval(()=>{apply();if(++n>=8)clearInterval(t)},500)});
   if(document.readyState==='complete')apply();
 })();
