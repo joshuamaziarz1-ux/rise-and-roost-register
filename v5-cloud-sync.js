@@ -59,7 +59,8 @@
       return out;
     }catch(e){if(!e.stale&&(!e.status||e.status>=500))connection(false,'Connection lost — operations need cloud confirmation.');throw e;}finally{clearTimeout(timeout);}
   }
-  function forgetMember(){identityEpoch++;memberToken='';sessionStorage.removeItem('rr.memberToken');data.customers=[];data.sales=[];data.pickups=[];data.roostReturns=[];data.cartonReturns=[];data.cartonRewards=[];data.roostCreditUses=[];}
+  function clearMemberData(){data.customers=[];data.sales=[];data.pickups=[];data.roostReturns=[];data.cartonReturns=[];data.cartonRewards=[];data.roostCreditUses=[];}
+  function forgetMember(){identityEpoch++;memberToken='';sessionStorage.removeItem('rr.memberToken');clearMemberData();}
   function applyMember(out){
     if(!out?.member)return;const existing=data.customers?.find(x=>x.id===out.member.id);
     if(existing)Object.assign(existing,out.member);data.customers=[existing||out.member];
@@ -74,7 +75,9 @@
     data.cartonSettings=cat.cartonSettings||{cartonsPerFreeDozen:12,rewardItemId:''};
     data.settings={...(data.settings||{}),paymentQrs:cat.paymentQrs||{},roostCreditSettings:cat.roostCreditSettings||{}};
     data.roostReturnTypes=cat.roostCreditSettings?.returnTypes||[];
-    if(!memberToken)forgetMember();suppress=true;renderAll();suppress=false;
+    // A public refresh may complete while signup is awaiting its response.
+    // Clear guest-only private state without invalidating that pending sign-in.
+    if(!memberToken)clearMemberData();suppress=true;renderAll();suppress=false;
     document.dispatchEvent(new CustomEvent('rr:sync',{detail:{revision:cat.revision}}));
   }
   function refresh(){if(refreshPromise)return refreshPromise;refreshPromise=refreshOnce().finally(()=>refreshPromise=null);return refreshPromise;}

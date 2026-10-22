@@ -2,7 +2,7 @@
 
 ## October 22 rc.2 validation
 
-The final suite contains **106 checks**: 23 Node/PostgreSQL/handler/model, one preview-preservation rehearsal, and 82 browser cases. The seven new session/live-account scenarios and deterministic rapid-cart regression run in desktop Chromium, iPhone WebKit and Android Chromium. The existing full split-UI screenshot comparison also runs on the landscape tablet.
+The final suite contains **109 checks**: 23 Node/PostgreSQL/handler/model, one preview-preservation rehearsal, and 85 browser cases. The eight new session/live-account scenarios and deterministic rapid-cart regression run in desktop Chromium, iPhone WebKit and Android Chromium. The existing full split-UI screenshot comparison also runs on the landscape tablet.
 
 Regression tests first reproduced a restored member token after logout and an accepted empty checkout in the old candidate. A separate deterministic probe then reproduced an Admin read restoring four synthetic private member records and removing the gate after SDK sign-out. The final guard verifies the active session and authentication generation before applying any Admin response. Conflict exports retain the exact unconfirmed changes even when a session transition has cleared displayed records.
 
@@ -13,11 +13,13 @@ Executed rc.2 commands:
 | `npm ci` | 39 packages; zero reported vulnerabilities |
 | `npm run test:all` | 23 Node checks and 1 preview-preservation check passed. An early browser failure exposed a test comparing reserved availability with stock on hand; the comparison and synthetic pickup cleanup were corrected. |
 | `npm run test:browser -- --reporter=line --max-failures=1` | 76 passed in 4.8 minutes, including all four immutable-baseline layout comparisons, before the final delayed-Admin-read guard. |
-| `npm run test:browser -- tests/browser/recovery.spec.js tests/browser/session-safety.spec.js tests/browser/sync.spec.js --reporter=line --max-failures=1 --output=work/rc2-final-behavior` | Final affected 75 scenarios passed, 0 failed in 2.4 minutes, including the delayed Admin read and exact conflict recovery data. Final-commit CI link is recorded in PR #3. |
+| `npm run test:browser -- tests/browser/recovery.spec.js tests/browser/session-safety.spec.js tests/browser/sync.spec.js --reporter=line --max-failures=1 --output=work/rc2-final-behavior` | Interim 75 affected scenarios passed, 0 failed in 2.4 minutes, including the delayed Admin read and exact conflict recovery data; this preceded the catalog/signup correction below. |
 
-Below is historical rc.1 evidence, retained to distinguish previous results from the new execution.
+**Final local result:** `npm run test:all` passed all **109 checks** (23 Node/PostgreSQL/handler/model, 1 preview-preservation, 85 browser; browser duration 4.9 minutes), with zero failures, skips or retries. This includes the final catalog/signup correction and all four immutable-main layout comparisons. All 32 selected before/after screenshot files were refreshed from this passing run. The final pushed commit and its independent CI run/result are pinned in [PR #3](https://github.com/joshuamaziarz1-ux/rise-and-roost-register/pull/3).
 
 The first pushed rc.2 CI run passed all 24 Node/preservation checks and 78 of 79 browser cases. The remaining iPhone failure occurred before the malformed-response assertion: the cart closed during rapid navigation. Inspection found a real 20-millisecond delayed cart reset in the original Start Shopping handler. A deterministic clock test reproduced the class being removed after the cart was opened. Initialization now finishes in the initial handler, with no delayed navigation reversal; no extra sleeps or retries were added to hide the defect. Final-commit CI results and the new three-engine regression run are recorded in PR #3.
+
+A subsequent local run caught a catalog revision arriving while signup was in flight. Guest-state cleanup had advanced the member identity generation and incorrectly discarded the valid signup response. A deterministic held-response test failed before the fix. Public refreshes now clear private guest data without canceling a pending signup; explicit logout still invalidates outstanding member responses. All 12 focused signup, logout and account-switch cases passed across the three engines after the correction. The prior commit passed 106 checks in [CI run 39830087651](https://github.com/joshuamaziarz1-ux/rise-and-roost-register/actions/runs/39830087651), but that result does not cover this newly reproduced regression. Final full-suite results are recorded below and in PR #3.
 
 The current run uses only disposable local PostgreSQL databases, the actual candidate Edge handler and intercepted synthetic authentication. No candidate site, Edge Function or migration has been deployed. Real magic-link email delivery and physical-device acceptance remain outstanding. The existing hosted Sites preview must not be mistaken for rc.2.
 

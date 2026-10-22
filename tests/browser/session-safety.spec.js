@@ -4,6 +4,14 @@ import {shop,adminLogin,rpc} from './helpers.js';
 // Keep the transport deadline separate from the session-race behavior under test.
 test.beforeEach(async({page})=>{await page.addInitScript(()=>document.addEventListener('DOMContentLoaded',()=>{if(window.RR_CONFIG)window.RR_CONFIG.timeoutMs=10000;}));});
 async function signIn(page,phone='2025550100'){await page.evaluate(()=>RRRoost.open());await page.locator('#rrPhoneSignIn').fill(phone);await page.locator('#rrPhoneGo').click();await expect(page.locator('#rrShopMemberBar')).toContainText(phone.endsWith('0101')?'Other Member':'Test Member');}
+test('a catalog update during signup cannot cancel the new member session',async({page},testInfo)=>{
+ await shop(page);let release,started;const held=new Promise(r=>release=r),seen=new Promise(r=>started=r);
+ await page.route('**/functions/v1/rise-roost-sync',async route=>{if(route.request().postDataJSON().action==='member_signup'){const response=await route.fetch();started();await held;await route.fulfill({response});}else await route.continue();});
+ await page.evaluate(()=>RRRoost.openSignup());await page.locator('#rrJoinName').fill('Catalog Race Member');await page.locator('#rrJoinPhone').fill('20255504'+String(testInfo.project.name==='chromium'?0:testInfo.project.name==='iphone-webkit'?1:2).padStart(2,'0'));await page.locator('#rrJoinSubmit').click();await seen;
+ const state=await rpc(page,'admin_load',{},true),before=state.data.items.find(x=>x.id==='item-other');await rpc(page,'admin_patch',{requestId:crypto.randomUUID(),changes:[{collection:'items',id:before.id,before,after:{...before,stock:before.stock+1}}]},true);await page.evaluate(()=>RRCloud.refreshCatalog());
+ await expect.poll(()=>page.evaluate(()=>data.items.find(x=>x.id==='item-other').stock)).toBe(before.stock+1);release();await expect(page.locator('#rrShopMemberBar')).toContainText('Catalog Race Member');expect(await page.evaluate(()=>!!sessionStorage.getItem('rr.memberToken'))).toBe(true);
+});
+
 test('a delayed sign-in response cannot restore an account after logout',async({page})=>{
  await shop(page);let release,started;const held=new Promise(r=>release=r),seen=new Promise(r=>started=r);
  await page.route('**/functions/v1/rise-roost-sync',async route=>{if(route.request().postDataJSON().action==='member_lookup_phone'){const response=await route.fetch();started();await held;await route.fulfill({response});}else await route.continue();});
