@@ -462,14 +462,14 @@
     box.innerHTML=list.slice(0,8).map(p=>{
       const total=(p.items||[]).reduce((s,i)=>s+Number(i.price||0)*Number(i.qty||0),0);
       const items=(p.items||[]).map(i=>`${i.qty}× ${esc(i.itemName)}`).join(', ');
-      return `<div class="rr-pickup-row"><div class="rr-pickup-top"><strong>${p.status==='ready'?'Ready for Pickup':p.status==='waiting'?'Waiting':p.status==='picked'?'Picked Up':'Cancelled'}</strong><span class="badge ${p.status==='ready'?'on':''}">${esc(p.status)}</span></div><div class="rsub" style="margin-top:5px">${items}</div><div style="margin-top:7px"><strong>${money(total)}</strong>${p.paid?' · Paid':''}</div></div>`
+      return `<div class="rr-pickup-row"><div class="rr-pickup-top"><strong>${p.status==='ready'?'Ready for Pickup':p.status==='waiting'?'Waiting':p.status==='picked'?'Picked Up':'Cancelled'}</strong><span class="badge ${p.status==='ready'?'on':''}">${esc(p.status)}</span></div><div class="rsub" style="margin-top:5px">${items}${p.scheduledAt?' · Pickup '+esc(new Date(p.scheduledAt).toLocaleString()):''}</div><div style="margin-top:7px"><strong>${money(total)}</strong>${p.paid?' · Paid':''}</div></div>`
     }).join('');
   }
 
   function renderHistory(c){
     const box=document.getElementById('rrHistoryList');if(!box)return;
     const events=[];
-    memberSales(c).forEach(s=>events.push({date:s.date,type:'Purchase',text:(s.items||[]).map(i=>`${i.qty}× ${i.itemName}`).join(', '),total:money(s.total)}));
+    memberSales(c).forEach(s=>events.push({date:s.date,type:s.source==='carton-club'?'Reward':'Purchase',text:(s.items||[]).map(i=>`${i.qty}× ${i.itemName}`).join(', '),total:money(s.total)}));
     legacyReturns(c).forEach(r=>events.push({date:r.date,type:'Return',text:`${Number(r.qty||0)} egg carton${Number(r.qty||0)===1?'':'s'} returned`,total:`+${Number(r.qty||0)} credit${Number(r.qty||0)===1?'':'s'}`}));
     roostReturns(c).forEach(r=>events.push({date:r.date,type:'Return',text:`${Number(r.qty||0)}× ${r.typeName}`,total:`+${Number(r.credits||0)} credit${Number(r.credits||0)===1?'':'s'}`}));
     events.sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -529,7 +529,9 @@
   }
 
   document.addEventListener('rr:member-expired',()=>logout(true));
-  document.addEventListener('rr:member-sync',()=>{renderShopBanner();const c=currentMember();if(c&&document.getElementById('rrCreditCount')){document.getElementById('rrCreditCount').textContent=credits(c);renderHistory(c);}});
+  const refreshAccount=()=>{renderShopBanner();const c=currentMember();if(c&&document.getElementById('rrCreditCount')){document.getElementById('rrCreditCount').textContent=credits(c);renderReturns(c);renderPickups(c);renderHistory(c);}};
+  document.addEventListener('rr:member-sync',refreshAccount);
+  document.addEventListener('rr:sync',refreshAccount);
   function setup(){
     ensureData();styles();ensureGuest();ensureOverlay();hookRecordSale();
     document.getElementById('memberCheckin')?.remove();

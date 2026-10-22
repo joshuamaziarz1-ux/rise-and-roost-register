@@ -1,6 +1,20 @@
-# Rise & Roost Register 5.2.0-rc.1
+# Rise & Roost Register 5.2.0-rc.2
 
 This is a review candidate for Issue #2, based on production `main` at `ab27be06d0ad7a999d4ca122ed30373c69b04435`. It is not a production release. Owner approval and physical-device acceptance are outstanding. No production branch, function, schema or business record was changed.
+
+## October 22 consolidation and fixes
+
+The existing `codex/phase-1-release-candidate` branch and PR #3 are retained as the single Phase 1 candidate. Its two previously tested rc.1 commits (`e263962`, `674b73e`) already descend from the latest main. This avoids a competing RC or an indiscriminate PR #1 merge. All current remote branch heads were fetched again; main remains unchanged. Six deployed UI/data/CSS/manifest files again matched main after newline normalization. The October 15 private Sites preview is an older implementation and **is not this candidate**.
+
+The rc.2 audit reproduced and corrected these defects with synthetic fixtures:
+
+- A delayed sign-in or return response could restore a previous member's token/private records after sign-out. Requests now reject responses from an obsolete identity; a stale account-expiry response cannot sign out the next member.
+- A queued Admin edit could retry using a different account after a session switch. The original actor is checked against both the sending session and any refreshed session. Sign-out clears private in-memory store data, and a late Admin read cannot restore it. Unconfirmed requests and exact conflict changes remain available for recovery/export.
+- Missing/null transaction arrays bypassed SQL three-valued checks and could create an empty zero-total sale. Arrays, payment methods and whole return quantities are now validated before any mutation. All failed-input tests assert the full canonical store is unchanged.
+- An already-open Roost account did not redraw newly configured return types or new pickup cards. Those existing views now refresh automatically while retaining selected return quantities and profile fields. Scheduled pickup time appears as data inside the existing pickup detail line; no new scheduling flow or unlock control is added.
+- Member account responses now include only that member's credit-use audit entries. Reward transactions use the existing history row with the correct event type.
+
+Styles, branding, navigation, checkout methods, landscape CSS and PWA manifest remain unchanged. No Phase 2 processors, payment-method controls, refunds or expanded customer-authentication scheme were implemented.
 
 ## Source and feature audit
 
@@ -39,7 +53,7 @@ The current chosen UI differs from some saved feature branches. Exact visual pre
 
 1. Current split Admin has no dedicated Comments tab. Comment submission and cross-device Admin data/backup synchronization are implemented and tested; restoring a visible dedicated tab requires a separate UI decision.
 2. Current checkout has no credit-spending checkbox. Credit earning, Admin reward redemption and the atomic credit checkout API are tested. The saved branch's customer credit-spending control is not introduced into the approved payment UX.
-3. Existing pickup/customer and Admin controls and member pickup cards are retained. Saved-branch appointment scheduling/approval screens and door-unlock integrations are not reintroduced. Appointment metadata is preserved and available through the scoped contract/export; adding appointment display/control elements needs a UI decision.
+3. Existing pickup/customer and Admin controls and member pickup cards are retained. Appointment times now appear inside their existing detail text and update automatically. Saved-branch appointment scheduling/approval screens and door-unlock integrations are not reintroduced. Appointment metadata is preserved through the scoped contract/export; adding scheduling/approval controls needs a separate UI decision.
 
 These are explicit remaining Issue #2 acceptance gaps. Keep the PR in **draft** until their treatment is approved. Automated tests passing does not mean Phase 1 or production cutover has been approved.
 
@@ -56,6 +70,8 @@ Do not execute this section without explicit owner production approval.
 Rollback: before migration, return to pinned main. After migration, retain additive tables and idempotency receipts; stop writes or use a compatible candidate client. Do not re-enable the old whole-store replacement saver or silently switch Admin to local persistence. Restore the provider backup only under a separately reviewed recovery procedure to avoid losing later real transactions.
 
 ## Physical-device acceptance (not yet performed)
+
+Approval sequence: review the exact PR commit and automated/screenshot evidence; decide how to treat the three UI scope gaps above; authorize an isolated candidate preview and real-device/magic-link checks; complete the checklist below; then give separate explicit production migration/deployment approval. There is no automatic merge, cutover or Phase 2 authorization when tests pass.
 
 - iPhone Safari: open Register, verify home/logo/cards/cart/payment and Roost readability, join/revisit/logout, scroll/keyboard/safe areas, background/resume and reconnect. Use synthetic preview data only.
 - Android Chrome: repeat above; test QR scanning on a second device without sending money.

@@ -33,6 +33,8 @@ test('PostgreSQL transactions, permissions and data preservation',async t=>{
     const before=await state(),m=before.customers.find(x=>x.id==='member-test');
     const sale=await rpc('checkout',request({payment:'cash',expectedTotal:5,expectedDue:0,useCredits:true,lines:[{itemId:'item-test',qty:1}]}),null,m.id);
     assert.equal(sale.result.creditsUsed,10);assert.equal((await state()).customers.find(x=>x.id===m.id).cartonCredits,m.cartonCredits-10);
+    const account=await rpc('member_account',{},null,m.id),other=await rpc('member_account',{},null,'member-other');
+    assert.equal(account.roostCreditUses.find(x=>x.saleId===sale.result.saleId).creditsUsed,10);assert(other.roostCreditUses.every(x=>x.customerId==='member-other'));
     await rpc('admin_void',request({id:sale.result.saleId}),ADMIN);await rpc('admin_void',request({id:sale.result.saleId}),ADMIN);assert.equal((await state()).customers.find(x=>x.id===m.id).cartonCredits,m.cartonCredits);
     const d=await state();await assert.rejects(()=>rpc('checkout',request({payment:'cash',expectedTotal:500,lines:[{itemId:'item-test',qty:100}],useCredits:true}),null,m.id),/inventory/);assert.deepEqual((await state()).customers,d.customers);
   });
@@ -100,5 +102,13 @@ test('PostgreSQL transactions, permissions and data preservation',async t=>{
     const before=(await rpc('member_account',{},null,'member-test')).member.cartonCredits;
     await assert.rejects(()=>rpc('roost_return',request({returns:[{typeId:'unconfigured-jar',qty:1}]}),null,'member-test'),/not available/);
     assert.equal((await rpc('member_account',{},null,'member-test')).member.cartonCredits,before);
+  });
+  await t.test('missing or null checkout, patch and return payloads never create records or credits',async()=>{
+    const before=await state();
+    for(const lines of [undefined,null,{},[]])await assert.rejects(()=>rpc('checkout',request({payment:'cash',expectedTotal:0,...lines===undefined?{}:{lines}})),/Invalid checkout lines/);
+    for(const changes of [undefined,null,{}])await assert.rejects(()=>rpc('admin_patch',request({changes}),ADMIN),/Invalid changes/);
+    for(const returns of [undefined,null,{},[],[{typeId:'egg-carton'}],[{typeId:'egg-carton',qty:null}]])await assert.rejects(()=>rpc('roost_return',request({returns}),null,'member-test'),/Invalid return/);
+    for(const qty of [null,0,-1,1.5])await assert.rejects(()=>rpc('carton_return',request({qty}),null,'member-test'),/Invalid return/);
+    assert.deepEqual(await state(),before);
   });
 });

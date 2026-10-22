@@ -31,7 +31,7 @@ test('localStorage records are preserved but never used as cloud data',async({pa
 test('Register recovers after six hours open and tab resume',async({page,browser})=>{
  await shop(page);await page.clock.install();await page.clock.fastForward('06:00:00');
  const c=await browser.newContext(),ad=await c.newPage();await adminLogin(ad);await ad.evaluate(()=>showTab('items'));await ad.locator('[data-stock="item-other"][data-d="1"]').click();
- await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect.poll(()=>page.evaluate(()=>data.items.find(x=>x.id==='item-other').stock)).toBe(await ad.evaluate(()=>data.items.find(x=>x.id==='item-other').stock));await c.close();
+ await expect(ad.locator('#adminScreen')).not.toHaveAttribute('inert','');await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect.poll(()=>page.evaluate(()=>data.items.find(x=>x.id==='item-other').stock)).toBe(await ad.evaluate(()=>available(item('item-other'))));await c.close();
 });
 test('Admin offline edits retry once and reach Register after reconnection',async({page,browser})=>{
  await adminLogin(page);await page.evaluate(()=>showTab('items'));const c=await browser.newContext(),r=await c.newPage();await shop(r);
@@ -59,5 +59,5 @@ test('unconfirmed purchase survives reload and is recovered without a second sal
 test('concurrent Admin edits preserve the completed change and reject a stale modal',async({page,browser})=>{
  await adminLogin(page);await page.evaluate(()=>showTab('items'));await page.locator('[data-ei="item-other"]').click();const original=await page.locator('#editItemStock').inputValue();await page.locator('#editItemPrice').fill('8');
  const c=await browser.newContext(),second=await c.newPage();await adminLogin(second);await second.evaluate(()=>showTab('items'));await second.locator('[data-stock="item-other"][data-d="1"]').click();await expect(second.locator('#adminScreen')).not.toHaveAttribute('inert','');
- let conflict='';page.on('dialog',async d=>{conflict=d.message();await d.accept();});await page.locator('#editSave').click();await expect.poll(()=>conflict).toContain('changed on another device');await expect.poll(()=>page.evaluate(()=>data.items.find(x=>x.id==='item-other').stock)).toBe(Number(original)+1);expect(await page.evaluate(()=>data.items.find(x=>x.id==='item-other').price)).toBe(3);await c.close();
+ let conflict='';page.on('dialog',async d=>{conflict=d.message();await d.accept();});await page.locator('#editSave').click();await expect.poll(()=>conflict).toContain('changed on another device');await expect.poll(()=>page.evaluate(()=>data.items.find(x=>x.id==='item-other').stock)).toBe(Number(original)+1);expect(await page.evaluate(()=>data.items.find(x=>x.id==='item-other').price)).toBe(3);expect(await page.evaluate(()=>RRData.getDraft().unconfirmedChanges.some(c=>c.id==='item-other'&&c.after.price===8))).toBe(true);await c.close();
 });

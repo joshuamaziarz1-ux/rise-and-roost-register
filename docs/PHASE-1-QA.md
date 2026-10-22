@@ -1,4 +1,29 @@
-# Phase 1 QA evidence — 5.2.0-rc.1
+# Phase 1 QA evidence — 5.2.0-rc.2
+
+## October 22 rc.2 validation
+
+The final suite contains **103 checks**: 23 Node/PostgreSQL/handler/model, one preview-preservation rehearsal, and 79 browser cases. The seven new session/live-account scenarios run in desktop Chromium, iPhone WebKit and Android Chromium. The existing full split-UI screenshot comparison also runs on the landscape tablet.
+
+Regression tests first reproduced a restored member token after logout and an accepted empty checkout in the old candidate. A separate deterministic probe then reproduced an Admin read restoring four synthetic private member records and removing the gate after SDK sign-out. The final guard verifies the active session and authentication generation before applying any Admin response. Conflict exports retain the exact unconfirmed changes even when a session transition has cleared displayed records.
+
+Executed rc.2 commands:
+
+| Command | Result |
+| --- | --- |
+| `npm ci` | 39 packages; zero reported vulnerabilities |
+| `npm run test:all` | 23 Node checks and 1 preview-preservation check passed. An early browser failure exposed a test comparing reserved availability with stock on hand; the comparison and synthetic pickup cleanup were corrected. |
+| `npm run test:browser -- --reporter=line --max-failures=1` | 76 passed in 4.8 minutes, including all four immutable-baseline layout comparisons, before the final delayed-Admin-read guard. |
+| `npm run test:browser -- tests/browser/recovery.spec.js tests/browser/session-safety.spec.js tests/browser/sync.spec.js --reporter=line --max-failures=1 --output=work/rc2-final-behavior` | Final affected 75 scenarios passed, 0 failed in 2.4 minutes, including the delayed Admin read and exact conflict recovery data. Final-commit CI link is recorded in PR #3. |
+
+Below is historical rc.1 evidence, retained to distinguish previous results from the new execution.
+
+The current run uses only disposable local PostgreSQL databases, the actual candidate Edge handler and intercepted synthetic authentication. No candidate site, Edge Function or migration has been deployed. Real magic-link email delivery and physical-device acceptance remain outstanding. The existing hosted Sites preview must not be mistaken for rc.2.
+
+Read-only production checks across 18 tables returned identical counts and full-record fingerprints before and after development. No raw customer records were exported. Supabase `rise-roost-api` remains version 13 and the older preview function remains version 3. The six deployed source files matched main. Evidence is in `phase1-production-preservation-20261022.json` and `phase1-deployed-source-20261022.json`.
+
+Supabase advisory review still reports [disabled leaked-password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection). No Auth setting was changed. No-policy informational entries deny direct browser access to service-only tables. Missing foreign-key indexes were reported only in the old synthetic preview schema; production's corresponding indexes exist. Unused-index notices alone are not a reason to delete production indexes. These existing settings and informational items are separate from the candidate's tested access controls.
+
+## Historical rc.1 evidence
 
 Status: **81 automated checks passed** (22 Node/PostgreSQL/handler/model, 1 preview-preservation, 58 browser). The release remains unapproved; see the three current-design acceptance gaps in `PHASE-1-RELEASE.md`.
 

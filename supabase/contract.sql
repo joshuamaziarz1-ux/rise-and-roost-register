@@ -138,7 +138,7 @@ begin
   row_doc:=private.rr_document('customers',to_jsonb(m));
   cfg:=d->'cartonSettings';
   row_doc:=row_doc||jsonb_build_object('threshold',coalesce(cfg->'cartonsPerFreeDozen','12'), 'reward',(select jsonb_build_object('itemId',i.id,'itemName',i.name,'available',greatest(0,i.stock-coalesce((select sum(pi.qty) from public.pickup_items pi join public.pickups p on p.id=pi.pickup_id where pi.item_id=i.id and p.status in ('ready','waiting')),0))) from public.items i where i.id=cfg->>'rewardItemId' and i.active));
-  return jsonb_build_object('member',row_doc,'revision',state->'revision','sales',coalesce((select jsonb_agg(x) from jsonb_array_elements(d->'sales') x where x->>'customerId'=m.id),'[]'),'roostReturns',coalesce((select jsonb_agg(x) from jsonb_array_elements(d->'roostReturns') x where x->>'customerId'=m.id),'[]'),'cartonReturns',coalesce((select jsonb_agg(x) from jsonb_array_elements(d->'cartonReturns') x where x->>'customerId'=m.id),'[]'),'cartonRewards',coalesce((select jsonb_agg(x) from jsonb_array_elements(d->'cartonRewards') x where x->>'customerId'=m.id),'[]'),'pickups',coalesce((select jsonb_agg(x-array['doorPin','pinTextedAt','accessExtendedUntil']) from jsonb_array_elements(d->'pickups') x where x->>'customerId'=m.id),'[]'));
+  return jsonb_build_object('member',row_doc,'revision',state->'revision','sales',coalesce((select jsonb_agg(x) from jsonb_array_elements(d->'sales') x where x->>'customerId'=m.id),'[]'),'roostReturns',coalesce((select jsonb_agg(x) from jsonb_array_elements(d->'roostReturns') x where x->>'customerId'=m.id),'[]'),'cartonReturns',coalesce((select jsonb_agg(x) from jsonb_array_elements(d->'cartonReturns') x where x->>'customerId'=m.id),'[]'),'cartonRewards',coalesce((select jsonb_agg(x) from jsonb_array_elements(d->'cartonRewards') x where x->>'customerId'=m.id),'[]'),'roostCreditUses',coalesce((select jsonb_agg(x) from jsonb_array_elements(d->'roostCreditUses') x where x->>'customerId'=m.id),'[]'),'pickups',coalesce((select jsonb_agg(x-array['doorPin','pinTextedAt','accessExtendedUntil']) from jsonb_array_elements(d->'pickups') x where x->>'customerId'=m.id),'[]'));
  end if;
  request_id:=(p_payload->>'requestId')::uuid;
  if request_id is null then raise exception 'Request ID required'; end if;
@@ -150,17 +150,20 @@ begin
  end if;
  perform set_config('rise_roost.suppress_revision','on',true);
  if p_action='admin_patch' then
-  if jsonb_typeof(p_payload->'changes')<>'array' or jsonb_array_length(p_payload->'changes')>500 then raise exception 'Invalid changes'; end if;
+  if jsonb_typeof(p_payload->'changes') is distinct from 'array' then raise exception 'Invalid changes'; end if;
+  if jsonb_array_length(p_payload->'changes')>500 then raise exception 'Invalid changes'; end if;
   for change in select * from jsonb_array_elements(p_payload->'changes') loop perform private.rr_patch(change,false); end loop;
   result:=jsonb_build_object('saved',true);
  elsif p_action='admin_import' then
-  if jsonb_typeof(p_payload->'records')<>'array' or jsonb_array_length(p_payload->'records')>10000 then raise exception 'Invalid backup records'; end if;
+  if jsonb_typeof(p_payload->'records') is distinct from 'array' then raise exception 'Invalid backup records'; end if;
+  if jsonb_array_length(p_payload->'records')>10000 then raise exception 'Invalid backup records'; end if;
   for change in select * from jsonb_array_elements(p_payload->'records') loop
    perform private.rr_patch(jsonb_build_object('collection',change->'collection','id',change->'id','before',null,'after',change->'value'),true);
   end loop;
   result:=jsonb_build_object('saved',true);
  elsif p_action='checkout' then
-  if jsonb_typeof(p_payload->'lines')<>'array' or jsonb_array_length(p_payload->'lines') not between 1 and 50 then raise exception 'Invalid checkout lines'; end if;
+  if jsonb_typeof(p_payload->'lines') is distinct from 'array' then raise exception 'Invalid checkout lines'; end if;
+  if jsonb_array_length(p_payload->'lines') not between 1 and 50 then raise exception 'Invalid checkout lines'; end if;
   for line in select * from jsonb_array_elements(p_payload->'lines') loop
    if coalesce((line->>'qty')::numeric,0) not between 1 and 1000 or (line->>'qty')::numeric<>trunc((line->>'qty')::numeric) then raise exception 'Invalid quantity'; end if;
   end loop;
@@ -196,11 +199,13 @@ begin
    insert into public.stock_log(item_id,item_name,delta,stock_after,reason) values(product.id,product.name,-1,product.stock,'Free dozen reward');
    result:=jsonb_build_object('saleId',reward_sale_id,'creditsUsed',qty);
   elsif p_action in ('carton_return','admin_return') then
+   if coalesce((p_payload->>'qty')::numeric,0) not between 1 and 50 or (p_payload->>'qty')::numeric<>trunc((p_payload->>'qty')::numeric) then raise exception 'Invalid return quantity'; end if;
    result:=public.rr_return_cartons(m.id,m.name,right(regexp_replace(m.phone,'[^0-9]','','g'),4),(p_payload->>'qty')::integer);
   else
-   if jsonb_typeof(p_payload->'returns')<>'array' or jsonb_array_length(p_payload->'returns') not between 1 and 30 then raise exception 'Invalid returns'; end if;
+   if jsonb_typeof(p_payload->'returns') is distinct from 'array' then raise exception 'Invalid returns'; end if;
+   if jsonb_array_length(p_payload->'returns') not between 1 and 30 then raise exception 'Invalid returns'; end if;
    for line in select * from jsonb_array_elements(p_payload->'returns') loop
-    if (line->>'qty')::numeric<>trunc((line->>'qty')::numeric) or (line->>'qty')::integer not between 1 and 1000 then raise exception 'Invalid return quantity'; end if;
+    if coalesce((line->>'qty')::numeric,0) not between 1 and 50 or (line->>'qty')::numeric<>trunc((line->>'qty')::numeric) then raise exception 'Invalid return quantity'; end if;
     result:=public.rr_roost_return(m.id,m.phone,line->>'typeId',(line->>'qty')::integer);
    end loop;
   end if;

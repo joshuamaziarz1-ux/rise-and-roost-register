@@ -2,7 +2,7 @@
 
 Self-service cash register, inventory, pickup, vendor, and customer rewards system for Rise & Roost.
 
-Candidate version: **5.2.0-rc.1** — draft for [Issue #2](https://github.com/joshuamaziarz1-ux/rise-and-roost-register/issues/2). Production remains on main until explicit owner approval.
+Candidate version: **5.2.0-rc.2** — draft for [Issue #2](https://github.com/joshuamaziarz1-ux/rise-and-roost-register/issues/2). Production remains on main until explicit owner approval.
 
 Current screens are `register-cloud-beta.html` and `admin-cloud-beta.html`. See [source audit, remaining acceptance gaps, file map, rollback and device checklist](docs/PHASE-1-RELEASE.md) and [executed QA report](docs/PHASE-1-QA.md).
 

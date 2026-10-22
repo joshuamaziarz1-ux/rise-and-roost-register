@@ -24,10 +24,11 @@ declare
   v_settings jsonb;
   v_payment text;
 begin
-  if p_payment not in ('cash','cashapp','paypal','applepay','googlepay') then
+  if p_payment is null or p_payment not in ('cash','cashapp','paypal','applepay','googlepay') then
     raise exception 'Invalid payment method';
   end if;
-  if jsonb_typeof(p_lines) <> 'array' or jsonb_array_length(p_lines) < 1 or jsonb_array_length(p_lines) > 50 then
+  if jsonb_typeof(p_lines) is distinct from 'array' then raise exception 'Invalid checkout lines'; end if;
+  if jsonb_array_length(p_lines) < 1 or jsonb_array_length(p_lines) > 50 then
     raise exception 'Invalid checkout lines';
   end if;
 

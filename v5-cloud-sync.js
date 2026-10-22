@@ -7,7 +7,7 @@
   const reads=new Set(['catalog','admin_load','member_account','member_lookup_phone','member_lookup','pickup_lookup']);
   let client,baseline,pending,saving=false,loading=false,ready=false,online=false,suppress=true,timer,retry=1000;
   let refreshPromise,lastCatalog,lastAdminData;
-  let checkoutPromise,identityEpoch=0,baselineActor;
+  let checkoutPromise,identityEpoch=0,authEpoch=0,baselineActor;
   let memberToken=sessionStorage.getItem('rr.memberToken')||'';
   function status(message){
     let el=document.getElementById('rrCloudBadge');
@@ -19,9 +19,14 @@
   }
   function lockAdmin(lock){const el=document.getElementById('adminScreen');if(el)el.inert=lock;}
   function connection(ok,message){online=ok;document.body.dataset.cloud=ok?'online':'offline';if(message)status(message);if(!admin&&typeof renderCart==='function'){renderCart();if(!ok)document.getElementById('payBtn').disabled=true;}}
-  async function api(action,payload={},needsAuth=action.startsWith('admin_')){
+  async function api(action,payload={},needsAuth=action.startsWith('admin_'),expectedActor=null){
+    const signingIn=['member_lookup_phone','member_lookup','member_signup'].includes(action);
+    if(signingIn)identityEpoch++;
+    const memberEpoch=identityEpoch,memberScoped=!admin&&(signingIn||!!memberToken||!!payload.memberToken);
+    const staleMember=()=>memberScoped&&memberEpoch!==identityEpoch;
+    const changedSession=()=>Object.assign(new Error('The Roost session changed. Sign in again to continue.'),{stale:true});
     const headers={'apikey':cfg.key,'Content-Type':'application/json','x-rr-client':'rise-roost-register'};
-    if(needsAuth){const {data:{session}}=await client.auth.getSession();if(!session)throw Object.assign(new Error('Administrator sign-in required'),{status:401});headers.Authorization='Bearer '+session.access_token;}
+    if(needsAuth){const {data:{session}}=await client.auth.getSession();if(!session)throw Object.assign(new Error('Administrator sign-in required'),{status:401});if(expectedActor&&session.user.id!==expectedActor){gate('Sign in to the original administrator account to recover its unconfirmed edit.');throw Object.assign(new Error('Administrator account changed'),{status:401});}headers.Authorization='Bearer '+session.access_token;}
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),cfg.timeoutMs);
     const body={...payload,action};let operationKey;
     if(!reads.has(action)&&!body.requestId){
@@ -35,8 +40,10 @@
     try{
       const send=()=>fetch(cfg.url+'/functions/v1/'+cfg.endpoint,{method:'POST',headers,body:JSON.stringify(body),signal:controller.signal,cache:'no-store'});
       let res=await send();
-      if(res.status===401&&needsAuth){const {data,error}=await client.auth.refreshSession();if(!error&&data.session){headers.Authorization='Bearer '+data.session.access_token;res=await send();}}
+      if(staleMember())throw changedSession();
+      if(res.status===401&&needsAuth){const {data,error}=await client.auth.refreshSession();if(!error&&data.session){if(expectedActor&&data.session.user.id!==expectedActor){gate('Sign in to the original administrator account to recover its unconfirmed edit.');throw Object.assign(new Error('Administrator account changed'),{status:401});}headers.Authorization='Bearer '+data.session.access_token;res=await send();}}
       let out;try{out=await res.json();}catch{throw new Error('Invalid cloud response');}
+      if(staleMember())throw changedSession();
       if(!res.ok){if(operationKey&&res.status>=400&&res.status<500&&res.status!==401)sessionStorage.removeItem(operationKey);if(res.status===401&&needsAuth){ready=false;gate('Session expired. Sign in to resume.');}throw Object.assign(new Error(out.error||'Cloud request failed'),{status:res.status,conflict:out.conflict});}
       if(!out||typeof out!=='object'||out.error||(!reads.has(action)&&!out.result))throw new Error('Cloud confirmation missing. Retry the same operation.');
       if(action==='checkout'&&(typeof out.result.saleId!=='string'||!out.result.saleId))throw new Error('Purchase receipt missing. Retry the same operation.');
@@ -50,13 +57,13 @@
         }catch{}
       }
       return out;
-    }catch(e){if(!e.status||e.status>=500)connection(false,'Connection lost — operations need cloud confirmation.');throw e;}finally{clearTimeout(timeout);}
+    }catch(e){if(!e.stale&&(!e.status||e.status>=500))connection(false,'Connection lost — operations need cloud confirmation.');throw e;}finally{clearTimeout(timeout);}
   }
-  function forgetMember(){identityEpoch++;memberToken='';sessionStorage.removeItem('rr.memberToken');data.customers=[];data.sales=[];data.pickups=[];data.roostReturns=[];data.cartonReturns=[];data.cartonRewards=[];}
+  function forgetMember(){identityEpoch++;memberToken='';sessionStorage.removeItem('rr.memberToken');data.customers=[];data.sales=[];data.pickups=[];data.roostReturns=[];data.cartonReturns=[];data.cartonRewards=[];data.roostCreditUses=[];}
   function applyMember(out){
     if(!out?.member)return;const existing=data.customers?.find(x=>x.id===out.member.id);
     if(existing)Object.assign(existing,out.member);data.customers=[existing||out.member];
-    for(const name of ['sales','pickups','roostReturns','cartonReturns','cartonRewards'])data[name]=out[name]||[];
+    for(const name of ['sales','pickups','roostReturns','cartonReturns','cartonRewards','roostCreditUses'])data[name]=out[name]||[];
     document.dispatchEvent(new CustomEvent('rr:member-sync',{detail:out.member}));
   }
   function applyCatalog(cat){
@@ -74,14 +81,18 @@
   async function refreshOnce(){
     const editing=admin&&(typeof edit!=='undefined'&&edit || document.activeElement?.matches('input,textarea,select')&&document.activeElement.closest('#adminScreen'));
     if(loading||editing||(admin&&(saving||pending||!ready)))return;loading=true;
-    try{if(admin)await loadAdmin();else{
+    try{if(admin){if(await loadAdmin()===false)return;}else{
       applyCatalog(await api('catalog'));
-      const epoch=identityEpoch;if(memberToken&&sessionStorage.getItem('riseRoostActiveMemberV1'))try{const out=await api('member_account');if(epoch===identityEpoch)applyMember(out);}catch(e){if(e.status===401||e.status===403){forgetMember();document.dispatchEvent(new Event('rr:member-expired'));}else throw e;}
+      const epoch=identityEpoch;if(memberToken&&sessionStorage.getItem('riseRoostActiveMemberV1'))try{const out=await api('member_account');if(epoch===identityEpoch)applyMember(out);}catch(e){if(epoch!==identityEpoch||e.stale)return;if(e.status===401||e.status===403){forgetMember();document.dispatchEvent(new Event('rr:member-expired'));}else throw e;}
     }connection(true,'Connected to shared store');}catch(e){status(e.message);}finally{loading=false;}
   }
   async function loadAdmin(force=false){
-    const {data:{session:adminSession}}=await client.auth.getSession();baselineActor=adminSession?.user?.id;
+    const epoch=authEpoch;
+    const {data:{session:adminSession}}=await client.auth.getSession();
     const out=await api('admin_load',{},true);
+    const {data:{session:currentSession}}=await client.auth.getSession();
+    if(epoch!==authEpoch||!currentSession||currentSession.user.id!==adminSession?.user?.id)return false;
+    baselineActor=adminSession.user.id;
     // A read started before a form opened must not replace its version baseline.
     if(!force&&ready&&(pending||saving||typeof edit!=='undefined'&&edit||document.activeElement?.matches('input,textarea,select')&&document.activeElement.closest('#adminScreen')))return;
     if(force||!ready||!lastAdminData||!model.same(lastAdminData,out.data)){lastAdminData=clone(out.data);suppress=true;data=migrate(out.data);renderAll();baseline=clone(data);suppress=false;}
@@ -130,9 +141,9 @@
   async function flush(){
     if(saving||!pending)return;saving=true;
     try{if(pending.actor!==baselineActor)throw new Error('Sign in to the original administrator account to recover this edit.');
-    const {actor,...request}=pending;await api('admin_patch',request,true);pending=null;window.RRData.clearPendingAdmin();retry=1000;await loadAdmin(true);status('Saved to shared store');}
+    const {actor,...request}=pending;await api('admin_patch',request,true,actor);pending=null;window.RRData.clearPendingAdmin();retry=1000;await loadAdmin(true);status('Saved to shared store');}
     catch(e){if(e.conflict||(e.status>=400&&e.status<500&&e.status!==401)){
-      window.RRCloud.conflictedDraft=clone(data);window.RRData.archiveDraft(data);pending=null;window.RRData.clearPendingAdmin();await loadAdmin(true);status('Edit was not saved: '+e.message);alert(e.message+' Your attempted edit is included with Export Backup in Settings.');
+      window.RRCloud.conflictedDraft={...clone(data),unconfirmedChanges:clone(pending.changes),requestId:pending.requestId,actor:pending.actor};window.RRData.archiveDraft(window.RRCloud.conflictedDraft);pending=null;window.RRData.clearPendingAdmin();await loadAdmin(true);status('Edit was not saved: '+e.message);alert(e.message+' Your attempted edit is included with Export Backup in Settings.');
     }else{status('Not confirmed — retrying the same change when connected.');clearTimeout(timer);timer=setTimeout(flush,retry);retry=Math.min(retry*2,30000);}}finally{saving=false;lockAdmin(!!pending);}
   }
   function checkout(method,entryList,opts={}){if(checkoutPromise)return checkoutPromise;checkoutPromise=checkoutOnce(method,entryList,opts).finally(()=>checkoutPromise=null);return checkoutPromise;}
@@ -161,7 +172,11 @@
     if(!window.supabase){connection(false,'Cloud library unavailable. Reconnect to load the register.');return;}
     client=window.supabase.createClient(cfg.url,cfg.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});suppress=false;
     if(admin){gate();try{const {data:{session}}=await client.auth.getSession();if(session)await loadAdmin();}catch(e){gate(e.message);}}else{ready=true;const cached=window.RRData.getCatalog();if(cached?.value){applyCatalog(cached.value);connection(false,'Showing cached items — reconnect before paying.');}await refresh();recoverPending();}
-    client.auth.onAuthStateChange((_event,session)=>{setTimeout(()=>{if(!admin)return;if(!session)gate();else if(!ready&&!pending)loadAdmin().catch(e=>gate(e.message));},0);});
+    client.auth.onAuthStateChange((event,session)=>{
+      const changed=!!(session&&baselineActor&&session.user.id!==baselineActor);
+      if(event==='SIGNED_OUT'||changed)authEpoch++;
+      setTimeout(()=>{if(!admin)return;if(!session||changed){ready=false;data=migrate({});baseline=null;lastAdminData=null;suppress=true;renderAll();suppress=false;document.getElementById('rrCloudAdminCard')?.remove();gate();}if(session&&!ready)loadAdmin().then(()=>{if(pending)flush();}).catch(e=>gate(e.message));},0);
+    });
     client.channel('rr-sync-'+crypto.randomUUID()).on('postgres_changes',{event:'UPDATE',schema:cfg.revisionSchema||'public',table:'store_revision_public',filter:'id=eq.1'},()=>refresh()).subscribe(s=>{if(s==='SUBSCRIBED')refresh();});
     setInterval(()=>{if(!document.hidden){if(pending)flush();else refresh();}},cfg.pollMs);
     window.addEventListener('online',()=>pending?flush():refresh());window.addEventListener('offline',()=>connection(false,'Offline — reconnect to confirm operations.'));
@@ -189,4 +204,4 @@
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })();
 
-(()=>{const label=()=>{const admin=/admin/.test(location.pathname),name='Rise & Roost '+(admin?'Admin':'Register')+' v5.2.0-rc.1';document.title=name;document.querySelectorAll('.version,.admin-top .sub,#settingsTab .danger-zone strong').forEach(el=>el.textContent=name);};window.addEventListener('load',()=>{label();setTimeout(label,4500);});})();
+(()=>{const label=()=>{const admin=/admin/.test(location.pathname),name='Rise & Roost '+(admin?'Admin':'Register')+' v5.2.0-rc.2';document.title=name;document.querySelectorAll('.version,.admin-top .sub,#settingsTab .danger-zone strong').forEach(el=>el.textContent=name);};window.addEventListener('load',()=>{label();setTimeout(label,4500);});})();
