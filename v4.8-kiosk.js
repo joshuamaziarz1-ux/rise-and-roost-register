@@ -72,7 +72,7 @@ function rebuildHome(){
     home.classList.remove('rr48-checkin-open');
     if(!sessionStorage.getItem(MEMBER_KEY))sessionStorage.setItem(GUEST_KEY,'1');
     const b=$('goShop');if(b)b.click();else showView('shopView');
-    setTimeout(()=>{$('shopView')?.classList.remove('rr48-cart-open');renderStore();renderCart();window.scrollTo(0,0)},20);
+    $('shopView')?.classList.remove('rr48-cart-open');renderStore();renderCart();window.scrollTo(0,0);
   };
   $('rr48Pickup').onclick=()=>{const b=$('goPickup');if(b)b.click();else showView('pickupView')};
   $('rr48Cartons').onclick=()=>{const b=$('goCartons');if(b)b.click();else showView('cartonView')};

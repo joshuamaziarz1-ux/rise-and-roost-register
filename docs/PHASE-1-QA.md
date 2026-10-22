@@ -2,7 +2,7 @@
 
 ## October 22 rc.2 validation
 
-The final suite contains **103 checks**: 23 Node/PostgreSQL/handler/model, one preview-preservation rehearsal, and 79 browser cases. The seven new session/live-account scenarios run in desktop Chromium, iPhone WebKit and Android Chromium. The existing full split-UI screenshot comparison also runs on the landscape tablet.
+The final suite contains **106 checks**: 23 Node/PostgreSQL/handler/model, one preview-preservation rehearsal, and 82 browser cases. The seven new session/live-account scenarios and deterministic rapid-cart regression run in desktop Chromium, iPhone WebKit and Android Chromium. The existing full split-UI screenshot comparison also runs on the landscape tablet.
 
 Regression tests first reproduced a restored member token after logout and an accepted empty checkout in the old candidate. A separate deterministic probe then reproduced an Admin read restoring four synthetic private member records and removing the gate after SDK sign-out. The final guard verifies the active session and authentication generation before applying any Admin response. Conflict exports retain the exact unconfirmed changes even when a session transition has cleared displayed records.
 
@@ -16,6 +16,8 @@ Executed rc.2 commands:
 | `npm run test:browser -- tests/browser/recovery.spec.js tests/browser/session-safety.spec.js tests/browser/sync.spec.js --reporter=line --max-failures=1 --output=work/rc2-final-behavior` | Final affected 75 scenarios passed, 0 failed in 2.4 minutes, including the delayed Admin read and exact conflict recovery data. Final-commit CI link is recorded in PR #3. |
 
 Below is historical rc.1 evidence, retained to distinguish previous results from the new execution.
+
+The first pushed rc.2 CI run passed all 24 Node/preservation checks and 78 of 79 browser cases. The remaining iPhone failure occurred before the malformed-response assertion: the cart closed during rapid navigation. Inspection found a real 20-millisecond delayed cart reset in the original Start Shopping handler. A deterministic clock test reproduced the class being removed after the cart was opened. Initialization now finishes in the initial handler, with no delayed navigation reversal; no extra sleeps or retries were added to hide the defect. Final-commit CI results and the new three-engine regression run are recorded in PR #3.
 
 The current run uses only disposable local PostgreSQL databases, the actual candidate Edge handler and intercepted synthetic authentication. No candidate site, Edge Function or migration has been deployed. Real magic-link email delivery and physical-device acceptance remain outstanding. The existing hosted Sites preview must not be mistaken for rc.2.
 

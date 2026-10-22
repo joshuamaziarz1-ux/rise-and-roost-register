@@ -13,6 +13,7 @@ The rc.2 audit reproduced and corrected these defects with synthetic fixtures:
 - Missing/null transaction arrays bypassed SQL three-valued checks and could create an empty zero-total sale. Arrays, payment methods and whole return quantities are now validated before any mutation. All failed-input tests assert the full canonical store is unchanged.
 - An already-open Roost account did not redraw newly configured return types or new pickup cards. Those existing views now refresh automatically while retaining selected return quantities and profile fields. Scheduled pickup time appears as data inside the existing pickup detail line; no new scheduling flow or unlock control is added.
 - Member account responses now include only that member's credit-use audit entries. Reward transactions use the existing history row with the correct event type.
+- A real rapid-navigation race appeared in Linux iPhone CI: a delayed Start Shopping callback could close a cart opened immediately afterward. A deterministic clock test reproduced it; synchronous initialization removes the delayed reversal without altering the approved interface.
 
 Styles, branding, navigation, checkout methods, landscape CSS and PWA manifest remain unchanged. No Phase 2 processors, payment-method controls, refunds or expanded customer-authentication scheme were implemented.
 

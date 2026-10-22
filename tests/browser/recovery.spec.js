@@ -2,6 +2,11 @@ import {test,expect} from '@playwright/test';
 import {adminLogin,shop,rpc} from './helpers.js';
 import fs from 'node:fs/promises';
 async function pay(page){await shop(page);await page.locator('[data-rr-plus="item-test"]').click();await page.locator('#rr48CartBar').click();await page.locator('#payBtn').click();await page.locator('[data-method="cash"]').click();}
+test('rapid shopping and cart taps cannot be undone by deferred initialization',async({page})=>{
+ await page.goto('/register-cloud-beta.html');await expect(page.locator('body')).toHaveAttribute('data-cloud','online');await page.clock.install();
+ const opened=await page.evaluate(()=>{$('rr48StartShop').click();document.querySelector('[data-rr-plus="item-test"]').click();$('rr48CartBar').click();return $('shopView').classList.contains('rr48-cart-open');});expect(opened).toBe(true);
+ await page.clock.fastForward('00:00:01');await expect(page.locator('#shopView')).toHaveClass(/rr48-cart-open/);await expect(page.locator('#payBtn')).toBeVisible();await expect(page.locator('#cartList')).toContainText('Test Eggs');
+});
 test('two rapid confirmation taps create exactly one sale and stock decrement',async({page})=>{
  await pay(page);const before=await rpc(page,'admin_load',{},true);let requests=0;
  await page.route('**/functions/v1/rise-roost-sync',route=>{if(route.request().postDataJSON().action==='checkout')requests++;return route.continue();});
