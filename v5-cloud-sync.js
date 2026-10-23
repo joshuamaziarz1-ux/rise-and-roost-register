@@ -14,13 +14,14 @@
     let el=document.getElementById('rrCloudBadge');
     if(!el){el=document.createElement('div');el.id='rrCloudBadge';el.setAttribute('role','status');el.style.cssText='position:fixed;right:14px;bottom:14px;z-index:9999;padding:8px 12px;border-radius:999px;font:800 12px system-ui;background:#fff;border:1px solid #d8ccb7;box-shadow:0 3px 16px rgba(0,0,0,.12);pointer-events:none';document.body.append(el);}
     el.style.opacity='1';if(/^(Connected|Saved|Purchase saved)/.test(message))setTimeout(()=>{if(el.textContent===message)el.style.opacity='0';},1600);
-    el.textContent=cfg.preview?'TEST DATA · '+message:message;
+    const label=cfg.preview?'TEST DATA · '+message:message;
+    if(el.textContent!==label)el.textContent=label;
     if(admin)document.dispatchEvent(new CustomEvent('rr:admin-save-state',{detail:{message,pending:!!pending}}));
     const saved=document.getElementById('rrCloudSaveStatus');
     if(admin&&saved){if(pending)saved.textContent=message.startsWith('Not confirmed')?'Not saved — connection problem':'Saving…';else if(message.startsWith('Edit'))saved.textContent=message;else if(/^(Connected|Saved)/.test(message))saved.textContent='Saved';}
   }
   function lockAdmin(lock){const el=document.getElementById('adminScreen');if(el)el.inert=lock;}
-  function connection(ok,message){online=ok;document.body.dataset.cloud=ok?'online':'offline';if(message)status(message);if(!admin&&typeof renderCart==='function'){renderCart();if(!ok)document.getElementById('payBtn').disabled=true;}}
+  function connection(ok,message){const changed=online!==ok,state=ok?'online':'offline';online=ok;if(document.body.dataset.cloud!==state)document.body.dataset.cloud=state;if(message)status(message);if(!admin&&typeof renderCart==='function'){if(changed)renderCart();if(!ok)document.getElementById('payBtn').disabled=true;}}
   async function api(action,payload={},needsAuth=action.startsWith('admin_'),expectedActor=null){
     const signingIn=['member_lookup_phone','member_lookup','member_signup'].includes(action);
     if(signingIn)identityEpoch++;

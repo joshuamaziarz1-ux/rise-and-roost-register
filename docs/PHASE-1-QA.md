@@ -1,12 +1,20 @@
 # Phase 1 QA evidence — 5.2.0-rc.3
 
+## October 23 final cart-input follow-up
+
+The permission-corrected head `916d031` passed 28 Node checks and the preservation rehearsal, but its full CI exposed two iPhone cases where pressing Cart left checkout hidden (101 browser passes, 2 failures). This was investigated rather than retried. A controlled redraw during native input reproduced the problem locally: WebKit delivered down/up events without a click. The post-fix probe delivered one click and opened the cart for both native click and touch tap.
+
+Unchanged cart labels and member-banner contents now stay in place. An unchanged online poll no longer redraws the entire cart; connection transitions still enable/disable checkout. Banner identity caches clear on logout, and real quantity/name/connection changes still update the existing controls. No stylesheet, layout or checkout-method change was made.
+
+`cart-input.spec.js` exercises redraw callbacks during actual input for guests and members on all three browser engines, using touch taps where supported and requiring exactly one click/open cart. There are no forced clicks, sleeps or skipped device cases. The new regression plus the two originally failing checkout workflows passed across all engines: **9 passed, 0 failed in 1.2 minutes**. The complete final suite contains **135 checks: 28 Node + 1 preservation + 106 browser**. Final-head CI is pinned in PR #3.
+
 ## October 23 final audit and permission follow-up
 
 Supabase access was restored at 19:54 UTC. A fresh read-only audit verified the correct healthy `RiseAndRoost` project, migrations, deployed functions, RLS, grants and advisories. Full-record fingerprints for all 18 production tables matched October 22 and stayed identical through this audit. Production API version 13 and older preview version 3 are unchanged; the candidate migration is still absent. See `phase1-production-preservation-20261023.json`. No production data, DDL, Auth settings, functions or static pages were changed. Log review used only aggregate source counts and does not establish zero runtime errors.
 
 The audit found broad legacy table privileges. The candidate already withdrew browser writes from 16 canonical tables but omitted `admins` and `store_revision_public`. An isolated regression reproduced retained direct/inherited mutation privileges before the correction. The reviewed source and generated migration now include both tables. The regression checks all 18 tables, rejects actual role-level `TRUNCATE` in rollback-protected synthetic transactions, retains public revision reads, and verifies service access/store data remain intact. It does not execute mutations against production.
 
-`npm test` passed **28 checks, 0 failures/skips/cancellations** after the fix. `npm run test:preview` passed **1 preservation rehearsal**, including canonical record and function-ACL preservation. The expanded final suite contains **132 checks** (28 Node + 1 preservation + 103 browser). Final-head CI is recorded in PR #3. The earlier exact-commit CI results below cover the original 131-check rc.3 head, not this subsequent permission correction.
+`npm test` passed **28 checks, 0 failures/skips/cancellations** after the fix. `npm run test:preview` passed **1 preservation rehearsal**, including canonical record and function-ACL preservation. The permission-only head contained 132 checks (28 Node + 1 preservation + 103 browser); its phone failure and final 135-check follow-up are documented above. Earlier 131-check passes do not cover these subsequent corrections.
 
 The connection blocker is resolved. Existing leaked-password protection remains disabled; no Auth setting was changed. Informational missing-index findings concern the old synthetic preview schema. Legacy production write grants remain until an approved migration. Physical-device/magic-link acceptance and a candidate-specific isolated deployment remain outstanding.
 

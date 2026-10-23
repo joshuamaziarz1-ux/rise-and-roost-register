@@ -146,17 +146,22 @@ renderStore=function(){
 renderCart=function(){
   ensureShopChrome();
   const e=entries(),units=e.reduce((n,x)=>n+x.qty,0),sum=total();
-  $('cartHint').textContent=e.length?'Check your quantities, then check out.':'Your cart is empty.';
+  const hint=e.length?'Check your quantities, then check out.':'Your cart is empty.';
+  if($('cartHint').textContent!==hint)$('cartHint').textContent=hint;
   $('cartList').innerHTML=e.length?e.map(x=>`<div class="cart-row"><div class="rr48-cart-thumb">${photoMarkup(x.item)}</div><div><div class="cname">${esc(x.item.name)}</div><div class="cbrand">${money(x.item.price)} each</div><button class="remove" data-remove="${x.item.id}">REMOVE</button></div><div><div class="cline">${money(Number(x.item.price)*x.qty)}</div><div class="qtys"><button class="qbtn" data-q="${x.item.id}" data-d="-1">−</button><span class="qnum">${x.qty}</span><button class="qbtn" data-q="${x.item.id}" data-d="1">+</button></div></div></div>`).join(''):'<div class="empty">Tap KEEP SHOPPING and add a product.</div>';
   $('cartList').querySelectorAll('[data-q]').forEach(x=>x.onclick=()=>changeQty(x.dataset.q,Number(x.dataset.d)));
   $('cartList').querySelectorAll('[data-remove]').forEach(x=>x.onclick=()=>{delete cart[x.dataset.remove];renderCart();renderStore()});
-  $('cartTotal').textContent=money(sum);$('payBtn').disabled=!e.length||(window.__RR_CLOUD_MODE&&!window.RRCloud?.ready);$('clearBtn').disabled=!e.length;
-  $('payBtn').textContent=e.length?`CHECK OUT — ${money(sum)}`:'CHECK OUT';$('clearBtn').textContent='CLEAR ORDER';
+  const amount=money(sum),label=e.length?`CHECK OUT — ${amount}`:'CHECK OUT';
+  if($('cartTotal').textContent!==amount)$('cartTotal').textContent=amount;
+  $('payBtn').disabled=!e.length||(window.__RR_CLOUD_MODE&&!window.RRCloud?.ready);$('clearBtn').disabled=!e.length;
+  if($('payBtn').textContent!==label)$('payBtn').textContent=label;
+  if($('clearBtn').textContent!=='CLEAR ORDER')$('clearBtn').textContent='CLEAR ORDER';
   updateCartBar();
 };
 function updateCartBar(){
   const b=$('rr48CartBar');if(!b)return;const e=entries(),units=e.reduce((n,x)=>n+x.qty,0);
-  b.disabled=!units;b.textContent=`🛒 CART • ${units} ITEM${units===1?'':'S'} • ${money(total())}`;
+  b.disabled=!units;const label=`🛒 CART • ${units} ITEM${units===1?'':'S'} • ${money(total())}`;
+  if(b.textContent!==label)b.textContent=label;
 }
 
 function polishCheckout(){

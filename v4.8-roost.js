@@ -6,6 +6,7 @@
   let sessionTimer=null;
   let pickupEditor=null;
   let lastPickupBox=null,lastPickupSignature='';
+  let lastShopBanner=null,lastShopBannerSignature='';
 
   const customers=()=>Array.isArray(data?.customers)?data.customers:[];
   const currentMember=()=>customers().find(c=>c.id===sessionStorage.getItem(MEMBER_KEY))||null;
@@ -128,6 +129,7 @@
   }
   function logout(goHome=true){
     pickupEditor=null;
+    lastShopBanner=null;lastShopBannerSignature='';
     lastPickupBox=null;lastPickupSignature='';lastReturnBox=null;lastReturnSignature='';Object.keys(qtyState).forEach(k=>delete qtyState[k]);
     if(window.__RR_CLOUD_MODE)window.RRCloud?.forgetMember();
     sessionStorage.removeItem(MEMBER_KEY);
@@ -356,6 +358,9 @@
     ensureShopBanner();
     const b=document.getElementById('rrShopMemberBar');if(!b)return;
     const c=currentMember();
+    const signature=JSON.stringify([c?.id||'',c?.name||'']);
+    if(lastShopBanner===b&&lastShopBannerSignature===signature&&!b.classList.contains('hidden')&&b.style.display==='flex')return;
+    lastShopBanner=b;lastShopBannerSignature=signature;
     b.classList.remove('hidden');
     b.style.display='flex';
     if(!c){
