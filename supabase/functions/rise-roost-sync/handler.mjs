@@ -1,6 +1,6 @@
-const READS = new Set(['catalog','admin_load','member_account','member_lookup_phone','member_lookup','pickup_lookup']);
-const ACTIONS = new Set([...READS,'admin_patch','admin_import','admin_void','admin_reward','admin_return','checkout','member_signup','member_profile','roost_return','carton_return','reward_redeem','pickup_complete','comment_submit']);
-const MEMBER_ACTIONS = new Set(['member_account','member_profile','roost_return','carton_return','reward_redeem']);
+const READS = new Set(['catalog','admin_load','member_account','member_lookup_phone','member_lookup','pickup_lookup','pickup_slots']);
+const ACTIONS = new Set([...READS,'admin_patch','admin_import','admin_void','admin_reward','admin_return','checkout','member_signup','member_profile','roost_return','carton_return','reward_redeem','pickup_complete','pickup_schedule','comment_submit']);
+const MEMBER_ACTIONS = new Set(['member_account','member_profile','roost_return','carton_return','reward_redeem','pickup_slots','pickup_schedule']);
 const encoder=new TextEncoder();
 const encode=bytes=>btoa(String.fromCharCode(...bytes)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
 const decode=value=>Uint8Array.from(atob(value.replaceAll('-','+').replaceAll('_','/')),c=>c.charCodeAt(0));
@@ -52,7 +52,7 @@ export function createHandler({rpc,getUser,secret,origins,now=()=>Date.now(),log
         Object.assign(out,await rpc('member_account',{},null,id));
         out.memberToken=await issueMember(id);
       }
-      if(['member_profile','roost_return','carton_return','reward_redeem'].includes(action)) Object.assign(out,await rpc('member_account',{},null,member));
+      if(['member_profile','roost_return','carton_return','reward_redeem','pickup_schedule'].includes(action)) Object.assign(out,await rpc('member_account',{},null,member));
       if(['checkout','pickup_complete','reward_redeem'].includes(action)) out.catalog=await rpc('catalog',{},null,null);
       return json(out);
     } catch(error) {

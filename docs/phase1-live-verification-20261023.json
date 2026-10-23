@@ -1,0 +1,11 @@
+{
+  "date": "2026-10-23",
+  "status": "supabase_connector_reauthentication_required",
+  "freshLiveFingerprintReadCompleted": false,
+  "latestSuccessfulProductionAudit": "phase1-production-preservation-20261022.json",
+  "productionWritesPerformed": false,
+  "productionDDLPerformed": false,
+  "deploymentsPerformed": false,
+  "realCustomerDataUsedInTests": false,
+  "requiredNextStep": "Reconnect Supabase and repeat the read-only project, migration, function, advisor and data-preservation audit before an approved isolated preview or production cutover."
+}

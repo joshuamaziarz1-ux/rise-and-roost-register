@@ -27,7 +27,7 @@ const server=http.createServer(async(req,res)=>{
   }
   if(url.pathname.startsWith('/auth/')){res.writeHead(200,{'Content-Type':'application/json'});res.end('{}');return;}
   if(url.pathname.startsWith('/original/') )throw Error('Invalid baseline route');
-  if(url.pathname==='/cloud-config.js'){res.writeHead(200,{'Content-Type':'text/javascript'});res.end(`window.__RR_CLOUD_MODE=true;window.RR_CONFIG={url:location.origin,key:'test-key',endpoint:'rise-roost-sync',pollMs:300,timeoutMs:1500};`);return;}
+  if(url.pathname==='/cloud-config.js'){res.writeHead(200,{'Content-Type':'text/javascript'});res.end(`window.__RR_CLOUD_MODE=true;window.RR_CONFIG={url:location.origin,key:'test-key',endpoint:'rise-roost-sync',pollMs:300,timeoutMs:10000};`);return;}
   if(url.pathname.startsWith('/realtime/')){res.writeHead(503);res.end();return;}
   const file=path.resolve('.'+(url.pathname==='/'?'/index.html':url.pathname));const root=process.cwd()+path.sep;if(!file.startsWith(root)||file.includes(path.sep+'node_modules'+path.sep)){res.writeHead(403);res.end();return;}
   const bytes=await fs.readFile(file);res.writeHead(200,{'Content-Type':mime[path.extname(file)]||'application/octet-stream','Cache-Control':'no-store'});res.end(bytes);

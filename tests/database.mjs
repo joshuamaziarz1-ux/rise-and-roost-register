@@ -29,7 +29,9 @@ export async function database(){
     const run=args=>new Promise((resolve,reject)=>{const child=spawn(pg_ctl,args,{stdio:'ignore',windowsHide:true});child.once('error',reject);child.once('exit',code=>code===0?resolve():reject(Error('pg_ctl exited with '+code)));});
     try{await run(['-D',dir,'-l',path.join(dir,'server.log'),'-o','-p '+port+' -h 127.0.0.1','-w','start']);}
     catch(e){throw new Error('Test PostgreSQL startup failed: '+e.message+' '+await fs.readFile(path.join(dir,'server.log'),'utf8').catch(()=>''));}
-    stopServer=()=>run(['-D',dir,'-m','fast','-w','stop']);
+    // A resumed Windows disk can take over 60 seconds to finish a checkpoint.
+    // Keep the normal durable shutdown; do not disable fsync or ignore failures.
+    stopServer=()=>run(['-D',dir,'-m','fast','-t','120','-w','stop']);
   }else{await instance.start();stopServer=()=>instance.stop();}
   pool=new pg.Pool({host:'127.0.0.1',port,user:'postgres',password:'test-only',database:'postgres',max:10});
   }

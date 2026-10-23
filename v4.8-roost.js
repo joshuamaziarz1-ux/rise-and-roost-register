@@ -4,6 +4,8 @@
   const GUEST_KEY=TEST?'riseRoostTESTGuestShoppingV1':'riseRoostGuestShoppingV1';
   const SESSION_MS=2*60*1000;
   let sessionTimer=null;
+  let pickupEditor=null;
+  let lastPickupBox=null,lastPickupSignature='';
 
   const customers=()=>Array.isArray(data?.customers)?data.customers:[];
   const currentMember=()=>customers().find(c=>c.id===sessionStorage.getItem(MEMBER_KEY))||null;
@@ -27,11 +29,12 @@
   const legacyReturns=c=>(data.cartonReturns||[]).filter(r=>r.customerId===c.id);
   const roostReturns=c=>(data.roostReturns||[]).filter(r=>r.customerId===c.id);
   const credits=c=>Math.max(0,Number(c.roostCredits??c.cartonCredits??0));
+  function pendingOperation(action){try{const entry=JSON.parse(sessionStorage.getItem('rr.operation.'+action)||'null');return entry?.actor===currentMember()?.id?entry.payload:null;}catch{return null;}}
 
   function ensureData(){
     data.customers=Array.isArray(data.customers)?data.customers:[];
     data.roostReturns=Array.isArray(data.roostReturns)?data.roostReturns:[];
-    data.roostReturnTypes=Array.isArray(data.roostReturnTypes)&&data.roostReturnTypes.length?data.roostReturnTypes:[
+    data.roostReturnTypes=Array.isArray(data.roostReturnTypes)&&(window.__RR_CLOUD_MODE||data.roostReturnTypes.length)?data.roostReturnTypes:window.__RR_CLOUD_MODE?[]:[
       {id:'egg-carton',name:'Egg Carton',credit:1,active:true},
       {id:'jar',name:'Jar',credit:1,active:true},
       {id:'bottle',name:'Bottle',credit:1,active:true}
@@ -124,12 +127,15 @@
     renderShopBanner();
   }
   function logout(goHome=true){
+    pickupEditor=null;
+    lastPickupBox=null;lastPickupSignature='';lastReturnBox=null;lastReturnSignature='';Object.keys(qtyState).forEach(k=>delete qtyState[k]);
     if(window.__RR_CLOUD_MODE)window.RRCloud?.forgetMember();
     sessionStorage.removeItem(MEMBER_KEY);
     sessionStorage.setItem(GUEST_KEY,'1');
     if(sessionTimer){clearTimeout(sessionTimer);sessionTimer=null}
     renderShopBanner();
     closeRoost();
+    const privateBody=document.getElementById('rrRoostBody');if(privateBody)privateBody.textContent='';
     if(goHome){
       cart={};
       try{renderCart()}catch(e){}
@@ -404,15 +410,16 @@
   }
 
   async function saveProfile(c){
+    const previous=pendingOperation('member_profile');
     const name=document.getElementById('rrProfileName').value.trim();
     const phone=document.getElementById('rrProfilePhone').value;
     const status=document.getElementById('rrProfileStatus');
-    if(!name){status.textContent='Name cannot be blank.';return}
-    if(!validPhone(phone)){status.textContent='Enter a 10-digit phone number.';return}
+    if(!previous&&!name){status.textContent='Name cannot be blank.';return}
+    if(!previous&&!validPhone(phone)){status.textContent='Enter a 10-digit phone number.';return}
     const owner=phoneOwner(phone,c.id);
-    if(owner){status.textContent='That phone number is already used by another My Roost account.';return}
+    if(!previous&&owner){status.textContent='That phone number is already used by another My Roost account.';return}
     if(window.__RR_CLOUD_MODE){
-      try{const out=await window.RRCloud.api('member_profile',{name,phone:phoneDigits(phone),version:c._version});window.RRCloud.applyMember(out);status.textContent='Saved to shared store.';renderShopBanner();resetTimer();}catch(e){status.textContent=e.message;}return;
+      try{const out=await window.RRCloud.api('member_profile',previous||{name,phone:phoneDigits(phone),version:c._version});window.RRCloud.applyMember(out);status.textContent=previous&&(previous.name!==name||previous.phone!==phoneDigits(phone))?'Previous change confirmed. Review your fields and save again to apply new changes.':'Saved to shared store.';renderShopBanner();resetTimer();}catch(e){if(!e.stale)status.textContent=e.message;}return;
     }
     const oldName=c.name;
     c.name=name;c.phone=phoneDigits(phone);c.updatedAt=new Date().toISOString();
@@ -421,21 +428,24 @@
   }
 
   const qtyState={};
+  let lastReturnBox=null,lastReturnSignature='';
+  const returnSignature=c=>JSON.stringify({member:c?.id,types:data.roostReturnTypes,qty:qtyState});
   function renderReturns(c){
-    const box=document.getElementById('rrReturnList');if(!box)return;
+    const box=document.getElementById('rrReturnList');if(!box)return;const submit=document.getElementById('rrSubmitReturns'),previous=pendingOperation('roost_return');submit.textContent=previous?'CONFIRM PREVIOUS RETURNS':'ADD RETURNS';submit.onclick=()=>submitReturns(c);if(!data.roostReturnTypes.some(x=>x.active!==false)){lastReturnBox=null;lastReturnSignature='';box.innerHTML='<p class="hint">No returns are currently eligible for credits.</p>';submit.dataset.noEligible='1';submit.disabled=!previous;return;}if(submit.dataset.noEligible){delete submit.dataset.noEligible;submit.disabled=false;}
     data.roostReturnTypes.filter(x=>x.active!==false).forEach(t=>{if(!(t.id in qtyState))qtyState[t.id]=0});
+    const signature=returnSignature(c);if(box===lastReturnBox&&signature===lastReturnSignature)return;lastReturnBox=box;lastReturnSignature=signature;
     box.innerHTML=data.roostReturnTypes.filter(x=>x.active!==false).map(t=>`<div class="rr-return-row"><div><strong>${esc(t.name)}</strong><div class="rsub">${Number(t.credit||1)} credit${Number(t.credit||1)===1?'':'s'} each</div></div><div class="rr-return-stepper"><button type="button" data-ret-minus="${t.id}">−</button><strong id="rrRetQty_${t.id}">${qtyState[t.id]||0}</strong><button type="button" data-ret-plus="${t.id}">+</button></div></div>`).join('');
     box.querySelectorAll('[data-ret-minus]').forEach(b=>b.onclick=()=>changeReturnQty(b.dataset.retMinus,-1));
     box.querySelectorAll('[data-ret-plus]').forEach(b=>b.onclick=()=>changeReturnQty(b.dataset.retPlus,1));
     document.getElementById('rrSubmitReturns').onclick=()=>submitReturns(c);
   }
-  function changeReturnQty(id,d){qtyState[id]=Math.max(0,Number(qtyState[id]||0)+d);const el=document.getElementById('rrRetQty_'+id);if(el)el.textContent=qtyState[id];resetTimer()}
+  function changeReturnQty(id,d){qtyState[id]=Math.max(0,Number(qtyState[id]||0)+d);const el=document.getElementById('rrRetQty_'+id);if(el)el.textContent=qtyState[id];lastReturnSignature=returnSignature(currentMember());resetTimer()}
   async function submitReturns(c){
-    const rows=data.roostReturnTypes.filter(t=>t.active!==false&&Number(qtyState[t.id]||0)>0);
-    if(!rows.length){showRoostNotice('Nothing Selected','Choose at least one item you are returning.','warn');return}
+    const previous=pendingOperation('roost_return'),rows=data.roostReturnTypes.filter(t=>t.active!==false&&Number(qtyState[t.id]||0)>0);
+    if(!previous&&!rows.length){showRoostNotice('Nothing Selected','Choose at least one item you are returning.','warn');return}
     if(window.__RR_CLOUD_MODE){
       const button=document.getElementById('rrSubmitReturns');button.disabled=true;
-      try{const out=await window.RRCloud.api('roost_return',{returns:rows.map(t=>({typeId:t.id,qty:Number(qtyState[t.id])}))});window.RRCloud.applyMember(out);rows.forEach(t=>qtyState[t.id]=0);renderReturns(c);renderHistory(c);document.getElementById('rrCreditCount').textContent=credits(c);showRoostNotice('Returns Added','Your returns and credits are saved to the shared store.','success');}catch(e){showRoostNotice('Returns Not Confirmed',e.message,'warn');}finally{button.disabled=false;}return;
+      const payload=previous||{returns:rows.map(t=>({typeId:t.id,qty:Number(qtyState[t.id])}))};try{const out=await window.RRCloud.api('roost_return',payload);window.RRCloud.applyMember(out);payload.returns.forEach(t=>{if(Number(qtyState[t.typeId]||0)===t.qty)qtyState[t.typeId]=0;});renderReturns(c);renderHistory(c);document.getElementById('rrCreditCount').textContent=credits(c);showRoostNotice(previous?'Previous Returns Confirmed':'Returns Added','Your returns and credits are saved to the shared store.','success');}catch(e){if(!e.stale){renderReturns(c);showRoostNotice('Returns Not Confirmed',e.message,'warn');}}finally{button.disabled=button.dataset.noEligible==='1'&&!pendingOperation('roost_return');}return;
     }
     let totalCredits=0,totalQty=0;
     rows.forEach(t=>{
@@ -457,19 +467,52 @@
 
   function renderPickups(c){
     const box=document.getElementById('rrPickupList');if(!box)return;
+    if(pickupEditor?.memberId===c.id&&document.getElementById('rrMemberPickupEditor'))return;
     const list=memberPickups(c).sort((a,b)=>new Date(b.created)-new Date(a.created));
+    const signature=JSON.stringify({member:c.id,pickups:list.slice(0,8),editor:pickupEditor?.id||null});
+    if(box===lastPickupBox&&signature===lastPickupSignature)return;
+    lastPickupBox=box;lastPickupSignature=signature;
     if(!list.length){box.innerHTML='<div class="empty">No pickup orders on this account.</div>';return}
     box.innerHTML=list.slice(0,8).map(p=>{
       const total=(p.items||[]).reduce((s,i)=>s+Number(i.price||0)*Number(i.qty||0),0);
       const items=(p.items||[]).map(i=>`${i.qty}× ${esc(i.itemName)}`).join(', ');
-      return `<div class="rr-pickup-row"><div class="rr-pickup-top"><strong>${p.status==='ready'?'Ready for Pickup':p.status==='waiting'?'Waiting':p.status==='picked'?'Picked Up':'Cancelled'}</strong><span class="badge ${p.status==='ready'?'on':''}">${esc(p.status)}</span></div><div class="rsub" style="margin-top:5px">${items}${p.scheduledAt?' · Pickup '+esc(new Date(p.scheduledAt).toLocaleString()):''}</div><div style="margin-top:7px"><strong>${money(total)}</strong>${p.paid?' · Paid':''}</div></div>`
+      return `<div class="rr-pickup-row" data-member-pickup="${esc(p.id)}"><div class="rr-pickup-top"><strong>${p.status==='ready'?'Ready for Pickup':p.status==='waiting'?'Waiting':p.status==='picked'?'Picked Up':'Cancelled'}</strong><span class="badge ${p.status==='ready'?'on':''}">${esc(p.status)}</span></div><div class="rsub" style="margin-top:5px">${items}${p.scheduledAt?' · Pickup '+esc(new Date(p.scheduledAt).toLocaleString())+' · '+esc(p.appointmentStatus||'approved'):''}</div>${p.appointmentNote?`<div class="rsub">${esc(p.appointmentNote)}</div>`:''}<div style="margin-top:7px"><strong>${money(total)}</strong>${p.paid?' · Paid':''}</div>${window.__RR_CLOUD_MODE&&['ready','waiting'].includes(p.status)?`<button class="btn small ghost" data-member-schedule="${esc(p.id)}">${p.scheduledAt?'Change Pickup Time':'Choose Pickup Time'}</button>`:''}${pickupEditor?.id===p.id?'<div id="rrMemberPickupEditor"></div>':''}</div>`
     }).join('');
+    box.querySelectorAll('[data-member-schedule]').forEach(b=>b.onclick=()=>openPickupSchedule(c,b.dataset.memberSchedule));
+    if(pickupEditor)renderPickupEditor();
+  }
+
+  async function openPickupSchedule(c,id){
+    const p=memberPickups(c).find(x=>x.id===id);if(!p)return;
+    const editor={id,memberId:c.id,before:window.RRModel.clone(p),slots:null,selected:'',busy:false};pickupEditor=editor;
+    const old=document.getElementById('rrMemberPickupEditor');if(old)old.remove();lastPickupSignature='';renderPickups(c);
+    try{const out=await window.RRCloud.api('pickup_slots',{id});if(pickupEditor!==editor||currentMember()?.id!==c.id)return;editor.slots=out.slots;editor.timeZone=out.timeZone;}
+    catch(e){if(pickupEditor!==editor||currentMember()?.id!==c.id)return;editor.error=e.message;editor.slots=[];}
+    renderPickupEditor();
+  }
+  function renderPickupEditor(){
+    const box=document.getElementById('rrMemberPickupEditor'),editor=pickupEditor;if(!box||!editor)return;
+    let pending;try{pending=JSON.parse(sessionStorage.getItem('rr.operation.pickup_schedule')||'null');}catch{}
+    pending=pending?.payload?.id===editor.id?pending:null;
+    if(pending)editor.selected=pending.payload.scheduledAt;
+    const options=[...(editor.slots||[])];if(editor.selected&&!options.includes(editor.selected))options.unshift(editor.selected);
+    box.innerHTML=`<div class="field" style="margin-top:10px"><label for="rrMemberPickupTime">Pickup time${editor.timeZone?' ('+esc(editor.timeZone)+')':''}</label><select id="rrMemberPickupTime" ${pending||editor.slots===null?'disabled':''}><option value="">${editor.slots===null?'Loading times…':'Choose a time'}</option>${options.map(at=>`<option value="${esc(at)}" ${at===editor.selected?'selected':''}>${esc(new Date(at).toLocaleString(undefined,{timeZone:editor.timeZone||undefined}))}</option>`).join('')}</select></div><p class="hint" id="rrMemberPickupStatus" role="status">${pending?'Your previous request needs confirmation. Retry it before choosing another time.':esc(editor.error||((editor.slots?.length===0)?'No pickup times are available. Please contact Danielle.':'Danielle will review your requested time.'))}</p><div class="actions"><button class="btn ghost small" id="rrMemberPickupClose">Close</button><button class="btn small" id="rrMemberPickupReload">Reload Times</button><button class="btn primary small" id="rrMemberPickupSave" ${!pending&&!options.length?'disabled':''}>${pending?'Retry Previous Request':'Request Time'}</button></div>`;
+    $('rrMemberPickupTime').onchange=e=>editor.selected=e.target.value;
+    $('rrMemberPickupClose').onclick=()=>{pickupEditor=null;renderPickups(currentMember());};
+    $('rrMemberPickupReload').onclick=()=>openPickupSchedule(currentMember(),editor.id);
+    $('rrMemberPickupSave').onclick=async()=>{
+      if(editor.busy||!editor.selected)return;if(currentMember()?.id!==editor.memberId)return;
+      editor.busy=true;box.querySelectorAll('button,select').forEach(b=>b.disabled=true);
+      const payload=pending?.payload||{id:editor.id,version:editor.before._version,appointmentVersion:editor.before._appointmentVersion??null,scheduledAt:editor.selected};
+      try{const out=await window.RRCloud.api('pickup_schedule',payload);if(pickupEditor!==editor||currentMember()?.id!==editor.memberId)return;window.RRCloud.applyMember(out);pickupEditor=null;renderPickups(currentMember());resetTimer();}
+      catch(e){if(pickupEditor===editor){editor.error=e.message;renderPickupEditor();}}finally{editor.busy=false;}
+    };
   }
 
   function renderHistory(c){
     const box=document.getElementById('rrHistoryList');if(!box)return;
     const events=[];
-    memberSales(c).forEach(s=>events.push({date:s.date,type:s.source==='carton-club'?'Reward':'Purchase',text:(s.items||[]).map(i=>`${i.qty}× ${i.itemName}`).join(', '),total:money(s.total)}));
+    memberSales(c).forEach(s=>events.push({date:s.date,type:s.source==='carton-club'?'Reward':'Purchase',text:(s.items||[]).map(i=>`${i.qty}× ${i.itemName}`).join(', ')+(s.creditsUsed?` · ${s.creditsUsed} Roost credits (${money(s.creditDiscount)})`:''),total:money(s.total)}));
     legacyReturns(c).forEach(r=>events.push({date:r.date,type:'Return',text:`${Number(r.qty||0)} egg carton${Number(r.qty||0)===1?'':'s'} returned`,total:`+${Number(r.qty||0)} credit${Number(r.qty||0)===1?'':'s'}`}));
     roostReturns(c).forEach(r=>events.push({date:r.date,type:'Return',text:`${Number(r.qty||0)}× ${r.typeName}`,total:`+${Number(r.credits||0)} credit${Number(r.credits||0)===1?'':'s'}`}));
     events.sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -556,7 +599,7 @@
     }
   }
 
-  window.RRRoost={open:openRoost,openSignup,logout,renderShopBanner};
+  window.RRRoost={open:openRoost,openSignup,logout,renderShopBanner,get member(){return currentMember();}};
   window.addEventListener('load',()=>{let n=0;const t=setInterval(()=>{n++;setup();wireHome();wireClearOrder();if(n>=12)clearInterval(t)},200)});
   if(document.readyState==='complete')setup();
 })();

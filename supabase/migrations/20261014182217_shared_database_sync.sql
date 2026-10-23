@@ -117,7 +117,7 @@ begin
   result:=result||jsonb_build_object('items',coalesce(children,'[]'));
  end if;
  if p_collection='pickups' then
-  select jsonb_build_object('scheduledAt',scheduled_at,'doorPin',door_pin,'pinTextedAt',pin_texted_at,'accessExtendedUntil',access_extended_until) into children from public.pickup_appointments where pickup_id=p_row->>'id';
+  select rr_extra||jsonb_build_object('scheduledAt',scheduled_at,'doorPin',door_pin,'pinTextedAt',pin_texted_at,'accessExtendedUntil',access_extended_until,'_appointmentVersion',rr_version) into children from public.pickup_appointments where pickup_id=p_row->>'id';
   result:=result||coalesce(children,'{}');
  end if;
  return result||jsonb_build_object('_version',p_row->'rr_version');
@@ -274,6 +274,57 @@ end;
 $function$
 ;
 revoke all on function private.rr_checkout(text,numeric,jsonb,text,boolean) from public,anon,authenticated;
+-- Existing pickup_appointments remain the only appointment store. Access-code
+-- columns are never modified by scheduling; only schedule/status metadata changes.
+create function private.rr_pickup_slots(p_id text) returns jsonb
+language plpgsql stable security definer set search_path='' as $$
+declare cfg jsonb; zone text; duration integer; slots jsonb;
+begin
+ select value into cfg from public.settings where key='pickup_schedule';
+ if cfg is null or coalesce((cfg->>'enabled')::boolean,false)=false then return '[]'; end if;
+ zone:=coalesce(cfg->>'timeZone','America/New_York');
+ if not exists(select 1 from pg_timezone_names where name=zone) then raise exception 'Invalid pickup time zone'; end if;
+ duration:=greatest(15,least(240,coalesce((cfg->>'slotMinutes')::integer,60)));
+ select coalesce(jsonb_agg(at order by at),'[]') into slots from (
+  select distinct (day+tm::time) at time zone zone as at,day+tm::time as local_at
+  from (select (now() at time zone zone)::date+n as day from generate_series(0,45) n) dates
+  cross join lateral jsonb_array_elements(coalesce(cfg->'days','[]')) rule
+  cross join lateral jsonb_array_elements_text(coalesce(rule->'times','[]')) tm
+  where coalesce((rule->>'enabled')::boolean,false) and (rule->>'day')::integer=extract(dow from day)::integer
+   and tm ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+ ) candidates
+ where at>now() and at at time zone zone=local_at and not exists(
+  select 1 from public.pickup_appointments a join public.pickups p on p.id=a.pickup_id
+  where p.id<>p_id and p.status in ('ready','waiting') and coalesce(a.rr_extra->>'appointmentStatus','approved')<>'declined'
+   and a.scheduled_at<at+make_interval(mins=>duration) and a.scheduled_at+make_interval(mins=>duration)>at
+ );
+ return slots;
+end $$;
+
+create function private.rr_set_appointment(p_id text,p_at timestamptz,p_status text,p_note text,p_import boolean default false) returns void
+language plpgsql security definer set search_path='' as $$
+declare duration integer;
+begin
+ if p_status is null or p_status not in ('unscheduled','pending','approved','declined') then raise exception 'Invalid appointment status'; end if;
+ if p_at is null and p_status in ('pending','approved') then raise exception 'Choose a pickup time'; end if;
+ if p_at is not null and p_status='unscheduled' then raise exception 'Clear the time for an unscheduled appointment'; end if;
+ if p_at is not null and not isfinite(p_at) then raise exception 'Invalid pickup time'; end if;
+ if not p_import and p_at is not null and p_status in ('pending','approved') then
+  if p_at<=now() then raise exception 'Choose a future pickup time'; end if;
+  select greatest(15,least(240,coalesce((value->>'slotMinutes')::integer,60))) into duration from public.settings where key='pickup_schedule';
+  duration:=coalesce(duration,60);
+  if exists(select 1 from public.pickup_appointments a join public.pickups p on p.id=a.pickup_id
+   where p.id<>p_id and p.status in ('ready','waiting') and coalesce(a.rr_extra->>'appointmentStatus','approved')<>'declined'
+    and a.scheduled_at<p_at+make_interval(mins=>duration) and a.scheduled_at+make_interval(mins=>duration)>p_at)
+  then raise exception 'DATA_CONFLICT: That pickup time is already reserved'; end if;
+ end if;
+ insert into public.pickup_appointments(pickup_id,scheduled_at,rr_extra)
+ values(p_id,p_at,jsonb_build_object('appointmentStatus',p_status,'appointmentNote',left(coalesce(p_note,''),1000),'appointmentUpdatedAt',now()))
+ on conflict(pickup_id) do update set scheduled_at=excluded.scheduled_at,
+  rr_extra=public.pickup_appointments.rr_extra||excluded.rr_extra,updated_at=now();
+end $$;
+
+revoke all on function private.rr_pickup_slots(text),private.rr_set_appointment(text,timestamptz,text,text,boolean) from public,anon,authenticated;
 -- Only the authenticated Edge Function service role can call this contract.
 -- Row versions guard every admin mutation. The global transaction lock orders
 -- checkout, returns, reservations and admin writes consistently for this store.
@@ -306,6 +357,16 @@ begin
    if current_doc is distinct from before_doc then raise exception 'DATA_CONFLICT: setting changed'; end if;
    if after_doc is null then raise exception 'Settings cannot be deleted'; end if;
    if setting_key='roost_credit_settings' and (coalesce((after_doc->'value'->>'creditValue')::numeric,0)<=0 or jsonb_typeof(after_doc->'value'->'returnTypes')<>'array') then raise exception 'Invalid credit settings'; end if;
+   if setting_key='pickup_schedule' then
+    if jsonb_typeof(after_doc->'value'->'days') is distinct from 'array' then raise exception 'Invalid pickup days'; end if;
+    if jsonb_array_length(after_doc->'value'->'days')>7 or not exists(select 1 from pg_timezone_names where name=coalesce(after_doc->'value'->>'timeZone','America/New_York')) then raise exception 'Invalid pickup schedule or time zone'; end if;
+    if coalesce((after_doc->'value'->>'slotMinutes')::numeric,60) not between 15 and 240 or (after_doc->'value'->>'slotMinutes')::numeric<>trunc((after_doc->'value'->>'slotMinutes')::numeric) then raise exception 'Invalid appointment length'; end if;
+    if exists(select 1 from jsonb_array_elements(after_doc->'value'->'days') r group by r->>'day' having count(*)>1) then raise exception 'Duplicate pickup day'; end if;
+    for child in select * from jsonb_array_elements(after_doc->'value'->'days') loop
+     if coalesce((child->>'day')::numeric,-1) not between 0 and 6 or (child->>'day')::numeric<>trunc((child->>'day')::numeric) or jsonb_typeof(child->'times') is distinct from 'array' then raise exception 'Invalid pickup day'; end if;
+     if exists(select 1 from jsonb_array_elements_text(child->'times') tm where tm !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$') then raise exception 'Invalid pickup time'; end if;
+    end loop;
+   end if;
    if setting_key='roostReturnTypes' then
     -- Return types are the same shared setting used by checkout and returns.
     update public.settings set value=jsonb_set(value,'{returnTypes}',after_doc->'value') where key='roost_credit_settings';
@@ -330,6 +391,7 @@ begin
  if p_import and current_doc is not null then return; end if;
  if current_doc is not null and (before_doc is null or (current_doc->>'_version')::bigint is distinct from (before_doc->>'_version')::bigint) then raise exception 'DATA_CONFLICT: % changed',c; end if;
  if current_doc is null and before_doc is not null then raise exception 'DATA_CONFLICT: % removed',c; end if;
+ if c='pickups' and current_doc->'_appointmentVersion' is distinct from before_doc->'_appointmentVersion' then raise exception 'DATA_CONFLICT: appointment changed'; end if;
  if after_doc is null then
   if c not in ('brands','items','customers','comments') then return; end if;
   if c='items' and exists(select 1 from public.pickup_items pi join public.pickups p on p.id=pi.pickup_id where pi.item_id=rr_patch.id and p.status in ('ready','waiting')) then raise exception 'Item is reserved'; end if;
@@ -338,11 +400,13 @@ begin
  end if;
  if c='sales' and not p_import then raise exception 'Sales are immutable; use checkout or void'; end if;
  if c='pickups' and after_doc->>'status'='picked' and not p_import then raise exception 'Use pickup completion'; end if;
+ if c='pickups' and not p_import and (after_doc->>'customerId' is distinct from current_doc->>'customerId') and after_doc->>'customerId' is not null and not exists(select 1 from public.customers member_record where member_record.id=after_doc->>'customerId') then raise exception 'Choose an existing Roost member'; end if;
  if c='items' and (after_doc->>'stock')::integer < coalesce((select sum(pi.qty) from public.pickup_items pi join public.pickups p on p.id=pi.pickup_id where pi.item_id=rr_patch.id and p.status in ('ready','waiting')),0) then raise exception 'Inventory is reserved for pickup'; end if;
  for k,v in select * from jsonb_each_text(spec->'map') loop
   if after_doc ? k then row_data:=row_data||jsonb_build_object(v,after_doc->k); end if;
  end loop;
  row_data:=row_data||jsonb_build_object('rr_extra',after_doc - array(select jsonb_object_keys(spec->'map')) - array['_version','items','roostCredits']);
+ if c='pickups' then row_data:=jsonb_set(row_data,'{rr_extra}',(row_data->'rr_extra')-array['scheduledAt','doorPin','pinTextedAt','accessExtendedUntil','_appointmentVersion','appointmentStatus','appointmentNote','appointmentUpdatedAt']); end if;
  select string_agg(format('%I',key),','),string_agg(format('(jsonb_populate_record(null::public.%I,$1)).%I',tbl,key),','),string_agg(format('%I=excluded.%I',key,key),',') into cols,vals,sets from jsonb_object_keys(row_data) key;
  execute format('insert into public.%I(%s) select %s on conflict(id) do update set %s',tbl,cols,vals,sets) using row_data;
  if c='sales' and p_import then
@@ -351,13 +415,17 @@ begin
   end loop;
  end if;
  if c='pickups' then
-  if jsonb_typeof(after_doc->'items')<>'array' or jsonb_array_length(after_doc->'items')=0 then raise exception 'Pickup needs items'; end if;
+  if jsonb_typeof(after_doc->'items') is distinct from 'array' then raise exception 'Pickup needs items'; end if;
+  if jsonb_array_length(after_doc->'items') not between 1 and 50 then raise exception 'Pickup needs items'; end if;
   -- Targeted line replacement in the same transaction. Other orders are untouched.
   delete from public.pickup_items where pickup_id=rr_patch.id;
    if after_doc ? 'scheduledAt' and p_import then
-    insert into public.pickup_appointments(pickup_id,scheduled_at,door_pin,pin_texted_at,access_extended_until)
-    values(rr_patch.id,(after_doc->>'scheduledAt')::timestamptz,after_doc->>'doorPin',(after_doc->>'pinTextedAt')::timestamptz,(after_doc->>'accessExtendedUntil')::timestamptz)
+    insert into public.pickup_appointments(pickup_id,scheduled_at,door_pin,pin_texted_at,access_extended_until,rr_extra)
+    values(rr_patch.id,(after_doc->>'scheduledAt')::timestamptz,after_doc->>'doorPin',(after_doc->>'pinTextedAt')::timestamptz,(after_doc->>'accessExtendedUntil')::timestamptz,jsonb_strip_nulls(jsonb_build_object('appointmentStatus',after_doc->'appointmentStatus','appointmentNote',after_doc->'appointmentNote','appointmentUpdatedAt',after_doc->'appointmentUpdatedAt')))
     on conflict(pickup_id) do nothing;
+   end if;
+   if not p_import and (after_doc->'scheduledAt' is distinct from current_doc->'scheduledAt' or after_doc->'appointmentStatus' is distinct from current_doc->'appointmentStatus' or after_doc->'appointmentNote' is distinct from current_doc->'appointmentNote') then
+    perform private.rr_set_appointment(rr_patch.id,(after_doc->>'scheduledAt')::timestamptz,coalesce(after_doc->>'appointmentStatus',case when after_doc->>'scheduledAt' is null then 'unscheduled' else 'approved' end),after_doc->>'appointmentNote');
    end if;
    for child in select * from jsonb_array_elements(after_doc->'items') loop
    if (child->>'qty')::numeric<>trunc((child->>'qty')::numeric) or (child->>'qty')::integer<1 then raise exception 'Invalid quantity'; end if;
@@ -383,6 +451,11 @@ begin
  if p_member_id is not null then
   select * into m from public.customers where id=p_member_id for update;
   if not found then raise exception 'UNAUTHORIZED: Member no longer exists'; end if;
+ end if;
+ if p_action='pickup_slots' then
+  if m.id is null or not exists(select 1 from public.pickups where id=p_payload->>'id' and rr_extra->>'customerId'=m.id and status in ('ready','waiting')) then raise exception 'UNAUTHORIZED: Pickup required'; end if;
+  select value into cfg from public.settings where key='pickup_schedule';
+  return jsonb_build_object('slots',private.rr_pickup_slots(p_payload->>'id'),'timeZone',coalesce(cfg->>'timeZone','America/New_York'));
  end if;
  if p_action in ('catalog','admin_load','member_account','member_lookup_phone','member_lookup','pickup_lookup') then
   state:=private.rr_state(); d:=state->'data';
@@ -438,6 +511,7 @@ begin
   end loop;
   result:=jsonb_build_object('saved',true);
  elsif p_action='checkout' then
+  if p_payload ? 'expectedMemberId' and p_payload->>'expectedMemberId' is distinct from m.id then raise exception 'DATA_CONFLICT: Member session changed. Review payment again.'; end if;
   if jsonb_typeof(p_payload->'lines') is distinct from 'array' then raise exception 'Invalid checkout lines'; end if;
   if jsonb_array_length(p_payload->'lines') not between 1 and 50 then raise exception 'Invalid checkout lines'; end if;
   for line in select * from jsonb_array_elements(p_payload->'lines') loop
@@ -446,6 +520,9 @@ begin
   if coalesce((p_payload->>'useCredits')::boolean,false) and m.id is null then raise exception 'UNAUTHORIZED: Member required for credits'; end if;
   result:=private.rr_checkout(p_payload->>'payment',(p_payload->>'expectedTotal')::numeric,p_payload->'lines',m.id,coalesce((p_payload->>'useCredits')::boolean,false));
   if p_payload ? 'expectedDue' and round((p_payload->>'expectedDue')::numeric,2) is distinct from (result->>'total')::numeric then raise exception 'Credit balance or price changed. Review payment again.'; end if;
+  if p_payload ? 'expectedCreditsUsed' and (p_payload->>'expectedCreditsUsed')::numeric is distinct from (result->>'creditsUsed')::numeric then raise exception 'Credit balance changed. Review payment again.'; end if;
+  if p_payload ? 'expectedCreditValue' and (p_payload->>'expectedCreditValue')::numeric is distinct from (result->>'creditValue')::numeric then raise exception 'Credit value changed. Review payment again.'; end if;
+  update public.sales set rr_extra=rr_extra||jsonb_build_object('grossTotal',result->'grossTotal','creditsUsed',result->'creditsUsed','creditValue',result->'creditValue','creditDiscount',result->'creditDiscount') where id=result->>'saleId';
   update public.sales set rr_extra=rr_extra||jsonb_build_object('paymentConfirmation','self-reported','providerVerified',false) where id=result->>'saleId';
   if m.id is not null then update public.sales set rr_extra=rr_extra||jsonb_build_object('customerId',m.id,'customerName',m.name,'customerType','roost-member') where id=result->>'saleId'; end if;
  elsif p_action='member_signup' then
@@ -485,7 +562,16 @@ begin
     result:=public.rr_roost_return(m.id,m.phone,line->>'typeId',(line->>'qty')::integer);
    end loop;
   end if;
+ elsif p_action='pickup_schedule' then
+  select private.rr_document('pickups',to_jsonb(p)) into row_doc from public.pickups p where id=p_payload->>'id' and p.rr_extra->>'customerId'=m.id and p.status in ('ready','waiting') for update;
+  if m.id is null or row_doc is null then raise exception 'UNAUTHORIZED: Pickup required'; end if;
+  if row_doc->'_version' is distinct from p_payload->'version' or row_doc->'_appointmentVersion' is distinct from nullif(p_payload->'appointmentVersion','null') then raise exception 'DATA_CONFLICT: Appointment changed'; end if;
+  if not exists(select 1 from jsonb_array_elements_text(private.rr_pickup_slots(p_payload->>'id')) slot where slot::timestamptz=(p_payload->>'scheduledAt')::timestamptz) then raise exception 'DATA_CONFLICT: That pickup time is no longer available'; end if;
+  perform private.rr_set_appointment(p_payload->>'id',(p_payload->>'scheduledAt')::timestamptz,'pending','');
+  update public.pickups set updated_at=now() where id=p_payload->>'id';
+  result:=jsonb_build_object('scheduled',true);
  elsif p_action='pickup_complete' then
+  if exists(select 1 from public.pickups p join public.pickup_appointments a on a.pickup_id=p.id where upper(p.code)=upper(p_payload->>'code') and a.rr_extra->>'appointmentStatus' in ('pending','declined')) then raise exception 'Appointment needs administrator approval'; end if;
   result:=public.rr_complete_pickup(p_payload->>'code');
  elsif p_action='admin_void' then
   select * into s from public.sales where id=p_payload->>'id' for update;

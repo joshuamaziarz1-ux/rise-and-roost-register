@@ -3,6 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
 const context=vm.createContext({});vm.runInContext(await fs.readFile('cloud-model.js','utf8'),context);const model=context.RRModel;
+test('credit quotes match full, partial, minimum-cash and decimal-value policies',()=>{
+ assert.equal(model.creditQuote(5,12).total,0);assert.equal(model.creditQuote(5,12).creditsUsed,10);
+ assert.equal(model.creditQuote(5,3).total,3.5);assert.equal(model.creditQuote(5,12,{allowFullPurchase:false}).total,0.5);
+ assert.equal(model.creditQuote(0.3,10,{creditValue:0.1}).creditsUsed,3);assert.equal(model.creditQuote(0.3,10,{creditValue:0.1}).total,0);
+ assert.equal(model.creditQuote(4.99,99,{creditValue:0.5}).total,0.49);
+});
 test('diff sends only changed records and keeps row versions',()=>{
   const before={brands:[{id:'b',name:'Brand',_version:2}],items:[{id:'i',price:5,stock:7,_version:10}],sales:[{id:'s',total:5}],settings:{paymentQrs:{cashapp:'qr'}}};
   const after=JSON.parse(JSON.stringify(before));after.items[0].price=6;

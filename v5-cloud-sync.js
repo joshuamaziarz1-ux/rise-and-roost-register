@@ -4,16 +4,18 @@
   const cfg=window.RR_CONFIG,model=window.RRModel,clone=model.clone;
   const embedded=!/\/(?:admin|register)(?:-v5|-cloud-beta)\.html$/i.test(location.pathname);
   let admin=!embedded&&/\/admin(?:-v5|-cloud-beta)\.html$/i.test(location.pathname);
-  const reads=new Set(['catalog','admin_load','member_account','member_lookup_phone','member_lookup','pickup_lookup']);
+  const reads=new Set(['catalog','admin_load','member_account','member_lookup_phone','member_lookup','pickup_lookup','pickup_slots']);
   let client,baseline,pending,saving=false,loading=false,ready=false,online=false,suppress=true,timer,retry=1000;
   let refreshPromise,lastCatalog,lastAdminData;
   let checkoutPromise,identityEpoch=0,authEpoch=0,baselineActor;
   let memberToken=sessionStorage.getItem('rr.memberToken')||'';
+  const memberSubject=()=>{try{return JSON.parse(atob(memberToken.split('.')[0].replaceAll('-','+').replaceAll('_','/'))).sub;}catch{return null;}};
   function status(message){
     let el=document.getElementById('rrCloudBadge');
     if(!el){el=document.createElement('div');el.id='rrCloudBadge';el.setAttribute('role','status');el.style.cssText='position:fixed;right:14px;bottom:14px;z-index:9999;padding:8px 12px;border-radius:999px;font:800 12px system-ui;background:#fff;border:1px solid #d8ccb7;box-shadow:0 3px 16px rgba(0,0,0,.12);pointer-events:none';document.body.append(el);}
     el.style.opacity='1';if(/^(Connected|Saved|Purchase saved)/.test(message))setTimeout(()=>{if(el.textContent===message)el.style.opacity='0';},1600);
     el.textContent=cfg.preview?'TEST DATA · '+message:message;
+    if(admin)document.dispatchEvent(new CustomEvent('rr:admin-save-state',{detail:{message,pending:!!pending}}));
     const saved=document.getElementById('rrCloudSaveStatus');
     if(admin&&saved){if(pending)saved.textContent=message.startsWith('Not confirmed')?'Not saved — connection problem':'Saving…';else if(message.startsWith('Edit'))saved.textContent=message;else if(/^(Connected|Saved)/.test(message))saved.textContent='Saved';}
   }
@@ -32,9 +34,11 @@
     if(!reads.has(action)&&!body.requestId){
       operationKey='rr.operation.'+action;
       let saved;try{saved=JSON.parse(sessionStorage.getItem(operationKey)||'null');}catch{}
+      const actor=!admin&&!signingIn?memberSubject():null;
+      if(saved?.actor&&saved.actor!==actor)throw new Error('Sign in to the original Roost account to confirm its previous operation.');
       if(saved&&!model.same(saved.payload,payload))throw new Error('A previous operation still needs confirmation. Retry the previous operation first.');
       body.requestId=saved?.requestId||crypto.randomUUID();
-      sessionStorage.setItem(operationKey,JSON.stringify({requestId:body.requestId,payload}));
+      sessionStorage.setItem(operationKey,JSON.stringify({requestId:body.requestId,payload,...actor?{actor}:{}}));
     }
     if(memberToken&&!admin&&!('memberToken' in body))body.memberToken=memberToken;
     try{
@@ -47,6 +51,8 @@
       if(!res.ok){if(operationKey&&res.status>=400&&res.status<500&&res.status!==401)sessionStorage.removeItem(operationKey);if(res.status===401&&needsAuth){ready=false;gate('Session expired. Sign in to resume.');}throw Object.assign(new Error(out.error||'Cloud request failed'),{status:res.status,conflict:out.conflict});}
       if(!out||typeof out!=='object'||out.error||(!reads.has(action)&&!out.result))throw new Error('Cloud confirmation missing. Retry the same operation.');
       if(action==='checkout'&&(typeof out.result.saleId!=='string'||!out.result.saleId))throw new Error('Purchase receipt missing. Retry the same operation.');
+      if(action==='pickup_schedule'&&out.result.scheduled!==true)throw new Error('Appointment confirmation missing. Retry the same request.');
+      if(action==='pickup_slots'&&(!Array.isArray(out.slots)||out.slots.some(at=>typeof at!=='string'||!Number.isFinite(new Date(at).getTime()))))throw new Error('Invalid pickup times. Reconnect and reload times.');
       if(['admin_patch','admin_import'].includes(action)&&out.result.saved!==true)throw new Error('Save confirmation missing. Retry the same operation.');
       if(action==='admin_load'&&(!Array.isArray(out.data?.items)||!Array.isArray(out.data?.brands)))throw new Error('Invalid shared store response.');
       if(operationKey)sessionStorage.removeItem(operationKey);
@@ -178,7 +184,7 @@
     client.auth.onAuthStateChange((event,session)=>{
       const changed=!!(session&&baselineActor&&session.user.id!==baselineActor);
       if(event==='SIGNED_OUT'||changed)authEpoch++;
-      setTimeout(()=>{if(!admin)return;if(!session||changed){ready=false;data=migrate({});baseline=null;lastAdminData=null;suppress=true;renderAll();suppress=false;document.getElementById('rrCloudAdminCard')?.remove();gate();}if(session&&!ready)loadAdmin().then(()=>{if(pending)flush();}).catch(e=>gate(e.message));},0);
+      setTimeout(()=>{if(!admin)return;if(!session||changed){window.RRPhase1Admin?.clearPrivate();ready=false;data=migrate({});baseline=null;lastAdminData=null;suppress=true;renderAll();suppress=false;document.getElementById('rrCloudAdminCard')?.remove();gate();}if(session&&!ready)loadAdmin().then(()=>{if(pending)flush();}).catch(e=>gate(e.message));},0);
     });
     client.channel('rr-sync-'+crypto.randomUUID()).on('postgres_changes',{event:'UPDATE',schema:cfg.revisionSchema||'public',table:'store_revision_public',filter:'id=eq.1'},()=>refresh()).subscribe(s=>{if(s==='SUBSCRIBED')refresh();});
     setInterval(()=>{if(!document.hidden){if(pending)flush();else refresh();}},cfg.pollMs);
@@ -207,4 +213,4 @@
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })();
 
-(()=>{const label=()=>{const admin=/admin/.test(location.pathname),name='Rise & Roost '+(admin?'Admin':'Register')+' v5.2.0-rc.2';document.title=name;document.querySelectorAll('.version,.admin-top .sub,#settingsTab .danger-zone strong').forEach(el=>el.textContent=name);};window.addEventListener('load',()=>{label();setTimeout(label,4500);});})();
+(()=>{const label=()=>{const admin=/admin/.test(location.pathname),name='Rise & Roost '+(admin?'Admin':'Register')+' v5.2.0-rc.3';document.title=name;document.querySelectorAll('.version,.admin-top .sub,#settingsTab .danger-zone strong').forEach(el=>el.textContent=name);};window.addEventListener('load',()=>{label();setTimeout(label,4500);});})();

@@ -30,11 +30,11 @@ test('unconfirmed Admin edits recover across a reload using the same request',as
  await adminLogin(page);await page.evaluate(()=>showTab('items'));const old=await page.evaluate(()=>item('item-other').stock);let blocked=true,ids=[];
  await page.route('**/functions/v1/rise-roost-sync',route=>{const body=route.request().postDataJSON();if(body.action==='admin_patch'){ids.push(body.requestId);if(blocked)return route.fulfill({status:200,contentType:'application/json',body:'{"result":{"saved":false}}'});}return route.continue();});
  await page.locator('[data-stock="item-other"][data-d="1"]').click();await expect(page.locator('#rrCloudBadge')).toContainText('Not confirmed');await expect(page.locator('#rrCloudSaveStatus')).toContainText('Not saved');await page.reload();blocked=false;await page.evaluate(()=>window.dispatchEvent(new Event('online')));
- await expect.poll(()=>page.evaluate(()=>item('item-other').stock)).toBe(old+1);await expect(page.locator('#adminScreen')).not.toHaveAttribute('inert','');expect(new Set(ids).size).toBe(1);
+ await expect.poll(()=>page.evaluate(()=>item('item-other')?.stock)).toBe(old+1);await expect(page.locator('#adminScreen')).not.toHaveAttribute('inert','');expect(new Set(ids).size).toBe(1);
 });
-test('signup, purchase attribution, revisit, private history and inactivity logout',async({page})=>{
+test('signup, purchase attribution, revisit, private history and inactivity logout',async({page},info)=>{
  await page.clock.install();
- await shop(page);await page.evaluate(()=>RRRoost.openSignup());const phone='202555'+String(Math.floor(Math.random()*10000)).padStart(4,'0');
+ await shop(page);await page.evaluate(()=>RRRoost.openSignup());const phone='20255530'+String(['chromium','iphone-webkit','android-chromium'].indexOf(info.project.name)).padStart(2,'0');
  await page.locator('#rrJoinName').fill('Synthetic Signup');await page.locator('#rrJoinPhone').fill(phone);await page.locator('#rrJoinSubmit').click();await expect(page.locator('#rrShopMemberBar')).toContainText('Synthetic Signup');const id=await page.evaluate(()=>data.customers[0].id);
  await page.locator('[data-rr-plus="item-test"]').click();await page.locator('#rr48CartBar').click();await page.locator('#payBtn').click();await page.locator('[data-method="cash"]').click();await page.locator('#rr48ConfirmPay').click();await expect(page.locator('#thanks')).toBeVisible();
  const sale=(await rpc(page,'admin_load',{},true)).data.sales.find(s=>s.customerId===id);expect(sale).toBeTruthy();expect(sale.customerName).toBe('Synthetic Signup');

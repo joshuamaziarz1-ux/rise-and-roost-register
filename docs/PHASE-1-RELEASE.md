@@ -1,6 +1,18 @@
-# Rise & Roost Register 5.2.0-rc.2
+# Rise & Roost Register 5.2.0-rc.3
 
 This is a review candidate for Issue #2, based on production `main` at `ab27be06d0ad7a999d4ca122ed30373c69b04435`. It is not a production release. Owner approval and physical-device acceptance are outstanding. No production branch, function, schema or business record was changed.
+
+## Owner-authorized controls in rc.3
+
+On October 22 the owner selected option 2: add the three missing controls using the existing design. They are implemented in this same RC branch and PR #3; this is a bounded Phase 1 scope update, not Phase 2 authorization.
+
+- **Comments & Requests:** an appended Admin tab uses existing card/button/field styles. Customer submissions arrive automatically; Admins can review, resolve and reopen them with row-version conflict checks. Original text, IDs and review timestamps remain in the existing comment records. Comment text is escaped and remains absent from public catalog responses.
+- **Roost credit spending:** signed-in members can opt in at the existing payment chooser. It shows credit value, discount and remaining cash/QR amount; a fully covered purchase confirms with credits without requesting a cash or wallet payment. Server totals, balance, credit value, credits used and member identity validate the frozen quote. Lost responses retry the same transaction. Member history shows credits spent and Admin sales label fully credit-paid purchases as Roost Credits.
+- **Pickup appointments:** Admins can link a new or existing pickup to a member without changing saved contact details, configure weekly availability/time zone/appointment length and schedule, approve or decline a time. Members request offered times for existing linked orders in My Roost. Pending requests reserve the appointment window; competing bookings and stale editors are rejected atomically. Requests recover after reload using their original request IDs. Unchanged member cards retain their DOM during polling so phone scrolling/taps remain stable.
+
+`phase1-admin-controls.js` adds only these Admin controls; `v4.8-payments-cloud.js` and `v4.8-roost.js` connect the member controls to the same service. `supabase/appointments.sql` uses the existing `pickup_appointments` table; its tracked source is included in the previously unshipped generated migration. There is no competing database and no new access-code generation, delivery or unlock integration. Scheduling changes never rewrite existing PIN/access metadata. Approving without editing the time also retains the original timestamp precision and daylight-saving-time instant. Availability is disabled until configured when no prior schedule exists; the editable store-time-zone default is America/New_York. Members see the next 45 days of configured future times. Existing active pickup flows remain usable without an appointment.
+
+See [Using the Phase 1 controls](PHASE-1-CONTROLS.md) for the operator steps. The original stylesheets, branding, assets, landscape CSS and manifest remain unchanged. Existing tab order is retained, with the new tab appended. Layout QA temporarily detaches that single authorized new tab while comparing pre-existing geometry to immutable main; separate actual-interface screenshots capture the additions. Browser emulation and synthetic authentication do not replace physical-device and real magic-link acceptance.
 
 ## October 22 consolidation and fixes
 
@@ -49,15 +61,9 @@ The local rollback branch `codex/phase-1-rollback-main` pins the exact original 
 
 The October 17 production migration `fix_checkout_unassigned_customer_record` was observed. The candidate independently uses a typed optional customer row and tested guest/member checkout; it does not overwrite the old production checkout function during development.
 
-## Release status and scope decisions
+## Release status
 
-The current chosen UI differs from some saved feature branches. Exact visual preservation takes priority; this candidate does **not** silently restore their redesigned controls:
-
-1. Current split Admin has no dedicated Comments tab. Comment submission and cross-device Admin data/backup synchronization are implemented and tested; restoring a visible dedicated tab requires a separate UI decision.
-2. Current checkout has no credit-spending checkbox. Credit earning, Admin reward redemption and the atomic credit checkout API are tested. The saved branch's customer credit-spending control is not introduced into the approved payment UX.
-3. Existing pickup/customer and Admin controls and member pickup cards are retained. Appointment times now appear inside their existing detail text and update automatically. Saved-branch appointment scheduling/approval screens and door-unlock integrations are not reintroduced. Appointment metadata is preserved through the scoped contract/export; adding scheduling/approval controls needs a separate UI decision.
-
-These are explicit remaining Issue #2 acceptance gaps. Keep the PR in **draft** until their treatment is approved. Automated tests passing does not mean Phase 1 or production cutover has been approved.
+The prior three UI scope gaps are now implemented under the owner's explicit option-2 authorization. Keep PR #3 draft until final automated results, actual expanded-interface screenshots, physical-device/magic-link acceptance and the owner release review are complete. No production or preview cutover, schema/function deployment, customer communication or Phase 2 work is authorized by that scope choice. The Supabase connector requires reauthentication as of October 23; repeat the read-only production/version audit after reconnecting, before any approved preview or cutover. The October 22 preservation evidence is retained as historical evidence.
 
 ## Existing-data preservation and approved cutover plan
 
@@ -73,13 +79,13 @@ Rollback: before migration, return to pinned main. After migration, retain addit
 
 ## Physical-device acceptance (not yet performed)
 
-Approval sequence: review the exact PR commit and automated/screenshot evidence; decide how to treat the three UI scope gaps above; authorize an isolated candidate preview and real-device/magic-link checks; complete the checklist below; then give separate explicit production migration/deployment approval. There is no automatic merge, cutover or Phase 2 authorization when tests pass.
+Approval sequence: review the exact PR commit and automated/screenshot evidence; review the three authorized controls and their screenshots; authorize an isolated candidate preview and real-device/magic-link checks; complete the checklist below; then give separate explicit production migration/deployment approval. There is no automatic merge, cutover or Phase 2 authorization when tests pass.
 
 - iPhone Safari: open Register, verify home/logo/cards/cart/payment and Roost readability, join/revisit/logout, scroll/keyboard/safe areas, background/resume and reconnect. Use synthetic preview data only.
 - Android Chrome: repeat above; test QR scanning on a second device without sending money.
 - Landscape tablet: 1180×820 automated comparison is available; check the real tablet's native resolution, tap targets, cart/checkout, rotation, installed-app/fullscreen and reopen behavior. Fullscreen manifest is not OS kiosk lockdown.
 - Admin on a separate real device: approved magic-link delivery and callback, allowlist rejection, price/hide/show/stock/sold-out, simultaneous edits and expired-session recovery. Verify Register receives changes without refresh and that an open cart/quote or edit is protected.
-- Exercise pickup reservation/completion, member returns/rewards, backup export and receipt/inventory history with synthetic fixtures. Resolve the three UI acceptance gaps above before signoff.
+- Exercise pickup reservation/completion, member returns/rewards, backup export and receipt/inventory history with synthetic fixtures. Verify Comments review/reopen on two Admin devices, partial/full credit spending and lost-response recovery, and member appointment request/reload recovery with Admin approval/stale-edit rejection before signoff.
 
 ## Known limits carried into Phase 2
 

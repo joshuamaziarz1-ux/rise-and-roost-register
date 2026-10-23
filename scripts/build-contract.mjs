@@ -68,7 +68,7 @@ begin
   result:=result||jsonb_build_object('items',coalesce(children,'[]'));
  end if;
  if p_collection='pickups' then
-  select jsonb_build_object('scheduledAt',scheduled_at,'doorPin',door_pin,'pinTextedAt',pin_texted_at,'accessExtendedUntil',access_extended_until) into children from public.pickup_appointments where pickup_id=p_row->>'id';
+  select rr_extra||jsonb_build_object('scheduledAt',scheduled_at,'doorPin',door_pin,'pinTextedAt',pin_texted_at,'accessExtendedUntil',access_extended_until,'_appointmentVersion',rr_version) into children from public.pickup_appointments where pickup_id=p_row->>'id';
   result:=result||coalesce(children,'{}');
  end if;
  return result||jsonb_build_object('_version',p_row->'rr_version');
@@ -88,6 +88,7 @@ sql+=`'settings',coalesce((select jsonb_object_agg(case key when 'roost_credit_s
 )) $$;
 `;
 sql+=fs.readFileSync('supabase/checkout.sql','utf8');
+sql+=fs.readFileSync('supabase/appointments.sql','utf8');
 sql+=fs.readFileSync('supabase/contract.sql','utf8');
 sql+=fs.readFileSync('supabase/legacy-guard.sql','utf8');
 sql+=`\nrevoke all on function public.rr_sync(text,jsonb,uuid,text) from public,anon,authenticated;

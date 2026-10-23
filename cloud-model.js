@@ -35,5 +35,13 @@
     // Inserts/updates before deletions preserves foreign keys when moving products.
     return out;
   }
-  root.RRModel={collections,clone,same,changes,documents};
+  function creditQuote(gross,credits,settings={}) {
+    const cents=Math.max(0,Math.round(Number(gross)*100));
+    const value=Math.max(1,Math.round(Number(settings.creditValue??0.5)*100));
+    let needed=Math.floor(cents/value);
+    if(settings.allowFullPurchase===false&&needed*value>=cents)needed=Math.max(0,needed-1);
+    const used=Math.min(Math.max(0,Math.floor(Number(credits)||0)),needed);
+    return {grossTotal:cents/100,creditsUsed:used,creditValue:value/100,creditDiscount:used*value/100,total:(cents-used*value)/100};
+  }
+  root.RRModel={collections,clone,same,changes,documents,creditQuote};
 })(globalThis);

@@ -89,6 +89,37 @@ test('PostgreSQL transactions, permissions and data preservation',async t=>{
     const account=await rpc('member_account',{},null,'member-test');assert.equal(new Date(account.pickups.find(x=>x.id===p.id).scheduledAt).toISOString(),'2026-10-20T16:00:00.000Z');assert(!('doorPin' in account.pickups.find(x=>x.id===p.id)));
     const backup={...order,id:'imported-appointment',code:'APPT2'};await rpc('admin_import',request({records:[{collection:'pickups',id:backup.id,value:backup}]}),ADMIN);assert.equal((await state()).pickups.find(x=>x.id===backup.id).scheduledAt,order.scheduledAt);
   });
+  await t.test('member scheduling uses store time zone, prevents double booking and preserves access metadata',async()=>{
+    const cfg={enabled:true,timeZone:'America/New_York',slotMinutes:60,days:Array.from({length:7},(_,day)=>({day,enabled:true,times:['10:00','12:00']}))};
+    await patch('settings',null,{id:'pickupSchedule',value:cfg});
+    for(const [id,member] of [['schedule-a','member-test'],['schedule-b','member-other']])await patch('pickups',null,{id,code:id.toUpperCase(),customerId:member,customerName:member,status:'waiting',paid:false,items:[{itemId:'item-other',qty:1}],created:new Date().toISOString()});
+    const d=await state(),a=d.pickups.find(x=>x.id==='schedule-a'),b=d.pickups.find(x=>x.id==='schedule-b');
+    const offered=await rpc('pickup_slots',{id:a.id},null,'member-test');assert(offered.slots.length>10);assert.equal(offered.timeZone,'America/New_York');
+    assert(offered.slots.every(x=>['10:00','12:00'].includes(new Intl.DateTimeFormat('en-GB',{timeZone:offered.timeZone,hour:'2-digit',minute:'2-digit'}).format(new Date(x)))));
+    await assert.rejects(()=>rpc('pickup_slots',{id:a.id},null,'member-other'),/UNAUTHORIZED/);
+    const book=p=>request({id:p.id,version:p._version,appointmentVersion:p._appointmentVersion??null,scheduledAt:offered.slots[0]});
+    const results=await Promise.allSettled([rpc('pickup_schedule',book(a),null,'member-test'),rpc('pickup_schedule',book(b),null,'member-other')]);assert.equal(results.filter(x=>x.status==='fulfilled').length,1);
+    const winner=(await state()).pickups.find(x=>x.appointmentStatus==='pending');assert(winner);
+    await assert.rejects(()=>rpc('pickup_complete',request({code:winner.code})),/approval/);
+    await pool.query("update pickup_appointments set door_pin='KEEP-PRIVATE',pin_texted_at=now(),access_extended_until=now()+interval '2 days' where pickup_id=$1",[winner.id]);
+    const before=(await state()).pickups.find(x=>x.id===winner.id);await patch('pickups',before,{...before,appointmentStatus:'approved'});
+    const after=(await state()).pickups.find(x=>x.id===winner.id);assert.equal(after.doorPin,before.doorPin);assert.equal(after.pinTextedAt,before.pinTextedAt);assert.equal(after.accessExtendedUntil,before.accessExtendedUntil);
+    const account=await rpc('member_account',{},null,after.customerId);assert(!('doorPin' in account.pickups.find(x=>x.id===after.id)));
+    await pool.query('update pickup_appointments set updated_at=now() where pickup_id=$1',[after.id]);const snapshot=await state();await assert.rejects(()=>patch('pickups',after,{...after,note:'Stale editor'}),/DATA_CONFLICT: appointment/);assert.deepEqual(await state(),snapshot);
+    for(const id of [a.id,b.id]){const p=(await state()).pickups.find(x=>x.id===id);await patch('pickups',p,{...p,status:'cancelled'});}
+  });
+  await t.test('credit quote and member mismatches roll back the entire sale',async()=>{
+    const before=await state();
+    for(const extra of [{expectedMemberId:'member-other'},{expectedCreditsUsed:999},{expectedCreditValue:999}])await assert.rejects(()=>rpc('checkout',request({payment:'cash',expectedTotal:5,lines:[{itemId:'item-test',qty:1}],useCredits:true,...extra}),null,'member-test'),/changed/);
+    assert.deepEqual(await state(),before);
+  });
+  await t.test('comment review is Admin-only, conflict-safe and retains original text',async()=>{
+    const out=await rpc('comment_submit',request({name:'Synthetic <name>',text:'Keep <script> as text',type:'product-request'}));
+    const c=(await state()).comments.find(x=>x.id===out.result.id);assert(c);
+    await assert.rejects(()=>rpc('admin_patch',request({changes:[{collection:'comments',id:c.id,before:c,after:{...c,status:'reviewed'}}]}),OTHER),/UNAUTHORIZED/);
+    await patch('comments',c,{...c,status:'reviewed'});await assert.rejects(()=>patch('comments',c,{...c,status:'resolved'}),/DATA_CONFLICT/);
+    const latest=(await state()).comments.find(x=>x.id===c.id);assert.equal(latest.text,c.text);assert.equal(latest.name,c.name);assert.equal(latest.status,'reviewed');assert(!JSON.stringify(await rpc('catalog')).includes(c.text));
+  });
   await t.test('QR settings are shared, Admin-only and conflict-checked',async()=>{
     const qr='data:image/png;base64,SYNTHETIC';
     const value={id:'cashapp',qr};await patch('payments',null,value);assert.equal((await rpc('catalog')).paymentQrs.cashapp,qr);

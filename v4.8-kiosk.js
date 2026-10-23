@@ -1,5 +1,5 @@
 (()=>{
-const BUILD='5.2.0-rc.2';
+const BUILD='5.2.0-rc.3';
 const TEST=!!window.__RR_TEST_MODE;
 const MEMBER_KEY=TEST?'riseRoostTESTActiveMemberV1':'riseRoostActiveMemberV1';
 const GUEST_KEY=TEST?'riseRoostTESTGuestShoppingV1':'riseRoostGuestShoppingV1';

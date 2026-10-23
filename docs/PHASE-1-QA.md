@@ -1,6 +1,30 @@
-# Phase 1 QA evidence — 5.2.0-rc.2
+# Phase 1 QA evidence — 5.2.0-rc.3
 
-## October 22 rc.2 validation
+## October 23 rc.3 validation
+
+Executed on October 23:
+
+| Command | Result |
+| --- | --- |
+| `npm run test:all` | **131 passed, 0 failed**: 27 database/handler/model, 1 preservation rehearsal, 103 browser cases. Browser duration 9.2 minutes. This complete run preceded the final unchanged-appointment-time preservation guard. |
+| Focused profile/return lost-response regression | Reproduced the old blocked profile retry; all 3 browser engines passed after recovery changes. |
+| Final appointment workflow repeat | Verifies linking an existing order, exact saved timestamp precision, approval, conflict rejection and reload recovery. **3 passed, 0 failed in 2.4 minutes**, across desktop Chromium, iPhone WebKit and Android Chromium. Final-head CI is pinned in PR #3. |
+
+The expanded suite contains **131 checks**: 27 Node/PostgreSQL/handler/model, one preview-preservation rehearsal and 103 browser cases. Six new control workflows run in desktop Chromium, iPhone WebKit and Android Chromium, including actual phone viewports for the additional Admin/Register contexts. Existing split-layout comparisons still run at all four viewports, including landscape tablet.
+
+Executed during implementation: 27 Node checks passed; four new desktop workflows passed immediately. The appointment workflow exposed a test comparing equivalent ISO timestamp strings with different UTC offsets, corrected to compare instants. A later iPhone run found a real repeated-render bug: identical account polling replaced pickup buttons during scrolling/tapping. Cards now redraw only when their data changes; the complete iPhone appointment workflow then passed in 47.4 seconds. No forced clicks, arbitrary sleeps or retries hide that failure. The final run additionally checks appointment recovery after page reload and the availability form's confirmed Saved status.
+
+New coverage includes Comments receive/review/resolve/reopen across independent Admins, escaped request text, partial/full credit spending, duplicate/lost-response protection, a changed credit value with unchanged cash due, scoped history, store-time-zone slots, concurrent booking rejection, member ownership, approval gates, appointment-version conflicts, and preserving private access metadata. An explicit profile lost-response regression reproduced the old retry becoming blocked after polling updated its version. Profile/return retries now confirm the original request; member operations retain their original actor, and another account cannot submit them. Three focused recovery cases passed in 27.2 seconds before the final full run. The test API deadline is 10 seconds (production uses 20), with 300-millisecond polling retained; interrupted-network tests explicitly abort responses. No sleeps or successful-operation retries disguise product failures. Windows test cleanup retains durable checkpoints and allows 120 seconds for shutdown after resume. Final full-suite results and exact-head CI are recorded in PR #3 after execution.
+
+Further testing found the same repeated-render tap loss in return steppers. Unchanged return controls now remain stable; an empty configured return list stays empty, disables submission and recovers when eligible types return. Private selection/DOM caches clear on logout. Conflict tests assert the explicit rejection dialog, canonical data and recovery draft instead of a connection badge that polling can replace.
+
+The original-interface layout test temporarily detaches only the newly authorized Comments tab before comparing prior controls/positions against main. The baseline sales label is normalized only for the newly supported Roost Credits payment value, whose old generic label was Prepaid. Actual expanded-interface screenshots from `controls.spec.js` separately show Comments, partial/full credit confirmation, member scheduling and Admin approval, including linking an existing order. No original stylesheet, logo asset, landscape CSS or manifest is changed.
+
+The October 22 full run was interrupted by the host sleeping overnight; its timing failures are superseded by a fresh October 23 run. The layout measurement now uses rendered text, since textContent counted an invisible credit button.
+
+No rc.3 deployment, production data write or production DDL has occurred. The Supabase connector required reauthentication on October 23, so a new live fingerprint read could not be completed. The retained October 22 18-table audit is the latest successful production audit; do not describe it as a fresh rc.3 live audit. The older hosted preview is not rc.3. Real magic-link and physical-device checks remain outstanding.
+
+## Historical rc.2 validation
 
 The final suite contains **109 checks**: 23 Node/PostgreSQL/handler/model, one preview-preservation rehearsal, and 85 browser cases. The eight new session/live-account scenarios and deterministic rapid-cart regression run in desktop Chromium, iPhone WebKit and Android Chromium. The existing full split-UI screenshot comparison also runs on the landscape tablet.
 
@@ -70,7 +94,7 @@ Test harness corrections included stable screenshot CSS scaling on high-density 
 
 GitHub CI uploads the complete `test-results` directory as `phase-1-browser-evidence` on every run, including before/after PNGs and failure traces when applicable. 32 selected before/after images are retained under `docs/qa/` in this candidate. Their release metadata is normalized as described above. The branch/commit and CI URL are recorded in the PR.
 
-No production merges, deployments, migrations, payment-provider changes, real payments or OS kiosk/unlock changes occurred. Physical-device acceptance and the three UI scope decisions in the release report remain open. Passing automation alone is not owner approval.
+No production merges, deployments, migrations, payment-provider changes, real payments or OS kiosk/unlock changes occurred. Physical-device acceptance and the owner release review in the release report remains open. Passing automation alone is not owner approval.
 
 | Viewport | Home pair | Shop pair | Cash pair | Admin pair |
 | --- | --- | --- | --- | --- |
@@ -78,3 +102,13 @@ No production merges, deployments, migrations, payment-provider changes, real pa
 | iphone-webkit | [before](qa/iphone-webkit/home-before.png) / [after](qa/iphone-webkit/home-after.png) | [before](qa/iphone-webkit/shop-before.png) / [after](qa/iphone-webkit/shop-after.png) | [before](qa/iphone-webkit/cash-before.png) / [after](qa/iphone-webkit/cash-after.png) | [before](qa/iphone-webkit/admin-dashboard-before.png) / [after](qa/iphone-webkit/admin-dashboard-after.png) |
 | android-chromium | [before](qa/android-chromium/home-before.png) / [after](qa/android-chromium/home-after.png) | [before](qa/android-chromium/shop-before.png) / [after](qa/android-chromium/shop-after.png) | [before](qa/android-chromium/cash-before.png) / [after](qa/android-chromium/cash-after.png) | [before](qa/android-chromium/admin-dashboard-before.png) / [after](qa/android-chromium/admin-dashboard-after.png) |
 | tablet-landscape | [before](qa/tablet-landscape/home-before.png) / [after](qa/tablet-landscape/home-after.png) | [before](qa/tablet-landscape/shop-before.png) / [after](qa/tablet-landscape/shop-after.png) | [before](qa/tablet-landscape/cash-before.png) / [after](qa/tablet-landscape/cash-after.png) | [before](qa/tablet-landscape/admin-dashboard-before.png) / [after](qa/tablet-landscape/admin-dashboard-after.png) |
+
+## Actual rc.3 control screenshots
+
+These 15 files show the expanded interface with synthetic records and real release labels; the earlier 32 normalized before/after layout files compare the pre-existing controls to immutable main.
+
+| Browser | Comments | Partial credits | Full credits | Member schedule | Admin appointment |
+| --- | --- | --- | --- | --- | --- |
+| Desktop | [view](qa/rc3/chromium/phase1-comments.png) | [view](qa/rc3/chromium/phase1-partial-credits.png) | [view](qa/rc3/chromium/phase1-full-credits.png) | [view](qa/rc3/chromium/phase1-member-schedule.png) | [view](qa/rc3/chromium/phase1-admin-appointment.png) |
+| iPhone | [view](qa/rc3/iphone-webkit/phase1-comments.png) | [view](qa/rc3/iphone-webkit/phase1-partial-credits.png) | [view](qa/rc3/iphone-webkit/phase1-full-credits.png) | [view](qa/rc3/iphone-webkit/phase1-member-schedule.png) | [view](qa/rc3/iphone-webkit/phase1-admin-appointment.png) |
+| Android | [view](qa/rc3/android-chromium/phase1-comments.png) | [view](qa/rc3/android-chromium/phase1-partial-credits.png) | [view](qa/rc3/android-chromium/phase1-full-credits.png) | [view](qa/rc3/android-chromium/phase1-member-schedule.png) | [view](qa/rc3/android-chromium/phase1-admin-appointment.png) |

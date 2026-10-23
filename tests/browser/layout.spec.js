@@ -22,6 +22,12 @@ test('approved split Register and Admin retain layout, styles, text and assets',
   return route.abort();
  });
  async function compare(name,selectors){
+  // The owner authorized one new Admin tab. Temporarily detach only that new
+  // control to compare every pre-existing tab/position against immutable main.
+  // Separate workflow tests capture the actual expanded interface.
+  const addedTab=page.locator('[data-phase1-control="comments-tab"]');
+  if(await addedTab.count())await addedTab.evaluate(e=>{window.layoutAddedTab=e;e.remove();});
+  if(name==='admin-sales')await before.evaluate(()=>{document.querySelectorAll('#salesHistory tbody tr').forEach((row,i)=>{const s=data.sales[i];if(s?.payment==='roostcredit')row.children[2].textContent=(s.source==='pickup'?'Pickup':'Store')+' · Roost Credits';});});
   await before.locator('#settingsTab .danger-zone .hint').evaluateAll(es=>es.forEach(e=>e.textContent='Store records are saved in the shared Supabase database.'));
   // Issue #2 explicitly forbids customer stock counts. Keep the approved stock
   // line's geometry/styles, but compare its required availability-only wording.
@@ -30,7 +36,7 @@ test('approved split Register and Admin retain layout, styles, text and assets',
   await page.locator('#rrCloudBadge').evaluate(e=>e.style.opacity='0').catch(()=>{});
   await before.locator('#rrCloudBadge').evaluate(e=>e.style.opacity='0').catch(()=>{});
   const measure=async p=>p.evaluate(selectors=>selectors.flatMap(selector=>[...document.querySelectorAll(selector)].filter(e=>e.getBoundingClientRect().width&&e.getBoundingClientRect().height).map(e=>{
-   const r=e.getBoundingClientRect(),c=getComputedStyle(e);return {selector,text:e.textContent.replace(/v\d[\w. -]*/g,'VERSION').trim(),x:r.x,y:r.y,w:r.width,h:r.height,font:c.fontFamily,size:c.fontSize,weight:c.fontWeight,color:c.color,background:c.backgroundColor,radius:c.borderRadius};
+   const r=e.getBoundingClientRect(),c=getComputedStyle(e);return {selector,text:e.innerText.replace(/v\d[\w. -]*/g,'VERSION').trim(),x:r.x,y:r.y,w:r.width,h:r.height,font:c.fontFamily,size:c.fontSize,weight:c.fontWeight,color:c.color,background:c.backgroundColor,radius:c.borderRadius};
   })),selectors);
   const a=await measure(before),b=await measure(page);expect(b,name).toEqual(a);
   // Versions and connection messages intentionally differ. Normalize only these
@@ -41,6 +47,7 @@ test('approved split Register and Admin retain layout, styles, text and assets',
   await expect(page).toHaveScreenshot(name+'.png',{...options(page),maxDiffPixels:0});
   for(const [label,p] of [['before',before],['after',page]]){const file=info.outputPath(name+'-'+label+'.png');await p.screenshot({path:file,fullPage:true});await info.attach(name+'-'+label,{path:file,contentType:'image/png'});}
   if(name==='shop')await before.locator('.rr48-stock').evaluateAll((es,texts)=>es.forEach((e,i)=>e.textContent=texts[i]),originalStock);
+  await page.evaluate(()=>{if(window.layoutAddedTab){document.querySelector('#adminScreen .tabs').append(window.layoutAddedTab);delete window.layoutAddedTab;}});
  }
  await before.goto('/original/register-cloud-beta.html');await page.goto('/register-cloud-beta.html');await settled(page);await settled(before);
  await compare('home',['#kioskHome button','#kioskHome img']);

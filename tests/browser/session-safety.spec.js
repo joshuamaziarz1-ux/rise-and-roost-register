@@ -8,15 +8,16 @@ test('a catalog update during signup cannot cancel the new member session',async
  await shop(page);let release,started;const held=new Promise(r=>release=r),seen=new Promise(r=>started=r);
  await page.route('**/functions/v1/rise-roost-sync',async route=>{if(route.request().postDataJSON().action==='member_signup'){const response=await route.fetch();started();await held;await route.fulfill({response});}else await route.continue();});
  await page.evaluate(()=>RRRoost.openSignup());await page.locator('#rrJoinName').fill('Catalog Race Member');await page.locator('#rrJoinPhone').fill('20255504'+String(testInfo.project.name==='chromium'?0:testInfo.project.name==='iphone-webkit'?1:2).padStart(2,'0'));await page.locator('#rrJoinSubmit').click();await seen;
- const state=await rpc(page,'admin_load',{},true),before=state.data.items.find(x=>x.id==='item-other');await rpc(page,'admin_patch',{requestId:crypto.randomUUID(),changes:[{collection:'items',id:before.id,before,after:{...before,stock:before.stock+1}}]},true);await page.evaluate(()=>RRCloud.refreshCatalog());
- await expect.poll(()=>page.evaluate(()=>data.items.find(x=>x.id==='item-other').stock)).toBe(before.stock+1);release();await expect(page.locator('#rrShopMemberBar')).toContainText('Catalog Race Member');expect(await page.evaluate(()=>!!sessionStorage.getItem('rr.memberToken'))).toBe(true);
+ const state=await rpc(page,'admin_load',{},true),before=state.data.items.find(x=>x.id==='item-other'),visibleBefore=(await rpc(page,'catalog')).items.find(x=>x.id===before.id).stock;await rpc(page,'admin_patch',{requestId:crypto.randomUUID(),changes:[{collection:'items',id:before.id,before,after:{...before,stock:before.stock+1}}]},true);await page.evaluate(()=>RRCloud.refreshCatalog());
+ await expect.poll(()=>page.evaluate(()=>data.items.find(x=>x.id==='item-other').stock)).toBe(visibleBefore+1);release();await expect(page.locator('#rrShopMemberBar')).toContainText('Catalog Race Member');expect(await page.evaluate(()=>!!sessionStorage.getItem('rr.memberToken'))).toBe(true);
 });
 
 test('a delayed sign-in response cannot restore an account after logout',async({page})=>{
  await shop(page);let release,started;const held=new Promise(r=>release=r),seen=new Promise(r=>started=r);
+ await page.evaluate(()=>{const api=RRCloud.api;RRCloud.api=(action,...args)=>{const p=api(action,...args);if(action==='member_lookup_phone')window.heldMemberResult=p.then(()=>null,e=>({stale:e.stale}));return p;};});
  await page.route('**/functions/v1/rise-roost-sync',async route=>{if(route.request().postDataJSON().action==='member_lookup_phone'){const response=await route.fetch();started();await held;await route.fulfill({response});}else await route.continue();});
  await page.evaluate(()=>RRRoost.open());await page.locator('#rrPhoneSignIn').fill('2025550100');await page.locator('#rrPhoneGo').click();await seen;await page.evaluate(()=>RRRoost.logout());release();
- await expect(page.locator('#rrPhoneGo')).toBeEnabled();expect(await page.evaluate(()=>sessionStorage.getItem('rr.memberToken'))).toBeNull();expect(await page.evaluate(()=>data.customers.length+data.sales.length)).toBe(0);await expect(page.locator('#rrShopMemberBar')).not.toContainText('Test Member');
+ expect(await page.evaluate(()=>window.heldMemberResult)).toEqual({stale:true});await expect(page.locator('#rrRoostBody')).toBeEmpty();expect(await page.evaluate(()=>sessionStorage.getItem('rr.memberToken'))).toBeNull();expect(await page.evaluate(()=>data.customers.length+data.sales.length)).toBe(0);await expect(page.locator('#rrShopMemberBar')).not.toContainText('Test Member');
 });
 test('a stale account expiry cannot sign out the next member',async({page})=>{
  await shop(page);await signIn(page);let release,started;const held=new Promise(r=>release=r),seen=new Promise(r=>started=r);let captured=false;
@@ -26,8 +27,9 @@ test('a stale account expiry cannot sign out the next member',async({page})=>{
 });
 test('a delayed committed return cannot repopulate private data after logout',async({page})=>{
  await shop(page);await signIn(page);await page.evaluate(()=>RRRoost.open());let release,started;const held=new Promise(r=>release=r),seen=new Promise(r=>started=r);
+ await page.evaluate(()=>{const api=RRCloud.api;RRCloud.api=(action,...args)=>{const p=api(action,...args);if(action==='roost_return')window.heldMemberResult=p.then(()=>null,e=>({stale:e.stale}));return p;};});
  await page.route('**/functions/v1/rise-roost-sync',async route=>{if(route.request().postDataJSON().action==='roost_return'){const response=await route.fetch();started();await held;await route.fulfill({response});}else await route.continue();});
- await page.locator('[data-ret-plus="egg-carton"]').click();await page.locator('#rrSubmitReturns').click();await seen;await page.evaluate(()=>RRRoost.logout());release();await expect(page.locator('#rrSubmitReturns')).toBeEnabled();expect(await page.evaluate(()=>data.customers.length+data.roostReturns.length)).toBe(0);expect(await page.evaluate(()=>sessionStorage.getItem('rr.memberToken'))).toBeNull();
+ await page.locator('[data-ret-plus="egg-carton"]').click();await page.locator('#rrSubmitReturns').click();await seen;await page.evaluate(()=>RRRoost.logout());release();expect(await page.evaluate(()=>window.heldMemberResult)).toEqual({stale:true});await expect(page.locator('#rrRoostBody')).toBeEmpty();expect(await page.evaluate(()=>data.customers.length+data.roostReturns.length)).toBe(0);expect(await page.evaluate(()=>sessionStorage.getItem('rr.memberToken'))).toBeNull();
 });
 test('an open Roost account updates eligible returns and pickup cards automatically',async({page})=>{
  await shop(page);await signIn(page);await page.evaluate(()=>RRRoost.open());const state=await rpc(page,'admin_load',{},true),settings=state.data.settings.roostCreditSettings;
@@ -39,6 +41,11 @@ test('an open Roost account updates eligible returns and pickup cards automatica
  await rpc(page,'admin_import',{requestId:crypto.randomUUID(),records:[{collection:'pickups',id:order.id,value:order}]},true);await expect(page.locator('#rrPickupList')).toContainText('Test Jam');await expect(page.locator('#rrPickupList')).toContainText(await page.evaluate(date=>new Date(date).toLocaleString(),order.scheduledAt));await expect(page.locator('#rrPickupList')).not.toContainText('NEVER-DISPLAY');
  const latest=(await rpc(page,'admin_load',{},true)).data.settings.roostCreditSettings;await rpc(page,'admin_patch',{requestId:crypto.randomUUID(),changes:[{collection:'settings',id:'roostCreditSettings',before:{id:'roostCreditSettings',value:latest},after:{id:'roostCreditSettings',value:settings}}]},true);
  await expect(page.locator('[data-ret-plus="synthetic-bottle"]')).toHaveCount(0);
+ const present=(await rpc(page,'admin_load',{},true)).data.settings.roostCreditSettings;
+ await rpc(page,'admin_patch',{requestId:crypto.randomUUID(),changes:[{collection:'settings',id:'roostCreditSettings',before:{id:'roostCreditSettings',value:present},after:{id:'roostCreditSettings',value:{...present,returnTypes:[]}}}]},true);
+ await expect(page.locator('#rrReturnList')).toContainText('No returns are currently eligible');await expect(page.locator('#rrSubmitReturns')).toBeDisabled();
+ const empty=(await rpc(page,'admin_load',{},true)).data.settings.roostCreditSettings;await rpc(page,'admin_patch',{requestId:crypto.randomUUID(),changes:[{collection:'settings',id:'roostCreditSettings',before:{id:'roostCreditSettings',value:empty},after:{id:'roostCreditSettings',value:settings}}]},true);await expect(page.locator('#rrSubmitReturns')).toBeEnabled();await expect(page.locator('[data-ret-plus="egg-carton"]')).toBeVisible();
+
  const saved=(await rpc(page,'admin_load',{},true)).data.pickups.find(x=>x.id===order.id);await rpc(page,'admin_patch',{requestId:crypto.randomUUID(),changes:[{collection:'pickups',id:order.id,before:saved,after:{...saved,status:'cancelled',completed:new Date().toISOString()}}]},true);await expect(page.locator('#rrPickupList')).toContainText('Cancelled');
 });
 test('pending Admin recovery cannot be submitted by a different approved account',async({page})=>{

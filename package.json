@@ -20,5 +20,5 @@
     "esbuild": "0.25.12",
     "supabase": "2.121.0"
   },
-  "version": "5.2.0-rc.2"
+  "version": "5.2.0-rc.3"
 }
