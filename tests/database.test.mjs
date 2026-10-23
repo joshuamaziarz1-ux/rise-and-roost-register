@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
 import {database,ADMIN,OTHER} from './database.mjs';
 const request=payload=>({requestId:crypto.randomUUID(),...payload});
 test('PostgreSQL transactions, permissions and data preservation',async t=>{
@@ -57,6 +58,28 @@ test('PostgreSQL transactions, permissions and data preservation',async t=>{
     const done=request({code:'TEST1'});await rpc('pickup_complete',done);await rpc('pickup_complete',done);assert.equal((await state()).items.find(x=>x.id==='item-test').stock,stock-2);
     const reward=await rpc('reward_redeem',request({}),null,'member-test');assert.equal((await state()).customers.find(x=>x.id==='member-test').cartonCredits,0);
     await rpc('admin_void',request({id:reward.result.saleId}),ADMIN);assert.equal((await state()).customers.find(x=>x.id==='member-test').cartonCredits,12);
+  });
+  await t.test('legacy write privileges are removed from every canonical table, including admin and revision records',async()=>{
+    const before=await state();
+    // Reproduce the live legacy grants, including privileges that bypass RLS.
+    await pool.query('grant insert,update,delete,truncate,references,trigger on public.admins,public.store_revision_public to public,anon,authenticated');
+    await pool.query(await fs.readFile('supabase/legacy-guard.sql','utf8'));
+    const {rows}=await pool.query(`select t.tablename,r.role,p.privilege
+      from pg_tables t cross join (values ('anon'),('authenticated')) r(role)
+      cross join (values ('INSERT'),('UPDATE'),('DELETE'),('TRUNCATE'),('REFERENCES'),('TRIGGER')) p(privilege)
+      where t.schemaname='public' and has_table_privilege(r.role,format('%I.%I',t.schemaname,t.tablename),p.privilege)
+      order by t.tablename,r.role,p.privilege`);
+    assert.deepEqual(rows,[],'Browser roles must have no inherited or direct canonical write privilege');
+    const conn=await pool.connect();
+    try{for(const role of ['anon','authenticated']){
+      await conn.query('begin');
+      try{
+        await conn.query('set local role '+role);
+        assert.equal((await conn.query('select * from public.store_revision_public')).rowCount,1,'Realtime revision reads must remain available');
+        await assert.rejects(()=>conn.query('truncate table public.admins,public.store_revision_public'),/permission denied/);
+      }finally{await conn.query('rollback');}
+    }}finally{conn.release();}
+    assert.deepEqual(await state(),before,'Permission hardening must preserve all store data and service access');
   });
   await t.test('RLS and service-only functions reject anon and unauthorized authenticated accounts',async()=>{
     await assert.rejects(()=>rpc('admin_load',{},OTHER),/UNAUTHORIZED/);

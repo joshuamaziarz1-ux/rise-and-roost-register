@@ -47,4 +47,4 @@ Scheduling preserves saved access-code fields. This release adds no PIN delivery
 
 ## Acceptance still required
 
-Review [the release report](PHASE-1-RELEASE.md), [QA evidence](PHASE-1-QA.md) and actual-control screenshots before approving an isolated candidate preview. Real iPhone/Android/tablet behavior and approved-admin magic-link delivery remain unverified. The Supabase connection must be reauthenticated before repeating the live read-only audit or preparing that preview. Production cutover requires separate explicit approval.
+Review [the release report](PHASE-1-RELEASE.md), [QA evidence](PHASE-1-QA.md) and actual-control screenshots before approving an isolated candidate preview. Real iPhone/Android/tablet behavior and approved-admin magic-link delivery remain unverified. Supabase access and the fresh read-only production audit were completed on October 23; all 18 table fingerprints remained unchanged. Production cutover requires separate explicit approval.

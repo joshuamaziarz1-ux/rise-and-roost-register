@@ -10,7 +10,8 @@ revoke insert,update,delete,truncate,references,trigger on
  public.brands,public.items,public.customers,public.pickups,public.pickup_items,
  public.sales,public.sale_items,public.stock_log,public.carton_returns,public.carton_rewards,
  public.roost_returns,public.roost_credit_uses,public.customer_comments,
- public.payment_methods,public.settings,public.pickup_appointments
+ public.payment_methods,public.settings,public.pickup_appointments,
+ public.admins,public.store_revision_public
 from public,anon,authenticated;
 -- Explicitly retain service-only access to all legacy privileged business RPCs.
 -- Existing deployments may have older grants than the reconstructed fixture.

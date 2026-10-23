@@ -14,6 +14,14 @@ On October 22 the owner selected option 2: add the three missing controls using 
 
 See [Using the Phase 1 controls](PHASE-1-CONTROLS.md) for the operator steps. The original stylesheets, branding, assets, landscape CSS and manifest remain unchanged. Existing tab order is retained, with the new tab appended. Layout QA temporarily detaches that single authorized new tab while comparing pre-existing geometry to immutable main; separate actual-interface screenshots capture the additions. Browser emulation and synthetic authentication do not replace physical-device and real magic-link acceptance.
 
+## October 23 read-only production audit
+
+The Supabase connection now reaches the correct healthy `RiseAndRoost` project. All 18 production-table fingerprints match October 22 and remained unchanged during the fresh audit. Production API version 13, older preview version 3 and the October 17 latest migration are unchanged; this candidate remains unshipped. The structured evidence is `phase1-production-preservation-20261023.json`.
+
+The live grants audit found two omissions in the candidate's legacy-write revocation list: `admins` and `store_revision_public`. Both are now included in `legacy-guard.sql` and the generated migration. A failing-then-passing isolated regression checks every canonical table, actual denied role-level truncation, preserved public revision reads and unchanged store/service access. `npm test` now passes 28 checks and the preview-preservation rehearsal passes; the complete suite contains 132 checks. No interface, stylesheet or checkout method changed in this follow-up.
+
+No production writes, DDL, deployments or Auth-setting changes were performed. Existing legacy write grants and disabled leaked-password protection remain production findings until separately approved changes. Physical-device/magic-link acceptance still needs an isolated candidate preview and explicit deployment approval.
+
 ## October 22 consolidation and fixes
 
 The existing `codex/phase-1-release-candidate` branch and PR #3 are retained as the single Phase 1 candidate. Its two previously tested rc.1 commits (`e263962`, `674b73e`) already descend from the latest main. This avoids a competing RC or an indiscriminate PR #1 merge. All current remote branch heads were fetched again; main remains unchanged. Six deployed UI/data/CSS/manifest files again matched main after newline normalization. The October 15 private Sites preview is an older implementation and **is not this candidate**.
@@ -63,7 +71,7 @@ The October 17 production migration `fix_checkout_unassigned_customer_record` wa
 
 ## Release status
 
-The prior three UI scope gaps are now implemented under the owner's explicit option-2 authorization. Keep PR #3 draft until final automated results, actual expanded-interface screenshots, physical-device/magic-link acceptance and the owner release review are complete. No production or preview cutover, schema/function deployment, customer communication or Phase 2 work is authorized by that scope choice. The Supabase connector requires reauthentication as of October 23; repeat the read-only production/version audit after reconnecting, before any approved preview or cutover. The October 22 preservation evidence is retained as historical evidence.
+The prior three UI scope gaps are now implemented under the owner's explicit option-2 authorization. Keep PR #3 draft until final automated results, actual expanded-interface screenshots, physical-device/magic-link acceptance and the owner release review are complete. No production or preview cutover, schema/function deployment, customer communication or Phase 2 work is authorized by that scope choice. Supabase access and the read-only production/version audit were successfully completed on October 23. Preserve both the October 22 and October 23 evidence and repeat the audit before any approved cutover if production state changes.
 
 ## Existing-data preservation and approved cutover plan
 
