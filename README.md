@@ -2,9 +2,19 @@
 
 Self-service cash register, inventory, pickup, vendor, and customer rewards system for Rise & Roost.
 
-Current version: **v5**
+Candidate version: **5.2.0-rc.3** — draft for [Issue #2](https://github.com/joshuamaziarz1-ux/rise-and-roost-register/issues/2). Production remains on main until explicit owner approval.
 
-## v5 features
+Current screens are `register-cloud-beta.html` and `admin-cloud-beta.html`. See [source audit, file map, rollback and device checklist](docs/PHASE-1-RELEASE.md) and [executed QA report](docs/PHASE-1-QA.md). [Using the new controls](docs/PHASE-1-CONTROLS.md) covers Comments, Roost credits and pickup appointments.
+
+```powershell
+npm ci
+node node_modules/@playwright/test/cli.js install chromium webkit
+npm run test:all
+```
+
+Tests use disposable local PostgreSQL and synthetic data. No production credentials or writes are needed. `npm run test:serve` provides a local synthetic test server; its simulated Admin sessions are for automation, not real email delivery. The fullscreen manifest does not provide OS kiosk lockdown or a service-worker offline app shell.
+
+## Historical v5 features (not all controls are present in the approved current split UI)
 
 - Simple kiosk-style home screen with Shop, Pickup Order, and The Roost
 - Self-serve tap-to-buy checkout and exact-cash checkout

@@ -1,0 +1,96 @@
+{
+  "date": "2026-10-23",
+  "projectId": "vveahfizojxwfwnqiuyv",
+  "projectName": "RiseAndRoost",
+  "status": "read_only_audit_complete",
+  "startedAt": "2026-10-23T19:54:46Z",
+  "completedAt": "2026-10-23T19:59:17Z",
+  "method": "Read-only full-record aggregate fingerprints; no raw business records exported",
+  "tables": [
+    "brands",
+    "items",
+    "customers",
+    "settings",
+    "payment_methods",
+    "pickups",
+    "pickup_items",
+    "pickup_appointments",
+    "sales",
+    "sale_items",
+    "stock_log",
+    "carton_returns",
+    "carton_rewards",
+    "roost_returns",
+    "roost_credit_uses",
+    "customer_comments",
+    "admins",
+    "store_revision_public"
+  ],
+  "allFingerprintsUnchangedDuringAudit": true,
+  "allFingerprintsMatchOctober22": true,
+  "publicTableCountWithRlsEnabled": 18,
+  "productionFunction": {
+    "name": "rise-roost-api",
+    "version": 13
+  },
+  "olderPreviewFunction": {
+    "name": "rise-roost-sync-preview",
+    "version": 3
+  },
+  "latestMigration": {
+    "version": "20261017020221",
+    "name": "fix_checkout_unassigned_customer_record"
+  },
+  "candidateMigrationInstalled": false,
+  "legacyBrowserWriteGrantsStillPresentInProduction": true,
+  "candidateAdditionalRevocations": [
+    "admins",
+    "store_revision_public"
+  ],
+  "candidateRegression": "Reproduced inherited/direct mutation privileges before correction; npm test passes 28 checks after correction, including denied role-level TRUNCATE and retained revision SELECT/service access",
+  "advisories": [
+    {
+      "name": "auth_leaked_password_protection",
+      "level": "WARN",
+      "count": 1,
+      "remediation": "https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection"
+    },
+    {
+      "name": "rls_enabled_no_policy",
+      "level": "INFO",
+      "count": 10,
+      "interpretation": "Service-only access pattern; public/preview helper tables have no browser row policies",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy"
+    },
+    {
+      "name": "unindexed_foreign_keys",
+      "level": "INFO",
+      "count": 10,
+      "schemas": [
+        "rr_preview"
+      ],
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0001_unindexed_foreign_keys"
+    },
+    {
+      "name": "unused_index",
+      "level": "INFO",
+      "count": 8,
+      "schemas": [
+        "public"
+      ],
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index"
+    }
+  ],
+  "logReview": {
+    "method": "Aggregate source counts only; no raw log payloads, personal data or request bodies exported",
+    "windowStart": "2026-10-23T18:00:00Z",
+    "windowEnd": "2026-10-23T19:56:00Z",
+    "doesNotEstablishZeroRuntimeErrors": true
+  },
+  "productionWritesPerformed": false,
+  "productionDDLPerformed": false,
+  "deploymentsPerformed": false,
+  "authSettingsChanged": false,
+  "rawBusinessRecordsExported": false,
+  "realCustomerDataUsedInTests": false
+}

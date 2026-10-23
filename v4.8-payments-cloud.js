@@ -1,6 +1,11 @@
 (()=>{
   let selectedPayment=null;
-  const labels={cash:'Cash',cashapp:'Cash App',paypal:'PayPal',applepay:'Apple Pay',googlepay:'Google Pay'};
+  let paymentEntries=[],paymentDue=0,paymentBusy=false;
+  let useCredits=false,paymentMemberId=null,paymentQuote=null;
+  const member=()=>window.RRRoost?.member||null;
+  const labels={cash:'Cash',cashapp:'Cash App',paypal:'PayPal',applepay:'Apple Pay',googlepay:'Google Pay',roostcredit:'Roost Credits'};
+  function quote(){const gross=paymentEntries.reduce((sum,x)=>sum+Number(x.item.price)*x.qty,0),c=member();paymentQuote=window.RRModel.creditQuote(gross,useCredits?c?.cartonCredits:0,data.settings?.roostCreditSettings);paymentDue=paymentQuote.total;}
+  function creditSummary(){return useCredits&&paymentQuote.creditsUsed?`<p class="hint">${paymentQuote.creditsUsed} Roost credits · ${money(paymentQuote.creditDiscount)} off · ${money(paymentDue)} remaining</p>`:'';}
   const ensureSettings=()=>{ data.settings=data.settings&&typeof data.settings==='object'?data.settings:{}; data.settings.paymentQrs=data.settings.paymentQrs&&typeof data.settings.paymentQrs==='object'?data.settings.paymentQrs:{}; return data.settings.paymentQrs; };
   const qrFor=m=>ensureSettings()[m]||'';
   const paymentTotal=(method)=>{
@@ -23,14 +28,21 @@
       @media(max-width:620px){.rr48-pay-methods{grid-template-columns:1fr}.rr48-pay-method{min-height:76px}.rr48-payment-admin-grid{grid-template-columns:1fr}}
     `;document.head.appendChild(s);
   }
-  function payChooser(){
+  function payChooser(reset=true){
+    if(window.__RR_CLOUD_MODE&&!window.RRCloud?.ready)return alert('Reconnect before paying.');
+    if(window.RRCloud?.pendingCheckout)return window.RRCloud.recoverPending();
     selectedPayment=null;
+    if(reset){paymentEntries=entries().map(x=>({item:{...x.item},qty:x.qty}));paymentMemberId=member()?.id||null;useCredits=false;}
+    if((member()?.id||null)!==paymentMemberId)return alert('The Roost account changed. Return to your cart and review payment again.');
+    quote();
     const o=document.getElementById('payOverlay'); if(!o)return;
     o.innerHTML=`<div class="modal rr48-payment-modal">
       <div class="rr48-pay-logo"><img src="assets/rise-roost-logo.webp?v=4.8.6" alt="Rise & Roost"></div>
       <div class="rr48-payment-question">CHOOSE PAYMENT</div>
-      <div class="big rr48-pay-total">${money(total())}</div>
-      <div class="rr48-pay-methods">
+      <div class="big rr48-pay-total">${money(paymentDue)}</div>
+      ${member()&&Number(member().cartonCredits)>0?`<div class="notice" id="rr48CreditOption"><label class="check"><input type="checkbox" id="rr48UseCredits" ${useCredits?'checked':''}> Use my Roost credits</label><div class="hint">${Number(member().cartonCredits)} credits available · ${money(paymentQuote.creditValue)} each</div><div id="rr48CreditSummary" role="status">${creditSummary()}</div></div>`:''}
+      <button class="btn primary wide ${useCredits&&paymentDue===0?'':'hidden'}" id="rr48PayCredits">CONTINUE WITH ROOST CREDITS</button>
+      <div class="rr48-pay-methods ${useCredits&&paymentDue===0?'hidden':''}">
         <button class="rr48-pay-method cash" data-method="cash">CASH</button>
         <button class="rr48-pay-method cashapp" data-method="cashapp">CASH APP</button>
         <button class="rr48-pay-method paypal" data-method="paypal">PAYPAL</button>
@@ -41,16 +53,20 @@
     </div>`;
     o.classList.remove('hidden');
     o.querySelectorAll('[data-method]').forEach(b=>b.onclick=()=>showMethod(b.dataset.method));
+    document.getElementById('rr48PayCredits').onclick=()=>showMethod('cash');
+    const credits=document.getElementById('rr48UseCredits');if(credits)credits.onchange=()=>{useCredits=credits.checked;quote();o.querySelector('.rr48-pay-total').textContent=money(paymentDue);document.getElementById('rr48CreditSummary').innerHTML=creditSummary();o.querySelector('.rr48-pay-methods').classList.toggle('hidden',useCredits&&paymentDue===0);document.getElementById('rr48PayCredits').classList.toggle('hidden',!(useCredits&&paymentDue===0));};
     document.getElementById('rr48BackCart').onclick=()=>o.classList.add('hidden');
   }
   function showMethod(method){
     selectedPayment=method;
-    const o=document.getElementById('payOverlay'),amt=money(total()),qr=qrFor(method);
-    if(method==='cash'){
+    const o=document.getElementById('payOverlay'),amt=money(paymentDue),qr=qrFor(method);
+    if(useCredits&&paymentDue===0){
+      o.innerHTML=`<div class="modal rr48-payment-modal"><div class="rr48-pay-logo"><img src="assets/rise-roost-logo.webp?v=4.8.6" alt=""></div><div class="rr48-payment-question">PAY WITH ROOST CREDITS</div><div class="big rr48-pay-total">${money(paymentDue)}</div>${creditSummary()}<p class="hint">Your credits cover this purchase.</p><div class="rr48-pay-actions"><button class="btn primary rr48-confirm-cash" id="rr48ConfirmPay">CONFIRM PURCHASE WITH ROOST CREDITS</button><button class="btn ghost" id="rr48BackMethods">← CHANGE PAYMENT METHOD</button></div></div>`;
+    }else if(method==='cash'){
       o.innerHTML=`<div class="modal rr48-payment-modal">
         <div class="rr48-pay-logo"><img src="assets/rise-roost-logo.webp?v=4.8.6" alt=""></div>
         <div class="rr48-pay-kicker">PLEASE PUT</div><div class="big rr48-pay-total">${amt}</div>
-        <div class="rr48-pay-box">IN THE CASH BOX</div>
+        <div class="rr48-pay-box">IN THE CASH BOX</div>${creditSummary()}
         <div class="rr48-pay-help">Exact cash only — no change is available.</div>
         <div class="rr48-pay-actions"><button class="btn primary rr48-confirm-cash" id="rr48ConfirmPay">✓ I PUT ${amt} IN THE CASH BOX</button><button class="btn ghost" id="rr48BackMethods">← CHANGE PAYMENT METHOD</button></div>
       </div>`;
@@ -59,7 +75,7 @@
       o.innerHTML=`<div class="modal rr48-payment-modal">
         <div class="rr48-pay-logo"><img src="assets/rise-roost-logo.webp?v=4.8.6" alt=""></div>
         <div class="rr48-payment-question">PAY WITH ${brand.toUpperCase()}</div>
-        <div class="rr48-send-total">Send exactly <strong>${amt}</strong></div>
+        <div class="rr48-send-total">Send exactly <strong>${amt}</strong></div>${creditSummary()}
         <div class="rr48-digital-pay">
           ${qr?`<img class="rr48-qr" src="${qr}" alt="${brand} QR code">`:`<div class="rr48-qr-missing">${brand} QR CODE<br>will appear here after it is added in Admin → Settings.</div>`}
           <div class="rr48-method-note">Scan the code, enter the amount shown above, and send the payment. Then confirm below.</div>
@@ -67,43 +83,39 @@
         <div class="rr48-pay-actions" style="margin-top:14px"><button class="btn primary rr48-confirm-cash" id="rr48ConfirmPay" ${qr?'':'disabled'}>✓ I SENT ${amt} WITH ${brand.toUpperCase()}</button><button class="btn ghost" id="rr48BackMethods">← CHANGE PAYMENT METHOD</button></div>
       </div>`;
     }
-    document.getElementById('rr48BackMethods').onclick=payChooser;
+    document.getElementById('rr48BackMethods').onclick=()=>payChooser(false);
     const c=document.getElementById('rr48ConfirmPay'); if(c)c.onclick=()=>completePayment(method);
   }
   async function completePayment(method){
-    const e=entries(); if(!e.length)return;
-    for(const x of e)if(x.qty>available(x.item))return alert(`${x.item.name} no longer has enough available inventory.`);
+    if(paymentBusy)return;
+    if((member()?.id||null)!==paymentMemberId)return alert('The Roost account changed. Return to your cart and review payment again.');
+    const e=paymentEntries; if(!e.length)return;
+    paymentBusy=true;
     const button=document.getElementById('rr48ConfirmPay');
     if(button){button.disabled=true;button.textContent='SAVING PURCHASE…'}
+    const back=document.getElementById('rr48BackMethods');if(back)back.disabled=true;
 
     if(window.RRCloud&&typeof window.RRCloud.checkout==='function'){
       try{
-        await window.RRCloud.checkout(method,e);
-        cart={};
+        const result=await window.RRCloud.checkout(method,e,{expectedDue:paymentDue,expectedMemberId:paymentMemberId,useCredits,...useCredits?{expectedCreditsUsed:paymentQuote.creditsUsed,expectedCreditValue:paymentQuote.creditValue}:{}});
+        paymentBusy=false;cart={};
         document.getElementById('payOverlay')?.classList.add('hidden');
         const thanks=document.getElementById('thanks'); if(thanks)thanks.classList.remove('hidden');
         renderAll();
-        const copy=document.querySelector('#thanks .rr48-thanks-copy'); if(copy)copy.textContent=`Your ${labels[method]} purchase is complete.`;
+        const copy=document.querySelector('#thanks .rr48-thanks-copy'); if(copy)copy.textContent=`Your ${labels[result.payment]||labels[method]} purchase is complete.`;
         let n=8; const cd=document.getElementById('rr48Countdown'); if(cd)cd.textContent=`Returning to the home screen in ${n} seconds…`;
         const timer=setInterval(()=>{n--;const el=document.getElementById('rr48Countdown');if(el)el.textContent=`Returning to the home screen in ${n} second${n===1?'':'s'}…`;if(n<=0){clearInterval(timer);document.getElementById('doneThanks')?.click()}},1000);
         return;
       }catch(err){
+        paymentBusy=false;
+        if(back)back.disabled=false;
         alert((err&&err.message)||'The purchase could not be saved. Please ask Danielle for help before trying again.');
-        if(button){button.disabled=false;button.textContent=`✓ I ${method==='cash'?'PUT '+money(total())+' IN THE CASH BOX':'SENT '+money(total())+' WITH '+(labels[method]||method).toUpperCase()}`}
+        if(button){button.disabled=false;button.textContent=useCredits&&paymentDue===0?'CONFIRM PURCHASE WITH ROOST CREDITS':`✓ I ${method==='cash'?'PUT '+money(paymentDue)+' IN THE CASH BOX':'SENT '+money(paymentDue)+' WITH '+(labels[method]||method).toUpperCase()}`}
         return;
       }
     }
 
-    const lines=e.map(x=>({itemId:x.item.id,itemName:x.item.name,brandId:x.item.brandId,brandName:brand(x.item.brandId)?.name||'Unknown',price:Number(x.item.price),qty:x.qty}));
-    e.forEach(x=>{x.item.stock=Math.max(0,x.item.stock-x.qty);logStock(x.item,-x.qty,`Customer sale - ${labels[method]||method}`)});
-    recordSale(lines,{payment:method,source:'store'});
-    cart={};persist();
-    document.getElementById('payOverlay')?.classList.add('hidden');
-    const thanks=document.getElementById('thanks'); if(thanks)thanks.classList.remove('hidden');
-    renderAll();
-    const copy=document.querySelector('#thanks .rr48-thanks-copy'); if(copy)copy.textContent=`Your ${labels[method]} purchase is complete.`;
-    let n=8; const cd=document.getElementById('rr48Countdown'); if(cd)cd.textContent=`Returning to the home screen in ${n} seconds…`;
-    const timer=setInterval(()=>{n--;const el=document.getElementById('rr48Countdown');if(el)el.textContent=`Returning to the home screen in ${n} second${n===1?'':'s'}…`;if(n<=0){clearInterval(timer);document.getElementById('doneThanks')?.click()}},1000);
+    paymentBusy=false;alert('Cloud connection required before confirming a purchase.');if(button)button.disabled=false;
   }
   async function qrData(file){
     if(!file)return '';
@@ -179,6 +191,8 @@
     const old=window.renderDashboard;
     if(old&&!old.__rr48pay){const wrapped=function(){old();injectDashboard()};wrapped.__rr48pay=true;window.renderDashboard=wrapped}
   }
+  // Install after kiosk initialization; checkout is safe even before window load.
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',apply,{once:true});else apply();
   window.addEventListener('load',()=>{let n=0;const t=setInterval(()=>{apply();if(++n>=8)clearInterval(t)},500)});
   if(document.readyState==='complete')apply();
 })();

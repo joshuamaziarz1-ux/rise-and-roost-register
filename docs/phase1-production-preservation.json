@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-19",
+  "method": "read-only Supabase queries before/after isolated preview smoke",
+  "tables": [
+    "brands",
+    "items",
+    "customers",
+    "settings",
+    "payment_methods",
+    "pickups",
+    "pickup_items",
+    "pickup_appointments",
+    "sales",
+    "sale_items",
+    "stock_log",
+    "carton_returns",
+    "carton_rewards",
+    "roost_returns",
+    "roost_credit_uses",
+    "customer_comments",
+    "admins",
+    "store_revision_public"
+  ],
+  "allFingerprintsUnchanged": true,
+  "rawBusinessRecordsExported": false,
+  "productionWritesPerformed": false,
+  "previewFunction": "rise-roost-sync-preview",
+  "previewFunctionVersion": 3,
+  "productionFunction": "rise-roost-api",
+  "productionFunctionVersion": 13
+}

@@ -1,0 +1,23 @@
+Fetched 2026-10-19; all existing heads preserved.
+origin/backup-v4.10.0-clean 23f0df7a10b1a7f3a40cf1977939fc59049bbd4f Publish clean single-controller v4.10.0 preview
+origin/backup-v4.10.1-clean 8776e631d2f508eb90c175dfdb08b15f449c84ec Publish cleaned customer copy v4.10.1
+origin/backup-v4.10.2-roost a6a9ab3c2c63640b29fa25b62e22cfecbfd55f25 Publish polished The Roost v4.10.2
+origin/backup-v4.8.7-working 0dbd91e79235edff6ae85ae8067a8e67a0919139 Publish tablet landscape v4.8.7 preview
+origin/backup-v4.8.9-working 7b6d0abf13ec3b4847857d05fa005ec05ea2bacb Publish clean centered home buttons v4.8.9
+origin/backup-v4.9.10-glitch ac30583e4a5c22dcb3173f3fcfa8a625ce385988 Publish The Roost naming cleanup v4.9.10
+origin/backup-v4.9.11-glitch 68bf5c21fe53e5e9ca39e818959dd1a9ff2a32e7 Publish stabilized v4.9.11 preview
+origin/backup-v4.9.2-working fd0e27069cd1f0167e7330ef5f60c3224389f37a Publish themed My Roost notices v4.9.2
+origin/backup-v4.9.7-working b66783cedf337733201c8c58f6cdd58ec4f5329d Publish hardened v4.9.7 guest and logout flow
+origin/backup-v5.0-first-split e32de44200644e9abcba0f609536f816b33d8738 Add separate v5 admin shell
+origin/backup-v5.0.2-before-live-admin 2553df59a7b4e37ab007606563e99925aba82f38 Remove Test Lab chrome from customer register
+origin/backup-v5.0.4-before-wallet-qrs 6353635b3fdb6d98cf3735776360c5bbfd49ea81 Add isolated admin demo page
+origin/feature/supabase-live abb7a6108fdf49ac5ac1cd275d3205bfa4e2385b Fix cloud beta routing logic
+origin/fix/cross-device-supabase-sync 4e106502eda4024079ffc2c85b3d0d7199a484ef Restore the original live store and embedded Admin layout
+origin/locked-before-pickup-pin-2026-10-06 412b8d3ac9eea2fe5203a8d9bd720ca6589dcaba Refresh deletable comments in register-cloud-beta.html
+origin/main ab27be06d0ad7a999d4ca122ed30373c69b04435 Harden register install manifest for tablet
+origin/saved-before-full-ui-redesign-2026-10-06 421643f6f774173a540b183d2427240fa705b01e Load warm UI polish in admin-cloud-beta.html
+origin/saved-before-persistent-layer-2026-10-16 c94d4b6508b4870a028fed8bb594cc3f4e76e636 Add safe same-browser live catalog sync with polling fallback
+origin/saved-before-removing-pickups-2026-10-06 4613d416b4791167c44916a3464088107d247296 Refresh member pickup approval and scheduling workflow
+origin/saved-before-roost-credit-2026-10-06 da77e41165f81fbe834d4a2dd75a8b0e6bd543c0 Load Roost cloud sync v5.1.2 in admin-cloud-beta.html
+origin/saved-before-tablet-landscape-kiosk-2026-10-16 24ea283b79c0614423d53ca7afd1a85bf6952678 Load persistent data layer in admin-cloud-beta.html
+origin/saved-v4.10.3 6dd45c91e5e4d61e2ceca7df2fe64f1ec74443f6 Publish The Roost benefits copy v4.10.3

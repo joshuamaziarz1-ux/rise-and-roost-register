@@ -1,11 +1,11 @@
 (()=>{
   function openRegister(){
-    location.href='register-v5.html';
+    location.href='register-cloud-beta.html';
   }
   function setup(){
-    document.title='Rise & Roost Admin v5.0.3';
-    document.querySelectorAll('.admin-top .sub').forEach(el=>el.textContent='Rise & Roost Admin v5.0.3');
-    document.querySelectorAll('#settingsTab .danger-zone strong').forEach(el=>el.textContent='Rise & Roost Admin v5.0.3');
+    document.title='Rise & Roost Admin v5.2.0-rc.3';
+    document.querySelectorAll('.admin-top .sub').forEach(el=>el.textContent='Rise & Roost Admin v5.2.0-rc.3');
+    document.querySelectorAll('#settingsTab .danger-zone strong').forEach(el=>el.textContent='Rise & Roost Admin v5.2.0-rc.3');
 
     const exit=document.getElementById('exitAdmin');
     if(exit){
@@ -14,7 +14,7 @@
     }
 
     const adminBtn=document.getElementById('adminBtn');
-    if(adminBtn && document.getElementById('adminScreen')?.classList.contains('hidden')){
+    if(!window.__RR_CLOUD_MODE && adminBtn && document.getElementById('adminScreen')?.classList.contains('hidden')){
       adminBtn.click();
     }
   }

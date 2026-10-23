@@ -1,0 +1,7 @@
+project_id = "rise-and-roost-register"
+[functions.rise-roost-sync]
+verify_jwt = false
+# The function verifies Admin JWTs using Auth getUser, checks the admins table,
+# and verifies signed member capabilities. Catalog and guest checkout are public.
+[functions.rise-roost-api]
+verify_jwt = false
