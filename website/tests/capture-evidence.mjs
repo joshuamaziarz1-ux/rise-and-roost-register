@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 const baseURL = process.env.RR_BETA_BASE_URL || "http://127.0.0.1:4175";
 if (
   process.env.RR_BETA_BASE_URL &&
+  !["127.0.0.1", "localhost"].includes(new URL(baseURL).hostname) &&
   !(
     new URL(baseURL).protocol === "https:" &&
     new URL(baseURL).hostname.endsWith(".workers.dev")
@@ -23,6 +24,8 @@ try {
     viewport: { width: 1440, height: 1000 },
   });
   const page = await context.newPage();
+  page.setDefaultTimeout(90000);
+  page.setDefaultNavigationTimeout(90000);
   await page.goto("/");
   await page.locator(".site-header").waitFor();
   await page.screenshot({
@@ -44,6 +47,7 @@ try {
   assert.match(id, /^[a-f0-9]{48}$/);
   // Never include the one-time owner credentials in evidence screenshots.
   await page.getByRole("button", { name: "I saved my access key" }).click();
+  await page.frameLocator("iframe").locator(".site-header").waitFor();
   await page.screenshot({
     path: "docs/screenshots/desktop-studio.png",
     fullPage: true,

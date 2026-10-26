@@ -13,7 +13,7 @@ This report covers the new `website/` project on `codex/issue-7-website-studio`.
 | `npm run test:worker` against actual local Cloudflare Worker/D1 | Passed: assets, CSP, owner session, draft/save/publish, separate public read, anonymous denial |
 | `npm run check` / Wrangler deploy dry run | Passed |
 | Runtime dependency audit (`npm audit --omit=dev`) | Zero reported vulnerabilities |
-| `npm run screenshots` against local Cloudflare Worker | Passed: default desktop/mobile, Studio, edited preview, matching published desktop/mobile; credentials excluded |
+| `npm run screenshots` against local development server | Passed: default desktop/mobile, fully loaded Studio, edited preview, matching published desktop/mobile; credentials excluded |
 | Production preservation | Existing index, Register/Admin HTML, core, stylesheet, and cloud adapter matched stable main byte for byte; all changed paths are new website/CI files |
 
 Total: **42 automated tests passed**, plus the Worker runtime smoke, build, install, audit, and screenshot checks. There are no intentionally disabled or expected-failure assertions in these suites. These are local results. GitHub CI and hosted HTTPS acceptance are distinct and must be reported separately.
@@ -42,7 +42,7 @@ PLAYWRIGHT_BROWSERS_PATH=/workspace/rise-roost-browsers \
 npm run test:browser -- --project=desktop-webkit --project=iphone-webkit
 ```
 
-No host-check bypass is needed for this supported custom-executable configuration. Standard CI/developer installations use `npx playwright install --with-deps chromium webkit` and the ordinary bundled launcher. CI pins Ubuntu 24.04 because the moving `ubuntu-latest` label migrated to Ubuntu 26 while the pinned Playwright version supports 24.04. The initial GitHub runs stopped during browser dependency installation; they did not execute application tests. The workflow was corrected to use the supported OS and Node 24 actions.
+No host-check bypass is needed for this supported custom-executable configuration. Standard developer installations use `npx playwright install --with-deps chromium webkit` and the ordinary bundled launcher. CI uses the matching official `mcr.microsoft.com/playwright:v1.56.1-noble` image with browser/system dependencies already installed, Ubuntu 24.04, and Node 24 actions. This avoids a moving host distribution and repeated browser/OS installation. The initial GitHub runs stopped during browser dependency installation; they did not execute application tests. Final GitHub status is tracked on PR #8 separately from the passing local results.
 
 ## Screenshots and remaining acceptance
 
