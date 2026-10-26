@@ -9,14 +9,15 @@ permissions:
   contents: read
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Playwright 1.56 supports Ubuntu 24.04; ubuntu-latest moved to 26.04.
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     defaults:
       run:
         working-directory: website
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
           cache: npm
