@@ -1,0 +1,31 @@
+name: Website beta checks
+on:
+  pull_request:
+    paths: ['website/**', '.github/workflows/website-beta.yml']
+  push:
+    branches: ['codex/issue-7-website-studio']
+    paths: ['website/**', '.github/workflows/website-beta.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm test
+      - run: npm run test:browser
+      - run: npm run check
+        env:
+          WRANGLER_SEND_METRICS: 'false'
+# Intentionally no deployment step, production credentials, or write permissions.

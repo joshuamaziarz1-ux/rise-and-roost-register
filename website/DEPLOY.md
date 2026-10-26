@@ -1,0 +1,49 @@
+# Deploy the isolated HTTPS beta
+
+One external connection is needed: authenticate a Cloudflare account that can create a **new Worker and a new D1 database**. Use a dedicated beta project, not the production Register, and do not attach the future custom domain. Cloudflare Workers Static Assets is used instead of static-only Pages so that owner sessions, drafts, publishing, uploads, and simulated orders have a backend. GitHub Pages is not the commercial hosting target.
+
+## One-time account connection
+
+Connect the owner’s Cloudflare account through a supported secure credential connection. Wrangler OAuth (`npx wrangler login`) is an alternative when an interactive browser callback is available. If using a narrowly scoped API token, supply it through secure environment settings, never chat, a committed file, frontend code, screenshots, or a PR. Scope access to the dedicated account/project: Workers Scripts edit, D1 edit, and the account-read permissions Wrangler needs. Confirm the current Cloudflare token UI and account limits/costs before granting it. No DNS or zone-edit permission is needed for a workers.dev beta.
+
+The setup machine also needs access to `api.cloudflare.com` and the assigned `*.workers.dev` hostname. GitHub API and Playwright browser-download access were restored during implementation; the environment draft includes `api.github.com`, `api.cloudflare.com`, `cdn.playwright.dev`, and `playwright.download.prss.microsoft.com`. Keep those settings and add the actual assigned beta hostname when known. Do not replace other existing allowlist entries. Additional provider download redirects, if any, must be added only as observed. The draft also declares `CLOUDFLARE_ACCOUNT_ID` and a proxy-backed `CLOUDFLARE_API_TOKEN` requirement for secure entry; neither has an invented/default value.
+
+## Commands for the coding/deployment operator
+
+Run from `website/` after authentication. Danielle does not need a terminal for normal editing.
+
+```sh
+npm ci
+npx wrangler whoami
+npx wrangler d1 create rise-roost-website-demo
+```
+
+Put the new demo database ID returned by that command into `wrangler.toml` in place of the all-zero placeholder. Confirm this is a **new demo database**, not a production binding. Then:
+
+```sh
+npx wrangler d1 execute rise-roost-website-demo --remote --file=schema.sql
+npm run check
+npm run deploy
+```
+
+Record the actual HTTPS address printed by Wrangler, the website branch commit SHA, D1 ID, and deployment time. Add that specific preview host to the cloud environment’s allowlist if required for verification. Do not invent or assume a hostname. No Supabase credentials, Square credentials, production data copies, migration of PR #3, or custom-domain changes belong in this procedure.
+
+## Required deployed acceptance
+
+Open the actual HTTPS deployment in a browser, then repeat the automated flows against it using a dedicated test workspace:
+
+- Home, shop/detail, About, Visit, Contact/FAQ, terms, basket, and pickup deadlines render on desktop and phone with no broken assets or horizontal overflow.
+- Create a private demo, save the access details securely, and sign in from a separate context/device. Change headline, product price and real raster upload, and order deadline.
+- Save draft: published site stays unchanged. Read-only preview: new content appears but Studio remains protected. Publish: a separate browser receives the update. Restore: published and draft return to the chosen version.
+- Simulate an order; server rejects stale prices, cutoffs, stock, or full capacity. No real payment occurs. Owner can see the request and fulfillment audit. Anonymous users cannot read the owner’s orders, save drafts, or publish.
+- Confirm HTTPS cookies include Secure/HttpOnly/SameSite and restrictive CSP/no-store/referrer headers are present. Never publish access keys in screenshots or logs.
+
+The local automated tests are not proof of a working deployed hostname or of physical-device Safari acceptance. Run the full WebKit matrix once its signed browser download is available; do not disable TLS or artifact verification to install it.
+
+For repeatable remote checks after deployment, set `RR_BETA_BASE_URL` to the actual isolated HTTPS workers.dev address and run `npm run test:worker`, `npm run test:browser`, and `npm run screenshots`. Remote test scripts reject production/custom-domain targets. Tests create separate synthetic workspaces; they never reuse the owner’s working demo. Without that variable, browser tests start an in-memory local server; the Worker smoke/screenshots expect the local Worker on port 4175.
+
+## Domain and eventual production
+
+The owner must register/confirm ownership of the desired domain in their own account, protect it with MFA and renewal settings, and approve a separate production launch. This beta makes no domain availability claim. A later reviewed launch must verify provider terms/plan/limits, Supabase owner auth/redirects/CORS, storage permissions, Square sandbox and verified webhooks, migrations/backups, fulfillment policies, and old kiosk bookmark continuity. Never redirect the existing kiosk as a beta side effect.
+
+Rollback for this isolated beta is a previous Worker deployment with its compatible demo schema. Export design JSON before discarding a demo database; delete only the dedicated beta Worker/database when finished. No production rollback is needed because this project does not deploy to, migrate, or replace production.
