@@ -1,4 +1,4 @@
-name = "rise-roost-website-beta"
+name = "rise-roost-beta"
 main = "server/worker.mjs"
 compatibility_date = "2025-10-01"
 workers_dev = true
@@ -11,6 +11,6 @@ not_found_handling = "single-page-application"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "rise-roost-website-demo"
-# Replace only after creating a NEW isolated demo database; never use the live Supabase project.
-database_id = "00000000-0000-0000-0000-000000000000"
+database_name = "rise-roost-beta-db"
+# Dedicated beta D1 database; no production database or custom-domain binding.
+database_id = "7824ffe0-d69a-4221-9aec-0f335257477a"

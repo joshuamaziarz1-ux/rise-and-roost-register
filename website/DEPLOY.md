@@ -1,6 +1,6 @@
 # Deploy the isolated HTTPS beta
 
-One external connection is needed: authenticate a Cloudflare account that can create a **new Worker and a new D1 database**. Use a dedicated beta project, not the production Register, and do not attach the future custom domain. Cloudflare Workers Static Assets is used instead of static-only Pages so that owner sessions, drafts, publishing, uploads, and simulated orders have a backend. GitHub Pages is not the commercial hosting target.
+The beta deployment targets only **rise-roost-beta**, with the dedicated **rise-roost-beta-db** D1 binding. Authenticate a Cloudflare account with rights to edit that isolated Worker and its demo database. Use a dedicated beta project, not the production Register, and do not attach the future custom domain. Cloudflare Workers Static Assets is used instead of static-only Pages so that owner sessions, drafts, publishing, uploads, and simulated orders have a backend. GitHub Pages is not the commercial hosting target.
 
 ## One-time account connection
 
@@ -15,13 +15,13 @@ Run from `website/` after authentication. Danielle does not need a terminal for 
 ```sh
 npm ci
 npx wrangler whoami
-npx wrangler d1 create rise-roost-website-demo
+npx wrangler d1 create rise-roost-beta-db
 ```
 
-Put the new demo database ID returned by that command into `wrangler.toml` in place of the all-zero placeholder. Confirm this is a **new demo database**, not a production binding. Then:
+The configured beta database now exists and its binding is recorded in `wrangler.toml`. Create it only when absent; never replace a working database on redeployment. If creating a fresh beta environment, set the returned demo database ID in that binding and confirm its identity before running any schema command. Then:
 
 ```sh
-npx wrangler d1 execute rise-roost-website-demo --remote --file=schema.sql
+npx wrangler d1 execute rise-roost-beta-db --remote --file=schema.sql
 npm run check
 npm run deploy
 ```
@@ -47,3 +47,9 @@ For repeatable remote checks after deployment, set `RR_BETA_BASE_URL` to the act
 The owner must register/confirm ownership of the desired domain in their own account, protect it with MFA and renewal settings, and approve a separate production launch. This beta makes no domain availability claim. A later reviewed launch must verify provider terms/plan/limits, Supabase owner auth/redirects/CORS, storage permissions, Square sandbox and verified webhooks, migrations/backups, fulfillment policies, and old kiosk bookmark continuity. Never redirect the existing kiosk as a beta side effect.
 
 Rollback for this isolated beta is a previous Worker deployment with its compatible demo schema. Export design JSON before discarding a demo database; delete only the dedicated beta Worker/database when finished. No production rollback is needed because this project does not deploy to, migrate, or replace production.
+
+## Scoped-token deployment status
+
+See [the beta deployment record](docs/BETA-DEPLOYMENT.md). Account-scoped token verification is the appropriate check for the configured account API token; the user-token verification endpoint is not applicable. The token has successfully created the dedicated D1 database, initialized its schema through the supported D1 query API, uploaded the website, and activated the beta version.
+
+Wrangler subsequently attempts `GET /accounts/{account_id}/workers/subdomain`, which is denied by this narrowly scoped token. Cloudflare documents **Workers Scripts Read** (or Write) at account level for this hostname lookup. No additional write access is needed for the completed beta deployment. Prefer supplying the existing public workers.dev URL from the beta Worker’s Dashboard **Visit** link, avoiding broader account-level access. A nonzero CLI result at this final lookup does not undo the upload: verify the target Worker’s active deployment and exact D1 binding before reporting status.

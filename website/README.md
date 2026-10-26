@@ -27,7 +27,7 @@ The browser matrix covers desktop Chromium, desktop WebKit (Safari analog), iPho
 
 ## Danielle’s demo access — no software install
 
-After the host is connected and deployed:
+After the beta HTTPS URL is confirmed:
 
 1. Open the deployed `/studio` address in Safari or Chrome. Choose **Create my private demo**. This creates an isolated workspace and signs you in as **Danielle · Demo Owner**.
 2. Save the workspace ID and randomly generated private access key shown once. **Copy private access details** copies both. Keep the key private; there is no shared/default password. Choose **I saved my access key** to dismiss it.
