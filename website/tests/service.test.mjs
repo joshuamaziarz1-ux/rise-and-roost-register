@@ -259,6 +259,56 @@ test("stale editors and parallel saves cannot overwrite the winning revision", a
   ]);
   assert.deepEqual(results.map((r) => r.status).sort(), [200, 409]);
 });
+test("a concurrent publish cannot accept an order quoted against the previous revision", async () => {
+  const h = harness();
+  const { data: s } = await h.call("/api/workspaces", {});
+  const document = clone(s.draft);
+  document.products[0].price += 100;
+  const saved = await h.call("/api/draft", { revision: s.revision, document });
+  const prepare = h.db.prepare.bind(h.db);
+  let published = false;
+  h.db.prepare = (sql) => ({
+    bind(...args) {
+      const statement = prepare(sql).bind(...args);
+      return {
+        ...statement,
+        async run() {
+          if (!published && sql.startsWith("UPDATE workspaces SET ledger_json=")) {
+            published = true;
+            assert.equal((await h.call("/api/publish", { revision: saved.data.revision })).status, 200);
+          }
+          return statement.run();
+        },
+      };
+    },
+  });
+  assert.equal((await h.call("/api/orders", orderInput(s))).status, 409);
+  assert.equal((await h.call("/api/studio")).data.orders.length, 0);
+});
+test("invalid pickup input returns a useful validation error and preserves the saved draft", async () => {
+  const h = harness();
+  const { data: s } = await h.call("/api/workspaces", {});
+  const document = clone(s.draft);
+  document.pickups[0].date = "2026-02-30";
+  const rejected = await h.call("/api/draft", { revision: s.revision, document });
+  assert.equal(rejected.status, 400);
+  assert.match(rejected.data.error, /invalid|ambiguous/);
+  assert.deepEqual((await h.call("/api/studio")).data.draft, s.draft);
+  document.pickups[0].date = s.draft.pickups[0].date;
+  document.products[0].category = "Bakery";
+  assert.equal((await h.call("/api/draft", { revision: s.revision, document })).status, 200);
+  document.products[0].category = {};
+  assert.throws(() => validateDocument(document), /category/);
+});
+test("all administrative writes require an owner session and other owners cannot change orders", async () => {
+  const h = harness();
+  for (const path of ["/api/draft", "/api/publish", "/api/restore", "/api/preview", "/api/upload", "/api/order-status"])
+    assert.equal((await h.call(path, {}, { anonymous: true })).status, 401);
+  const { data: s } = await h.call("/api/workspaces", {});
+  const { data: order } = await h.call("/api/orders", orderInput(s));
+  await h.call("/api/workspaces", {});
+  assert.equal((await h.call("/api/order-status", { id: order.id, status: "canceled" })).status, 400);
+});
 test("requests use authoritative prices and preserve explicit unpaid status", async () => {
   const h = harness(),
     { data: s } = await h.call("/api/workspaces", {}),

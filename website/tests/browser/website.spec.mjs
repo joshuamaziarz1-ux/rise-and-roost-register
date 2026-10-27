@@ -171,6 +171,11 @@ test("products, upload/crop, varieties, price, pickup cutoff, and simulated cart
     .getByLabel("Product description", { exact: true })
     .fill("A sample description, made our own.");
   await page.getByLabel("Price ($)", { exact: true }).fill("11.50");
+  await page.getByLabel("Category", { exact: true }).fill("Bakery");
+  await page.getByLabel("Replace photo 1", { exact: true }).setInputFiles({
+    name: "not-a-photo.svg", mimeType: "image/svg+xml", buffer: Buffer.from("<svg/>")
+  });
+  await expect(page.locator("#notice")).toContainText("Choose a JPG, PNG, or WebP");
   // Generate a real image in-browser. Upload follows the same canvas re-encoding path as Finder.
   const bytes = await page.evaluate(() => {
     const c = document.createElement("canvas");
@@ -197,13 +202,21 @@ test("products, upload/crop, varieties, price, pickup cutoff, and simulated cart
   await cutoff.fill("17:30");
   await save(page);
   await publish(page);
+  await page.reload();
+  await nav(page, "Products").click();
+  await expect(page.getByLabel("Category", { exact: true })).toHaveValue("Bakery");
+  await expect(page.getByLabel("Product name", { exact: true })).toHaveValue("Danielle’s demo loaf");
   await page.goto("/demo/" + id + "/product/bread");
   await expect(page.locator("h1")).toHaveText("Danielle’s demo loaf");
   await expect(page.locator(".detail-price")).toHaveText("$11.50");
+  await expect(page.locator(".product-detail")).toContainText("A sample description, made our own.");
+  await expect(page.locator(".product-detail .eyebrow")).toContainText("Bakery");
   await expect(page.locator(".detail-image")).toHaveAttribute(
     "alt",
     "Uploaded synthetic green image",
   );
+  await expect(page.locator(".detail-image")).toHaveJSProperty("complete", true);
+  expect(await page.locator(".detail-image").evaluate((img) => img.naturalWidth)).toBeGreaterThan(0);
   await page
     .getByRole("button", { name: "Add to basket", exact: true })
     .click();
@@ -223,6 +236,46 @@ test("products, upload/crop, varieties, price, pickup cutoff, and simulated cart
     .click();
   await expect(page.locator(".receipt")).toContainText("no payment collected");
   await expect(page.locator(".receipt")).toContainText("$23.00");
+});
+
+test("Sold Out, in-store and hidden availability persist; failed saves recover without discarding edits", async ({ page, context }) => {
+  const { id } = await owner(page);
+  await nav(page, "Products").click();
+  await page.getByLabel("Total demo stock (0 = sold out)", { exact: true }).fill("0");
+  await context.route("**/api/draft", (route) => route.fulfill({
+    status: 503, contentType: "text/html", body: "<h1>Temporary upstream outage</h1>"
+  }), { times: 1 });
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.locator("#notice")).toContainText("temporarily unavailable");
+  await expect(page.locator("#saved-status")).toHaveText("Unsaved draft");
+  await expect(page.getByLabel("Total demo stock (0 = sold out)", { exact: true })).toHaveValue("0");
+  await save(page);
+  await publish(page);
+  const visitor = await context.newPage();
+  await visitor.goto("/demo/" + id + "/shop");
+  await expect(visitor.locator(".product-card").filter({ hasText: "Slow Sunday sourdough" })).toContainText("Sold out");
+  await visitor.goto("/demo/" + id + "/product/bread");
+  await expect(visitor.getByRole("button", { name: "Sold out", exact: true })).toBeDisabled();
+  await page.getByLabel("Total demo stock (0 = sold out)", { exact: true }).fill("2");
+  await page.getByLabel("Maximum units per pickup", { exact: true }).fill("0");
+  await save(page);
+  await publish(page);
+  await visitor.reload();
+  await expect(visitor.getByRole("button", { name: "Sold out", exact: true })).toBeDisabled();
+  await page.getByLabel("Maximum units per pickup", { exact: true }).fill("2");
+  await page.getByLabel("Sales channel", { exact: true }).selectOption("store");
+  await save(page);
+  await publish(page);
+  await visitor.reload();
+  await expect(visitor.getByRole("button", { name: "In-store only", exact: true })).toBeDisabled();
+  await page.getByLabel("Visible to customers", { exact: true }).uncheck();
+  await save(page);
+  await publish(page);
+  await visitor.reload();
+  await expect(visitor.getByRole("heading", { name: "This item is unavailable." })).toBeVisible();
+  await visitor.goto("/demo/" + id + "/shop");
+  await expect(visitor.getByRole("heading", { name: "Slow Sunday sourdough", exact: true })).toHaveCount(0);
+  await visitor.close();
 });
 
 test("page/section structure, undo, advanced design, and literal XSS text remain safe", async ({

@@ -44,7 +44,8 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   reporter: [["list"], ["html", { open: "never" }]],
-  use: { baseURL, trace: "retain-on-failure" },
+  // Remote traces can contain the throwaway owner's one-time private access key.
+  use: { baseURL, trace: process.env.RR_BETA_BASE_URL ? "off" : "retain-on-failure" },
   webServer: process.env.RR_BETA_BASE_URL
     ? undefined
     : {

@@ -193,6 +193,8 @@ export function validateDocument(doc) {
     if (!keyPattern.test(p.id) || products.has(p.id) || !p.name?.trim())
       fail("Products need unique IDs and names.");
     products.add(p.id);
+    if (p.category !== undefined && (typeof p.category !== "string" || p.category.length > 100))
+      fail("Use a product category of no more than 100 characters.");
     if (
       !integer(p.price, 0, 1000000) ||
       !integer(p.stock, 0, 10000) ||
@@ -229,9 +231,14 @@ export function validateDocument(doc) {
   for (const p of doc.pickups) {
     if (!keyPattern.test(p.id) || !integer(p.capacity, 0, 10000))
       fail("Check pickup capacity.");
-    const start = localInstant(p.date, p.start),
-      end = localInstant(p.date, p.end),
+    let start, end, cutoff;
+    try {
+      start = localInstant(p.date, p.start);
+      end = localInstant(p.date, p.end);
       cutoff = localInstant(p.cutoffDate, p.cutoffTime);
+    } catch (error) {
+      fail(error.message);
+    }
     if (end <= start || cutoff >= start)
       fail(
         "The cutoff must precede pickup, and the window must end after it starts.",
@@ -685,10 +692,11 @@ export async function api(request, db, now = Date.now()) {
         };
         ledger.orders.unshift(order);
         const result = await run(
-          "UPDATE workspaces SET ledger_json=?,ledger_version=ledger_version+1 WHERE id=? AND ledger_version=?",
+          "UPDATE workspaces SET ledger_json=?,ledger_version=ledger_version+1 WHERE id=? AND ledger_version=? AND published_revision=?",
           JSON.stringify(ledger),
           row.id,
           row.ledger_version,
+          row.published_revision,
         );
         if (result.meta.changes === 1) return json(order, 201);
       }

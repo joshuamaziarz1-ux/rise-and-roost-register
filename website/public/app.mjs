@@ -142,7 +142,7 @@ if (
         h(
           "small",
           {},
-          p.stock === 0 ? doc.ui.soldOut : p.channel === "store" ? doc.ui.inStore : doc.ui.preorder,
+          [p.category, availabilityLabel(p)].filter(Boolean).join(" · "),
         ),
         link("/product/" + p.id, h("h3", {}, p.name)),
         h(
@@ -154,6 +154,9 @@ if (
       ),
     );
   }
+  const soldOut = (p) => p.stock === 0 || p.capacity === 0;
+  const availabilityLabel = (p) =>
+    soldOut(p) ? doc.ui.soldOut : p.channel === "store" ? doc.ui.inStore : doc.ui.preorder;
   function renderSection(section, page) {
     if (section.hidden) return null;
     const s = h("section", {
@@ -356,7 +359,7 @@ if (
       p.variants.map((v) => h("option", { value: v.id }, v.name)),
     );
     const action = button(
-      p.stock === 0
+      soldOut(p)
         ? doc.ui.soldOut
         : p.channel === "store"
           ? doc.ui.inStore
@@ -365,7 +368,7 @@ if (
       {
         class: "primary-link",
         disabled:
-          p.stock === 0 || p.channel === "store" || isPreview || editing,
+          soldOut(p) || p.channel === "store" || isPreview || editing,
       },
     );
     return h(
@@ -399,7 +402,7 @@ if (
         "div",
         {},
         link("/shop", "← " + doc.ui.continue),
-        h("p", { class: "eyebrow" }, doc.ui.preorder),
+        h("p", { class: "eyebrow" }, [p.category, availabilityLabel(p)].filter(Boolean).join(" · ")),
         h("h1", {}, p.name),
         h("p", {}, p.description),
         price,

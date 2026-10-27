@@ -40,7 +40,12 @@ export async function request(path, data) {
           body: JSON.stringify(data),
         },
   );
-  const result = await response.json();
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error("The website is temporarily unavailable. Please try again. Your unsaved edits are still in this tab.");
+  }
   if (!response.ok)
     throw Object.assign(new Error(result.error || "Please try again."), {
       status: response.status,

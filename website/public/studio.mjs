@@ -628,6 +628,7 @@ export async function start(root) {
             textField("Product description", p, "description", {
               type: "textarea",
             }),
+            textField("Category", p, "category"),
             field(
               "Price ($)",
               (p.price / 100).toFixed(2),

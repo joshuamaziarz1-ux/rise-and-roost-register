@@ -47,6 +47,8 @@ jobs:
       RR_BETA_BASE_URL: https://rise-roost-beta.joshua-maziarz1.workers.dev
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - id: opt-in
         run: |
           case "$(git log -1 --format=%s)" in
@@ -62,14 +64,19 @@ jobs:
         if: steps.opt-in.outputs.enabled == 'true'
       - run: npm run test:worker
         if: steps.opt-in.outputs.enabled == 'true'
+      - run: node tests/hosted-api.mjs
+        if: steps.opt-in.outputs.enabled == 'true'
       - run: npm run test:browser
         if: steps.opt-in.outputs.enabled == 'true'
-      - run: npm run screenshots
+      - id: evidence
+        run: npm run screenshots
         if: steps.opt-in.outputs.enabled == 'true'
       - uses: actions/upload-artifact@v4
-        if: always() && steps.opt-in.outputs.enabled == 'true'
+        if: steps.evidence.outcome == 'success'
         with:
           name: hosted-beta-screenshots
-          path: website/docs/screenshots/*.png
+          path: |
+            website/docs/screenshots/*.png
+            website/test-results/hosted-api.json
           retention-days: 7
 # Intentionally no deployment step, production credentials, or write permissions.
