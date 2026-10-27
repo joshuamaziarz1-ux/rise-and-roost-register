@@ -38,8 +38,9 @@ function database({ blobArrays = false } = {}) {
     },
   };
 }
-function harness(options) {
+function harness(options = {}) {
   const db = database(options);
+  const site = { publicWorkspaceId: options.publicWorkspaceId || "" };
   let cookie = "";
   async function call(path, body, options = {}) {
     const response = await api(
@@ -55,6 +56,7 @@ function harness(options) {
       }),
       db,
       options.now ?? now,
+      site,
     );
     if (response.headers.get("Set-Cookie") && !options.anonymous)
       cookie = response.headers.get("Set-Cookie").split(";")[0];
@@ -68,6 +70,7 @@ function harness(options) {
   return {
     call,
     db,
+    site,
     get cookie() {
       return cookie;
     },
@@ -260,6 +263,36 @@ test("stale editors and parallel saves cannot overwrite the winning revision", a
     h.call("/api/draft", { revision: s.revision, document: s.draft }),
   ]);
   assert.deepEqual(results.map((r) => r.status).sort(), [200, 409]);
+});
+test("the root storefront reads the configured D1 publication; drafts and other demos stay isolated", async () => {
+  const h = harness();
+  const { data: main } = await h.call("/api/workspaces", {});
+  h.site.publicWorkspaceId = main.id;
+  const document = clone(main.draft);
+  document.products[0].name = "Published across computers";
+  const saved = await h.call("/api/draft", { revision: main.revision, document });
+  const rootBefore = await h.call("/api/site", undefined, { anonymous: true });
+  assert.equal(rootBefore.data.id, main.id);
+  assert.notEqual(rootBefore.data.document.products[0].name, document.products[0].name);
+  assert.equal(rootBefore.response.headers.get("Cache-Control"), "no-store");
+  assert.equal(rootBefore.response.headers.get("CDN-Cache-Control"), "no-store");
+  const published = await h.call("/api/publish", { revision: saved.data.revision });
+  assert.equal(published.data.isPrimary, true);
+  assert.equal(published.data.publishedPath, "/");
+  const rootAfter = (await h.call("/api/site", undefined, { anonymous: true })).data;
+  const explicit = (await h.call("/api/site?workspace=" + main.id, undefined, { anonymous: true })).data;
+  assert.deepEqual(rootAfter, explicit);
+  assert.equal(rootAfter.document.products[0].name, document.products[0].name);
+  const { data: other } = await h.call("/api/workspaces", {});
+  assert.equal(other.isPrimary, false);
+  assert.equal(other.publishedPath, "/demo/" + other.id);
+  assert.equal(other.mainStudioPath, "/studio?workspace=" + main.id);
+  await h.call("/api/publish", { revision: other.revision });
+  assert.deepEqual((await h.call("/api/site")).data, rootAfter);
+});
+test("a missing configured public workspace reports an error instead of silently showing the starter", async () => {
+  const h = harness({ publicWorkspaceId: "a".repeat(48) });
+  assert.equal((await h.call("/api/site")).status, 503);
 });
 test("a concurrent publish cannot accept an order quoted against the previous revision", async () => {
   const h = harness();

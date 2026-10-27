@@ -41,6 +41,12 @@ test("responsive public pages, links, products, and empty basket load without br
 }, info) => {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  const sample = await page.request.post("/api/workspaces", {
+    headers: { Origin: new URL(info.project.use.baseURL).origin },
+    data: { customerDemo: true },
+  });
+  expect(sample.status()).toBe(201);
+  const prefix = "/demo/" + (await sample.json()).id;
   for (const path of [
     "/",
     "/shop",
@@ -51,7 +57,7 @@ test("responsive public pages, links, products, and empty basket load without br
     "/cart",
     "/product/bread",
   ]) {
-    const response = await page.goto(path);
+    const response = await page.goto(prefix + path);
     expect(response.status()).toBe(200);
     await expect(page.locator(".site-header")).toBeVisible();
     await expect(page.locator("main#main-content")).toHaveCount(1);
@@ -62,7 +68,7 @@ test("responsive public pages, links, products, and empty basket load without br
       ),
     ).toBe(true);
   }
-  await page.goto("/");
+  await page.goto(prefix);
   await expect(
     page.getByRole("heading", { name: "A little homemade. A lot of heart." }),
   ).toBeVisible();
@@ -294,7 +300,16 @@ test("Sold Out, in-store and hidden availability persist; failed saves recover w
   await visitor.goto("/demo/" + id + "/shop");
   await expect(visitor.getByRole("heading", { name: "Slow Sunday sourdough", exact: true })).toHaveCount(0);
   // Root checkout must not sign Danielle out or restore an already submitted basket.
-  await visitor.goto("/product/bread");
+  let checkoutPrefix = "";
+  if (process.env.RR_BETA_BASE_URL) {
+    const customer = await page.request.post("/api/workspaces", {
+      headers: { Origin: new URL(test.info().project.use.baseURL).origin },
+      data: { customerDemo: true },
+    });
+    expect(customer.status()).toBe(201);
+    checkoutPrefix = "/demo/" + (await customer.json()).id;
+  }
+  await visitor.goto(checkoutPrefix + "/product/bread");
   await visitor.getByRole("button", { name: "Add to basket", exact: true }).click();
   await visitor.locator(".basket-link").click();
   const pickup = visitor.getByLabel("Choose your pickup", { exact: true });
@@ -302,7 +317,7 @@ test("Sold Out, in-store and hidden availability persist; failed saves recover w
   await visitor.getByRole("button", { name: "Request a demo preorder", exact: true }).click();
   await expect(visitor.locator(".receipt")).toContainText("no payment collected");
   expect((await (await page.request.get("/api/studio")).json()).id).toBe(id);
-  await visitor.goto("/cart");
+  await visitor.goto(checkoutPrefix + "/cart");
   await expect(visitor.locator("main")).toContainText("Your basket is waiting for something good.");
   await visitor.close();
 });

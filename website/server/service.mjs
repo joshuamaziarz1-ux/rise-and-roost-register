@@ -24,6 +24,7 @@ const json = (value, status = 200, headers = {}) =>
     headers: {
       "Content-Type": "application/json",
       "Cache-Control": "no-store",
+      "CDN-Cache-Control": "no-store",
       ...headers,
     },
   });
@@ -369,7 +370,7 @@ export function inspectImage(bytes, mime) {
     );
   return true;
 }
-export async function api(request, db, now = Date.now()) {
+export async function api(request, db, now = Date.now(), { publicWorkspaceId = "" } = {}) {
   const url = new URL(request.url),
     path = url.pathname;
   const first = (sql, ...args) =>
@@ -457,6 +458,10 @@ export async function api(request, db, now = Date.now()) {
       versions: JSON.parse(row.versions_json).map(({ document, ...v }) => v),
       orders: JSON.parse(row.ledger_json).orders,
       owner: "Danielle · Demo Owner",
+      isPrimary: row.id === publicWorkspaceId,
+      publishedPath: row.id === publicWorkspaceId ? "/" : "/demo/" + row.id,
+      studioPath: "/studio?workspace=" + row.id,
+      mainStudioPath: publicWorkspaceId ? "/studio?workspace=" + publicWorkspaceId : "",
     });
     if (path === "/api/workspaces" && request.method === "POST") {
       await rateLimit("create", 40);
@@ -523,18 +528,20 @@ export async function api(request, db, now = Date.now()) {
       });
     }
     if (path === "/api/site" && request.method === "GET") {
-      const id = url.searchParams.get("workspace");
+      const id = url.searchParams.get("workspace") || publicWorkspaceId;
       if (!id) return json({ document: seed(now), revision: 1, availabilityRevision: 0, id: "" });
       const row = await first(
         "SELECT published_json,published_revision,ledger_json,ledger_version FROM workspaces WHERE id=?",
         id,
       );
-      if (!row) fail("This demo workspace was not found.", 404);
+      if (!row) fail("This published workspace was not found. Contact the beta operator; saved content has not been reset.", id === publicWorkspaceId ? 503 : 404);
       return json({
         document: availableDocument(JSON.parse(row.published_json), JSON.parse(row.ledger_json)),
         revision: row.published_revision,
         availabilityRevision: row.ledger_version,
         id,
+        isPrimary: id === publicWorkspaceId,
+        studioPath: "/studio?workspace=" + id,
       });
     }
     if (path.startsWith("/api/preview/") && request.method === "GET") {

@@ -10,7 +10,7 @@ export const security = {
 export default {
   async fetch(request, env) {
     let response = new URL(request.url).pathname.startsWith("/api/")
-      ? await api(request, env.DB)
+      ? await api(request, env.DB, Date.now(), { publicWorkspaceId: env.PUBLIC_WORKSPACE_ID })
       : await env.ASSETS.fetch(request);
     response = new Response(response.body, response);
     for (const [key, value] of Object.entries(security))

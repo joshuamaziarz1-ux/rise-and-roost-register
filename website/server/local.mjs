@@ -40,6 +40,7 @@ const types = {
 };
 const env = {
   DB: db,
+  PUBLIC_WORKSPACE_ID: process.env.RR_PUBLIC_WORKSPACE_ID || "",
   ASSETS: {
     async fetch(request) {
       let path = decodeURIComponent(new URL(request.url).pathname);

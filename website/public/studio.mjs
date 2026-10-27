@@ -2,6 +2,9 @@ import { h, button, field, request, notify, guard } from "./dom.mjs";
 import { seed, clone, money } from "./model.mjs";
 
 export async function start(root) {
+  const requestedWorkspace = new URLSearchParams(location.search).get("workspace");
+  let loginWorkspace = /^[a-f0-9]{48}$/.test(requestedWorkspace || "") ? requestedWorkspace : "";
+  let mainWorkspace = "";
   let state,
     doc,
     tab = "Home",
@@ -116,6 +119,9 @@ export async function start(root) {
     state = result;
     doc = clone(result.draft);
     dirty = false;
+    loginWorkspace = result.id;
+    if (result.mainStudioPath) mainWorkspace = new URL(result.mainStudioPath, location.origin).searchParams.get("workspace");
+    history.replaceState({}, "", result.studioPath || "/studio?workspace=" + result.id);
     render();
   }
   async function upload(file) {
@@ -168,7 +174,7 @@ export async function start(root) {
     );
   }
   function login() {
-    let id = "",
+    let id = loginWorkspace || mainWorkspace,
       key = "";
     root.replaceChildren(
       h(
@@ -188,7 +194,7 @@ export async function start(root) {
           h(
             "p",
             {},
-            "A beautiful beginning, with room for every idea. Create a private demo to edit, preview, and publish sample changes together.",
+            mainWorkspace ? "Return to your saved workspace to edit the beta website. Create a private demo only when you want a separate test site." : "A beautiful beginning, with room for every idea. Create a private demo to edit, preview, and publish sample changes together.",
           ),
           button(
             "Create my private demo",
@@ -206,7 +212,7 @@ export async function start(root) {
           ),
           h(
             "details",
-            {},
+            { open: !!requestedWorkspace },
             h("summary", {}, "Return to an existing workspace"),
             h(
               "form",
@@ -233,7 +239,7 @@ export async function start(root) {
             ),
           ),
         ),
-        h("a", { href: "/" }, "← View the sample storefront"),
+        h("a", { href: "/" }, "← View the published website"),
       ),
     );
   }
@@ -1220,7 +1226,7 @@ export async function start(root) {
               clearTimeout(timer);
               timer = setTimeout(() => guard(save)(), 1000);
             }
-            notify("Published to your private demo. Other browsers update within five seconds.");
+            notify(result.isPrimary ? "Published to the beta website. Other browsers update within five seconds." : "Published to your private demo. Other browsers update within five seconds.");
           } finally {
             publishing = false;
             savedLabel();
@@ -1244,7 +1250,7 @@ export async function start(root) {
             h("img", { src: "/assets/logo.webp", alt: "" }),
             h("span", {}, "Website\nStudio"),
           ),
-          h("p", { class: "workspace-badge" }, "PRIVATE DEMO · OWNER"),
+          h("p", { class: "workspace-badge" }, state.isPrimary ? "BETA WEBSITE · OWNER" : "PRIVATE DEMO · OWNER"),
           h(
             "nav",
             { "aria-label": "Studio navigation" },
@@ -1265,9 +1271,12 @@ export async function start(root) {
             h("p", {}, "Danielle · Demo Owner"),
             h(
               "a",
-              { href: "/demo/" + state.id, target: "_blank", rel: "noopener" },
-              "View published demo ↗",
+              { href: state.publishedPath || "/demo/" + state.id, target: "_blank", rel: "noopener" },
+              state.isPrimary ? "View published website ↗" : "View published demo ↗",
             ),
+            h("p", { class: "small-note", id: "publishing-destination" },
+              state.isPrimary ? "Publish demo updates the main beta website on every device." : "This is a separate test workspace. Publishing updates its demo link, not the main beta website."),
+            !state.isPrimary && state.mainStudioPath ? h("a", { href: state.mainStudioPath }, "Sign in to the main website workspace ↗") : null,
             button(
               "Sign out",
               guard(async () => {
@@ -1444,17 +1453,25 @@ export async function start(root) {
     "focus",
     guard(async () => {
       if (!state || dirty || saving) return;
+      const workspaceId = state.id;
+      const revision = state.revision;
       const fresh = await request("/api/studio");
-      if (fresh.revision !== state.revision) {
+      if (state?.id === workspaceId && state.revision === revision && !dirty && !saving && !publishing && fresh.revision > state.revision) {
         adopt(fresh);
         notify("Loaded the draft saved on your other device.");
       }
     }),
   );
   try {
-    adopt(await request("/api/studio"));
+    const current = await request("/api/studio");
+    if (loginWorkspace && current.id !== loginWorkspace) login();
+    else adopt(current);
   } catch (e) {
     if (e.status !== 401) notify(e.message, true);
+    try {
+      const publicSite = await request("/api/site");
+      if (publicSite.isPrimary) mainWorkspace = publicSite.id;
+    } catch {}
     login();
   }
 }

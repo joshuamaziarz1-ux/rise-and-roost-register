@@ -758,40 +758,41 @@ if (
     const betaNotice = site.querySelector(".demo-bar");
     root.replaceChildren(betaNotice, site);
   }
-  async function load() {
+  let loadSequence = 0;
+  const siteEndpoint = () => isPreview
+    ? "/api/preview/" + match[2]
+    : "/api/site" + (prefix.startsWith("/demo/") ? "?workspace=" + workspace : "");
+  async function load(force = true) {
+    const sequence = ++loadSequence;
     const result = await request(
-      isPreview
-        ? "/api/preview/" + match[2]
-        : "/api/site" + (workspace ? "?workspace=" + workspace : ""),
+      siteEndpoint(),
     );
+    if (sequence !== loadSequence) return;
     if (editing && previewDocumentReceived) return;
+    if (result.id === workspace && (result.revision < revision ||
+      (result.revision === revision && result.availabilityRevision < availabilityRevision))) return;
+    const changed = result.id !== workspace || result.revision !== revision;
+    if (!force && !changed && result.availabilityRevision === availabilityRevision) return;
     doc = result.document;
     revision = result.revision || 1;
     availabilityRevision = result.availabilityRevision || 0;
     workspace = result.id || workspace;
     render();
+    if (!force && changed) notify("The published website has updated. Please review your basket before requesting.");
   }
   guard(load)();
   if (!editing && !isPreview) {
     setInterval(
       guard(async () => {
         if (document.hidden) return;
-        const result = await request(
-          "/api/site" + (workspace ? "?workspace=" + workspace : ""),
-        );
-        if (result.revision !== revision || result.availabilityRevision !== availabilityRevision) {
-          const contentChanged = result.revision !== revision;
-          doc = result.document;
-          revision = result.revision;
-          availabilityRevision = result.availabilityRevision;
-          render();
-          if (contentChanged) notify(
-            "The published website has updated. Please review your basket before requesting.",
-          );
-        }
+        await load(false);
       }),
       5000,
     );
     window.addEventListener("online", guard(load));
+    window.addEventListener("focus", guard(() => load(false)));
+    document.addEventListener("visibilitychange", guard(async () => {
+      if (!document.hidden) await load(false);
+    }));
   }
 }
