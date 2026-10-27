@@ -14,6 +14,7 @@ if (
     revision = 1,
     availabilityRevision = 0,
     workspace = "",
+    studioPath = "/studio",
     isPreview = false,
     prefix = "",
     path = "/",
@@ -664,7 +665,7 @@ if (
         isPreview
           ? "UNPUBLISHED PREVIEW · Read only · Simulation disabled"
           : "WEBSITE BETA · Sample products · No real payments",
-        h("a", { href: "/studio" }, "Open Website Studio ↗"),
+        h("a", { href: studioPath }, "Open Website Studio ↗"),
       ),
       h("div", { class: "announcement" }, doc.ui.announcement),
       h(
@@ -777,6 +778,7 @@ if (
     revision = result.revision || 1;
     availabilityRevision = result.availabilityRevision || 0;
     workspace = result.id || workspace;
+    studioPath = result.studioPath || (result.id ? "/studio?workspace=" + result.id : "/studio");
     render();
     if (!force && changed) notify("The published website has updated. Please review your basket before requesting.");
   }

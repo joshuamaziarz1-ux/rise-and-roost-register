@@ -20,6 +20,7 @@ test('the primary storefront shares published products across independent sessio
       await visitor.goto('/demo/' + id + '/shop');
       await expect(editor.locator('.site-header')).toBeVisible();
       await expect(visitor.locator('.site-header')).toBeVisible();
+      await expect(editor.getByRole('link', { name: 'Open Website Studio' })).toHaveAttribute('href', '/studio?workspace=' + id);
       expect(await editor.locator('.product-card').allTextContents()).toEqual(await visitor.locator('.product-card').allTextContents());
       await visitor.goto('/studio');
       await visitor.getByText('Return to an existing workspace', { exact: true }).click();
@@ -34,6 +35,7 @@ test('the primary storefront shares published products across independent sessio
     await expect(editor.locator('#publishing-destination')).toContainText('main beta website');
     await visitor.goto('/shop');
     await expect(visitor.getByRole('heading', { name: 'Slow Sunday sourdough', exact: true })).toBeVisible();
+    await expect(visitor.getByRole('link', { name: 'Open Website Studio' })).toHaveAttribute('href', '/studio?workspace=' + id);
     await editor.getByRole('button', { name: 'Products', exact: true }).click();
     await editor.getByLabel('Product name', { exact: true }).fill('Cross-device published loaf');
     await editor.getByLabel('Price ($)', { exact: true }).fill('11.27');
