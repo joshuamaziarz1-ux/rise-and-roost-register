@@ -557,7 +557,9 @@ export async function api(request, db, now = Date.now()) {
         path.split("/").at(-1),
       );
       if (!row) fail("Image not found.", 404);
-      return new Response(row.bytes, {
+      // D1 returns BLOBs as number arrays; SQLite returns Uint8Array. Response
+      // would stringify a plain array into comma-separated text and break images.
+      return new Response(new Uint8Array(row.bytes), {
         headers: {
           "Content-Type": row.mime,
           "Cache-Control": "public,max-age=86400",

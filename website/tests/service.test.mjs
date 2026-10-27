@@ -12,7 +12,7 @@ import {
 import { seed, localInstant, safeLink, clone } from "../public/model.mjs";
 
 const now = Date.parse("2026-10-26T14:00:00Z");
-function database() {
+function database({ blobArrays = false } = {}) {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(readFileSync(new URL("../schema.sql", import.meta.url), "utf8"));
   return {
@@ -24,7 +24,9 @@ function database() {
           );
           return {
             async first() {
-              return sqlite.prepare(sql).get(...args) || null;
+              const row = sqlite.prepare(sql).get(...args) || null;
+              if (blobArrays && row?.bytes) row.bytes = Array.from(row.bytes);
+              return row;
             },
             async run() {
               const result = sqlite.prepare(sql).run(...args);
@@ -36,8 +38,8 @@ function database() {
     },
   };
 }
-function harness() {
-  const db = database();
+function harness(options) {
+  const db = database(options);
   let cookie = "";
   async function call(path, body, options = {}) {
     const response = await api(
@@ -519,6 +521,16 @@ test("workspace owners cannot save another workspace’s image references", asyn
     400,
   );
   assert.notEqual(first.id, second.id);
+});
+test("D1 number-array BLOBs are served as original image bytes rather than CSV text", async () => {
+  const h = harness({ blobArrays: true });
+  await h.call("/api/workspaces", {});
+  const image = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=", "base64");
+  const uploaded = await h.call("/api/upload", { mime: "image/png", data: image.toString("base64") });
+  assert.equal(uploaded.status, 201);
+  const served = await h.call(uploaded.data.src, undefined, { anonymous: true });
+  assert.equal(served.response.headers.get("Content-Type"), "image/png");
+  assert.deepEqual(new Uint8Array(served.data), new Uint8Array(image));
 });
 test("new-workspace and login rate limits return actionable errors", async () => {
   const h = harness();
