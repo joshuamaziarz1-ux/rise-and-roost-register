@@ -88,3 +88,36 @@ jobs:
             website/qa-results/hosted-api.json
           retention-days: 7
 # Intentionally no deployment step, production credentials, or write permissions.
+  root-sync:
+    if: github.head_ref == 'codex/issue-7-website-studio'
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+      options: --ipc=host
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - id: opt-in
+        run: |
+          subject=$(git -c safe.directory="$GITHUB_WORKSPACE" log -1 --format=%s)
+          case "$subject" in
+            *'[sync-repro]'*) echo 'mode=reproduce' >> "$GITHUB_OUTPUT" ;;
+            *'[verify-sync]'*|*'[verify-beta]'*) echo 'mode=verify' >> "$GITHUB_OUTPUT" ;;
+          esac
+      - uses: actions/setup-node@v5
+        if: steps.opt-in.outputs.mode != ''
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: npm ci
+        if: steps.opt-in.outputs.mode != ''
+      - run: node tests/root-sync.mjs --reproduce
+        if: steps.opt-in.outputs.mode == 'reproduce'
+      - run: node tests/root-sync.mjs
+        if: steps.opt-in.outputs.mode == 'verify'
