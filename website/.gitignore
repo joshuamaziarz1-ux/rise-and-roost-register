@@ -3,4 +3,5 @@ node_modules/
 .wrangler/
 test-results/
 playwright-report/
+qa-results/
 .dev.vars

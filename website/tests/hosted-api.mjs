@@ -100,6 +100,6 @@ await call('/api/order-status', { id: accepted.id, status: 'ready' }, 409);
 await call('/api/logout', {});
 await call('/api/studio', undefined, 401);
 const report = { checkedAt: new Date().toISOString(), origin, passed: true, checks: ['HTTPS public and Studio routes', 'assets and security headers', 'secure cookies and owner-only writes', 'CSRF and anonymous rejection', 'raster upload and invalid image rejection', 'D1 cross-session persistence', 'draft and preview separation', 'publish without deployment', 'stale revision and invalid input rejection', 'authoritative prices', 'concurrent D1 reservation and idempotency', 'explicit unpaid simulation', 'fulfillment transitions and logout'], timings };
-await mkdir('test-results', { recursive: true });
-await writeFile('test-results/hosted-api.json', JSON.stringify(report, null, 2));
+await mkdir('qa-results', { recursive: true });
+await writeFile('qa-results/hosted-api.json', JSON.stringify(report, null, 2));
 console.log(JSON.stringify({ passed: true, checks: report.checks, requests: timings.length, medianMs: timings.map((x) => x.ms).sort((a,b)=>a-b)[Math.floor(timings.length/2)] }, null, 2));

@@ -77,6 +77,6 @@ jobs:
           name: hosted-beta-screenshots
           path: |
             website/docs/screenshots/*.png
-            website/test-results/hosted-api.json
+            website/qa-results/hosted-api.json
           retention-days: 7
 # Intentionally no deployment step, production credentials, or write permissions.
