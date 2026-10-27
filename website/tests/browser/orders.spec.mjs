@@ -1,0 +1,98 @@
+import { test, expect } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
+import { mkdir } from 'node:fs/promises';
+
+test('customer order tracking separates payment verification and fulfillment across independent sessions', async ({ page, browser }, info) => {
+  const baseURL = info.project.use.baseURL;
+  if (!process.env.RR_BETA_BASE_URL) await page.context().setExtraHTTPHeaders({ 'CF-Connecting-IP': randomUUID() });
+  const created = await page.request.post('/api/workspaces', { headers: { Origin: new URL(baseURL).origin }, data: {} });
+  expect(created.status()).toBe(201);
+  const { id } = await created.json();
+  await page.goto('/studio?workspace=' + id);
+  await page.getByRole('navigation', { name: 'Studio navigation' }).getByRole('button', { name: 'Orders', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Orders & customer tracking' })).toBeVisible();
+  const customerContext = await browser.newContext({ ...info.project.use, baseURL });
+  if (!process.env.RR_BETA_BASE_URL) await customerContext.setExtraHTTPHeaders({ 'CF-Connecting-IP': randomUUID() });
+  try {
+    const customer = await customerContext.newPage();
+    const errors = [];
+    customer.on('pageerror', e => errors.push(e.message));
+    await customer.goto('/demo/' + id + '/product/bread');
+    await customer.getByRole('button', { name: 'Add to basket', exact: true }).click();
+    await customer.locator('.basket-link').click();
+    await expect(customer.getByLabel('Email for order updates', { exact: true })).toBeDisabled();
+    const pickup = customer.getByLabel('Choose your pickup', { exact: true });
+    await pickup.selectOption(await pickup.locator('option:not([disabled])').nth(1).getAttribute('value'));
+    await customer.getByRole('button', { name: 'Request a demo preorder', exact: true }).click();
+    const tracking = customer.getByRole('link', { name: 'Track your order', exact: true });
+    const trackingPath = await tracking.getAttribute('href');
+    expect(trackingPath).toMatch(/^\/orders\/[a-f0-9]{48}\/[a-f0-9]{48}#access=[a-f0-9]{48}$/);
+    const initialResponse = customer.waitForResponse(r => r.request().method() === 'GET' && r.url().includes('/api/order-tracking/'));
+    await tracking.click();
+    const initialOrder = await (await initialResponse).json();
+    await expect(customer.getByRole('heading', { name: /^RR-/ })).toBeVisible();
+    const current = customer.getByLabel('Current order status', { exact: true });
+    await expect(customer.getByLabel('Order items', { exact: true })).toContainText('1 × Slow Sunday sourdough (Classic loaf) · $9.00');
+    await expect(customer.locator('main')).not.toContainText('[object ');
+    await expect(current).toContainText('Awaiting payment report');
+    const reportRoute = '**/api/order-tracking/*/*/report';
+    await customer.route(reportRoute, route => route.fulfill({ status: 503, contentType: 'text/html', body: '<h1>Temporary outage</h1>' }));
+    await customer.getByRole('button', { name: "I've Sent Payment", exact: true }).click();
+    await expect(customer.getByRole('alert')).toContainText('temporarily unavailable');
+    await expect(current).toContainText('Awaiting payment report');
+    await customer.unroute(reportRoute);
+    await customer.getByRole('button', { name: "I've Sent Payment", exact: true }).click();
+    await expect(current).toContainText('Payment Reported');
+    await expect(current).toContainText('has not been accepted or processed');
+    await expect(current.getByRole('heading')).toHaveText('Order Received');
+    await expect(customer.getByLabel('Paid receipt', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Refresh orders', exact: true }).click();
+    const card = page.locator('article.sub-card');
+    await expect(card).toContainText('Payment Reported');
+    await card.getByText('Verify payment against independent records', { exact: true }).click();
+    await card.getByLabel('Private verification reference', { exact: true }).fill('SYNTHETIC QA ONLY - external reference');
+    await card.getByLabel('I checked an independent payment record for the full order total', { exact: true }).check();
+    await card.getByRole('button', { name: 'Record independently verified payment', exact: true }).click();
+    await expect(current).toContainText('Payment Verified', { timeout: 20000 });
+    await expect(current.getByRole('heading')).toHaveText('Order Received');
+    await expect(customer.getByLabel('Paid receipt', { exact: true })).toContainText('$9.00');
+    await expect(customer.getByLabel('Paid receipt', { exact: true })).toContainText('No payment was processed');
+    await expect(customer.locator('main')).not.toContainText('external reference');
+    await customer.emulateMedia({ media: 'print' });
+    await expect(customer.getByLabel('Paid receipt', { exact: true })).toBeVisible();
+    await expect(customer.getByLabel('Order stages', { exact: true })).toBeHidden();
+    await expect(customer.getByRole('button', { name: 'Print or save receipt as PDF', exact: true })).toBeHidden();
+    await customer.emulateMedia({ media: 'screen' });
+    await card.getByLabel('Fulfillment status', { exact: true }).selectOption('preparing');
+    await expect(current.getByRole('heading')).toHaveText('Preparing Your Order', { timeout: 20000 });
+    await card.getByLabel('Fulfillment status', { exact: true }).selectOption('ready');
+    await expect(current.getByRole('heading')).toHaveText('Ready for Pickup', { timeout: 20000 });
+    const statusRoute = '**/api/order-tracking/*/*';
+    await customer.route(statusRoute, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(initialOrder) }));
+    await customer.getByRole('button', { name: 'Refresh order status', exact: true }).click();
+    await expect(current.getByRole('heading')).toHaveText('Ready for Pickup');
+    await customer.unroute(statusRoute);
+    // A separate customer browser session can use the link, without a Studio cookie.
+    const second = await browser.newContext({ ...info.project.use, baseURL });
+    try {
+      const other = await second.newPage();
+      await other.goto(trackingPath);
+      await expect(other.getByLabel('Current order status', { exact: true })).toContainText('Ready for Pickup');
+      expect((await second.request.get('/api/studio')).status()).toBe(401);
+      expect((await second.request.post('/api/order-fulfillment', { headers: { Origin: new URL(baseURL).origin }, data: { id: 'no-owner', status: 'picked-up' } })).status()).toBe(401);
+      await other.goto(trackingPath.split('#')[0]);
+      await expect(other.getByRole('alert')).toContainText('complete private tracking link');
+      await expect(other.getByLabel('Paid receipt', { exact: true })).toHaveCount(0);
+    } finally { await second.close(); }
+    expect(await customer.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    await mkdir('qa-results', { recursive: true });
+    // Do not capture a Studio access key or the private customer tracking URL.
+    await customer.screenshot({ path: `qa-results/order-tracking-${info.project.name}.png`, fullPage: true });
+    if (info.project.name === 'desktop-chromium') await page.screenshot({ path: 'qa-results/studio-orders-desktop.png', fullPage: true });
+    await card.getByLabel('Fulfillment status', { exact: true }).selectOption('picked-up');
+    await expect(current.getByRole('heading')).toHaveText('Picked Up', { timeout: 20000 });
+    await customer.reload();
+    await expect(customer.getByLabel('Current order status', { exact: true })).toContainText('Picked Up');
+    expect(errors).toEqual([]);
+  } finally { await customerContext.close(); }
+});

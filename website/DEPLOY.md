@@ -59,3 +59,10 @@ Rollback for this isolated beta is a previous Worker deployment with its compati
 See [the beta deployment record](docs/BETA-DEPLOYMENT.md). Account-scoped token verification is the appropriate check for the configured account API token; the user-token verification endpoint is not applicable. The token has successfully created the dedicated D1 database, initialized its schema through the supported D1 query API, uploaded the website, and activated the beta version.
 
 Wrangler subsequently attempts `GET /accounts/{account_id}/workers/subdomain`, which is denied by this narrowly scoped token. Cloudflare documents **Workers Scripts Read** (or Write) at account level for this hostname lookup. No additional write access is needed for the completed beta deployment. Prefer supplying the existing public workers.dev URL from the beta Worker’s Dashboard **Visit** link, avoiding broader account-level access. A nonzero CLI result at this final lookup does not undo the upload: verify the target Worker’s active deployment and exact D1 binding before reporting status.
+
+
+## Customer tracking and optional email
+
+See [ORDER-TRACKING.md](docs/ORDER-TRACKING.md). The tracking release needs **no schema migration, reset, or import**: new order fields and its durable notification outbox are stored atomically in the existing beta ledger JSON. Old records remain unchanged until their owner explicitly enables a tracking link or changes a status. Preserve the current D1 ID and `PUBLIC_WORKSPACE_ID`.
+
+`ORDER_EMAIL_ENABLED = "false"` is intentional. A five-minute beta Worker scheduled handler retries consented notification submissions only when configuration is complete; while off it makes no D1 query or external request. There are no Square/Supabase bindings. Do not insert an email API key into wrangler.toml, GitHub, browser code, source control, or chat. Configure a beta-only Resend key as a Worker secret and a sender already verified with that provider, then explicitly enable email after a controlled recipient test. This task does not authorize DNS or custom-domain changes.

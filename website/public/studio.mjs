@@ -1,5 +1,6 @@
 import { h, button, field, request, notify, guard } from "./dom.mjs";
 import { seed, clone, money } from "./model.mjs";
+import { paymentLabels, fulfillmentLabels, notificationLabels, eventLabels } from "./orders.mjs";
 
 export async function start(root) {
   const requestedWorkspace = new URLSearchParams(location.search).get("workspace");
@@ -963,79 +964,79 @@ export async function start(root) {
   function ordersPanel() {
     let filter = "";
     const list = h("div");
-    const draw = () =>
-      list.replaceChildren(
-        ...state.orders
-          .filter((o) => !filter || o.pickup.date === filter)
-          .map((o) =>
-            h(
-              "div",
-              { class: "sub-card" },
-              h("h3", {}, "Demo " + o.id.slice(0, 8) + " · " + money(o.total)),
-              h("p", {}, o.pickup.date + " · " + o.pickup.start),
-              h(
-                "p",
-                {},
-                o.lines
-                  .map((l) => `${l.qty} × ${l.name} (${l.variant})`)
-                  .join(", "),
-              ),
-              h("strong", {}, "Payment not collected"),
-              field(
-                "Fulfillment status",
-                o.status,
-                guard(async (status) => {
-                  await request("/api/order-status", { id: o.id, status });
-                  state = await request("/api/studio");
-                  draw();
-                }),
-                { choices: ["pending", "ready", "picked-up", "canceled"] },
-              ),
-              h(
-                "details",
-                {},
-                h("summary", {}, "Audit history"),
-                o.audit.map((a) => h("p", {}, a.at + " · " + a.action)),
-              ),
-            ),
-          ),
-      );
+    const refreshOrders = async () => {
+      const fresh = await request("/api/studio");
+      state.orders = fresh.orders;
+      state.notificationsEnabled = fresh.notificationsEnabled;
+      draw();
+    };
+    const update = async (path, order, values) => {
+      await request(path, { id: order.id, version: order.version || 1, ...values });
+      await refreshOrders();
+    };
+    const card = (o) => {
+      const box = h("article", { class: "sub-card", "aria-label": "Order " + o.orderNumber },
+        h("h3", {}, o.orderNumber + " · " + money(o.total)),
+        h("p", {}, "BETA ORDER · " + o.pickup.date + " · " + o.pickup.start),
+        h("p", {}, o.lines.map((l) => `${l.qty} × ${l.name} (${l.variant})`).join(", ")),
+        h("p", {}, h("strong", {}, paymentLabels[o.paymentStatus] || "Awaiting payment report")),
+        h("p", {}, "Preparation: " + (fulfillmentLabels[o.status] || o.status)));
+      if (o.trackingPath) box.append(h("p", {}, h("a", { href: o.trackingPath, target: "_blank", rel: "noopener noreferrer" }, "Open private customer status")),
+        h("p", { class: "small-note" }, "Share this private link only with the customer. It does not grant Studio access."));
+      else box.append(button("Create customer tracking link", guard(() => update("/api/order-link", o, {}))));
+      if (o.paymentStatus === "verified") {
+        box.append(h("p", {}, "Verified: " + o.paymentVerifiedAt),
+          h("p", {}, "Independent reference (private): " + o.verification.evidence),
+          h("p", {}, "Beta paid receipt: " + o.paidReceipt.number));
+      } else if (o.status !== "canceled") {
+        let evidence = "", method = "external_record", checked = false;
+        const verify = button("Record independently verified payment", guard(async () => {
+          if (!checked) return notify("Check an independent payment record before confirming verification.", true);
+          verify.disabled = true;
+          try {
+            await update("/api/order-payment", o, { independentlyVerified: checked, method, evidence });
+            notify("Payment verification recorded and a beta paid receipt created. Preparation has not changed.");
+          } finally { verify.disabled = false; }
+        }));
+        box.append(h("details", {}, h("summary", {}, "Verify payment against independent records"),
+          h("p", {}, "A customer's payment report is not proof of payment. Check your independent bank, cash, or other payment record before using this control. This records manual verification only; it does not contact or modify Square."),
+          field("Independent payment record", method, (v) => { method = v; }, { choices: [
+            { value: "external_record", label: "External payment record" },
+            { value: "bank_record", label: "Bank record" },
+            { value: "cash_record", label: "Cash receipt record" },
+          ] }),
+          field("Private verification reference", evidence, (v) => { evidence = v; }, { maxlength: 500, placeholder: "Reference or record checked; no card or bank account details" }),
+          field("I checked an independent payment record for the full order total", checked, (v) => { checked = v; }, { type: "checkbox" }),
+          verify));
+      }
+      const allowed = {
+        pending: ["pending", "preparing", "ready", "canceled"],
+        preparing: ["preparing", "ready", "canceled"],
+        ready: ["ready", "picked-up", "canceled"],
+        "picked-up": ["picked-up"], canceled: ["canceled"],
+      }[o.status] || [o.status];
+      box.append(field("Fulfillment status", o.status, guard(async (status) => {
+        try { await update("/api/order-fulfillment", o, { status }); }
+        catch (e) { draw(); throw e; }
+      }), { choices: allowed.map((value) => ({ value, label: fulfillmentLabels[value] || value })) }),
+      h("p", { class: "small-note" }, "Change preparation only when work actually begins. Ready for Pickup updates the customer's page immediately. Payment status stays separate; cancellation does not issue a refund."),
+      h("details", {}, h("summary", {}, "Email notification activity"),
+        o.customer?.emailOptIn ? [h("p", {}, "Customer requested transactional email updates."),
+          (o.notifications || []).map((n) => h("p", {}, `${eventLabels[n.event]}: ${notificationLabels[n.status] || "Submission not confirmed"}${n.acceptedAt ? " · " + n.acceptedAt : ""}`))]
+          : h("p", {}, "Email updates not requested. The private status page works without email.")),
+      h("details", {}, h("summary", {}, "Audit history"), o.audit.map((a) => h("p", {}, a.at + " · " + a.action))));
+      return box;
+    };
+    const draw = () => list.replaceChildren(...state.orders.filter((o) => !filter || o.pickup.date === filter).map(card));
     draw();
-    return h(
-      "div",
-      {},
-      h("h2", {}, "Demo orders, kept simple."),
-      h(
-        "p",
-        {},
-        "Simulated requests only. There is no “mark paid” control. Canceling releases capacity. Real customers, refunds, and Square are not connected.",
-      ),
-      field(
-        "Filter pickup date",
-        filter,
-        (value) => {
-          filter = value;
-          draw();
-        },
-        { type: "date" },
-      ),
-      button(
-        "Refresh orders",
-        guard(async () => {
-          const fresh = await request("/api/studio");
-          state.orders = fresh.orders;
-          draw();
-        }),
-      ),
-      list,
-      state.orders.length
-        ? null
-        : h(
-            "p",
-            {},
-            "No demo orders yet. Open the published demo, add a product, and request a simulated preorder.",
-          ),
-    );
+    return h("div", {}, h("h2", {}, "Orders & customer tracking"),
+      h("p", {}, "Manage payment verification, preparation, and pickup separately. Beta orders do not charge customers or process Square payments. Saved statuses and customer tracking links work across devices without publishing the website again."),
+      h("p", { class: "small-note" }, state.notificationsEnabled
+        ? "Optional transactional email is connected. Provider acceptance is recorded; delivery is not claimed."
+        : "Email sending is off until a verified sender and a beta-only email service are configured. Customer status pages work now."),
+      field("Filter pickup date", filter, (v) => { filter = v; draw(); }, { type: "date" }),
+      button("Refresh orders", guard(refreshOrders)), list,
+      !state.orders.length ? h("p", {}, "No demo orders yet. Open the published website, add a product, and request a simulated preorder.") : null);
   }
   function versionsPanel() {
     return h(

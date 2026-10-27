@@ -56,6 +56,9 @@ jobs:
             *'[verify-beta]'*)
               echo 'enabled=true' >> "$GITHUB_OUTPUT"
               echo 'suite=full' >> "$GITHUB_OUTPUT" ;;
+            *'[verify-orders]'*)
+              echo 'enabled=true' >> "$GITHUB_OUTPUT"
+              echo 'suite=orders' >> "$GITHUB_OUTPUT" ;;
             *'[verify-pages]'*)
               echo 'enabled=true' >> "$GITHUB_OUTPUT"
               echo 'suite=pages' >> "$GITHUB_OUTPUT" ;;
@@ -76,9 +79,17 @@ jobs:
         if: steps.opt-in.outputs.suite == 'full'
       - run: npm run test:browser -- --grep 'responsive public' --max-failures=1
         if: steps.opt-in.outputs.suite == 'pages'
+      - run: npm run test:browser -- --grep 'customer order tracking' --max-failures=1
+        if: steps.opt-in.outputs.suite == 'orders'
+      - uses: actions/upload-artifact@v4
+        if: steps.opt-in.outputs.suite == 'orders'
+        with:
+          name: hosted-order-tracking-screenshots
+          path: website/qa-results/*.png
+          retention-days: 7
       - id: evidence
         run: npm run screenshots
-        if: steps.opt-in.outputs.enabled == 'true'
+        if: steps.opt-in.outputs.enabled == 'true' && steps.opt-in.outputs.suite != 'orders'
       - uses: actions/upload-artifact@v4
         if: steps.evidence.outcome == 'success'
         with:
@@ -107,7 +118,7 @@ jobs:
           subject=$(git -c safe.directory="$GITHUB_WORKSPACE" log -1 --format=%s)
           case "$subject" in
             *'[sync-repro]'*) echo 'mode=reproduce' >> "$GITHUB_OUTPUT" ;;
-            *'[verify-sync]'*|*'[verify-beta]'*) echo 'mode=verify' >> "$GITHUB_OUTPUT" ;;
+            *'[verify-sync]'*|*'[verify-beta]'*|*'[verify-orders]'*) echo 'mode=verify' >> "$GITHUB_OUTPUT" ;;
           esac
       - uses: actions/setup-node@v5
         if: steps.opt-in.outputs.mode != ''

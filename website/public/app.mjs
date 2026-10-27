@@ -9,6 +9,8 @@ if (
   import("./studio.mjs")
     .then((m) => m.start(root))
     .catch((e) => notify(e.message, true));
+} else if (location.pathname.startsWith("/orders/")) {
+  import("./tracking.mjs").then((m) => m.start(root)).catch((e) => notify(e.message, true));
 } else {
   let doc,
     revision = 1,
@@ -18,7 +20,10 @@ if (
     isPreview = false,
     prefix = "",
     path = "/",
-    receipt;
+    receipt,
+    notificationsEnabled = false,
+    checkoutEmail = "",
+    emailOptIn = false;
   const editing = new URLSearchParams(location.search).has("studio-preview");
   let previewDocumentReceived = false;
   const match = location.pathname.match(
@@ -79,7 +84,7 @@ if (
     )
       return;
     const target = new URL(a.href).pathname;
-    if (target.startsWith("/studio")) return;
+    if (target.startsWith("/studio") || target.startsWith("/orders/")) return;
     if (prefix && !target.startsWith(prefix)) return;
     e.preventDefault();
     navigate(prefix ? target.slice(prefix.length) || "/" : target);
@@ -421,7 +426,7 @@ if (
         { class: "section-inner empty-state receipt" },
         h("span", { class: "eyebrow" }, "DEMO · NO PAYMENT"),
         h("h1", {}, doc.ui.simulated),
-        h("p", {}, "Reference: " + receipt.id.slice(0, 10)),
+        h("p", {}, "Order number: " + (receipt.orderNumber || receipt.id.slice(0, 10))),
         h("p", {}, pickupLabel(receipt.pickup)),
         h(
           "p",
@@ -437,9 +442,11 @@ if (
         h(
           "p",
           {},
-          "Status: pending · Payment: not collected · No real fulfillment",
+          "Your beta request was received. Open Track your order for its current payment, preparation, and pickup status. This website has not processed a payment.",
         ),
-        link("/shop", doc.ui.continue, "primary-link"),
+        receipt.trackingPath ? h("p", {}, h("a", { href: receipt.trackingPath, class: "primary-link" }, "Track your order")) : null,
+        h("p", { class: "small-note" }, "Save your private tracking link to view this order on another device. Email is optional and is sent only when configured and requested."),
+        link("/shop", doc.ui.continue, "secondary-button"),
       );
     const lines = cart.lines
       .map((l) => ({
@@ -480,9 +487,21 @@ if (
       }),
     );
     const chosen = doc.pickups.find((p) => p.id === cart.pickupId);
+    const emailInput = h("input", {
+      type: "email", "aria-label": "Email for order updates", autocomplete: "email", maxlength: 254,
+      value: checkoutEmail, disabled: !notificationsEnabled,
+      oninput: (e) => { checkoutEmail = e.target.value; },
+    });
+    const emailConsent = h("input", {
+      type: "checkbox", checked: emailOptIn, disabled: !notificationsEnabled,
+      "aria-label": "Email me order updates",
+      onchange: (e) => { emailOptIn = e.target.checked; emailInput.required = emailOptIn; },
+    });
+    emailInput.required = emailOptIn;
     const action = button(
       doc.ui.checkout,
       guard(async () => {
+        if (emailOptIn && !emailInput.reportValidity()) return;
         action.disabled = true;
         try {
           if (!workspace) {
@@ -499,6 +518,8 @@ if (
             revision,
             requestId: cart.requestId,
             pickupId: cart.pickupId,
+            emailOptIn: notificationsEnabled && emailOptIn,
+            email: checkoutEmail,
             total,
             lines: lines.map((l) => ({
               productId: l.productId,
@@ -626,6 +647,11 @@ if (
                 h("span", {}, "Demo total"),
                 h("strong", {}, money(total)),
               ),
+              h("label", { class: "field" }, h("span", {}, "Email for order updates (optional)"), emailInput),
+              h("label", { class: "field" }, h("span", {}, "Email me order receipt, verified payment, preparation, and pickup readiness"), emailConsent),
+              h("p", { class: "small-note" }, notificationsEnabled
+                ? "Transactional updates only. Provider acceptance is shown on your private tracking page; inbox delivery is not guaranteed."
+                : "Email is not connected for this beta site. You will receive a private order tracking link instead."),
               action,
               h(
                 "p",
@@ -775,6 +801,7 @@ if (
     const changed = result.id !== workspace || result.revision !== revision;
     if (!force && !changed && result.availabilityRevision === availabilityRevision) return;
     doc = result.document;
+    notificationsEnabled = !!result.notificationsEnabled;
     revision = result.revision || 1;
     availabilityRevision = result.availabilityRevision || 0;
     workspace = result.id || workspace;

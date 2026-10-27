@@ -2,7 +2,7 @@
 
 Isolated Issue #7 beta, based on production main `ab27be06d0ad7a999d4ca122ed30373c69b04435`. Issues #5 and #7 and Phase 1 PR #3 (`c3b28a369aa90c2f03895a9cf315f4e0f410cbb5`) were inspected. PR #3 remains unmerged and is not a dependency of this project. Its earlier 135-test result is not claimed as this website’s test result.
 
-Everything in this project is separate from the existing Register: frontend assets, theme, backend, storage, orders, authentication, and deployment. There is no production Supabase client, Square integration, real payment status, production deployment, or DNS configuration. The original Register/Admin files remain unchanged.
+Everything in this project is separate from the existing Register: frontend assets, theme, backend, storage, orders, authentication, and deployment. There is no production Supabase client, Square integration, automated payment processing, production deployment, or DNS configuration. The original Register/Admin files remain unchanged.
 
 ## Run and test
 
@@ -42,14 +42,16 @@ Use **View published website** in the main workspace to share the root site. Sep
 
 ## Simulated commerce
 
-Shop, product detail, basket quantities, varieties, integer-cent totals, pickup selection, and receipt pages work end to end. Every request rechecks the published revision, prices, sales channel, quantity, total, local cutoff, closed/full pickup, per-product pickup capacity, and total stock. Atomic compare-and-swap protects capacity; request IDs prevent duplicate orders on retries. Requests always remain **payment not collected / simulated**. No payment details or customer contact information are requested. Orders can move through pending, ready, picked-up, and canceled; cancellation releases capacity, and completed/canceled orders cannot be resurrected. All fulfillment changes are audited.
+Shop, product detail, basket quantities, varieties, integer-cent totals, pickup selection, and receipt pages work end to end. Every request rechecks the published revision, prices, sales channel, quantity, total, local cutoff, closed/full pickup, per-product pickup capacity, and total stock. Atomic compare-and-swap protects capacity; request IDs prevent duplicate orders on retries. Orders remain clearly labeled **beta / simulated** and the website never processes a payment. Checkout creates a unique order number and private customer status link. **I've Sent Payment** records only a customer report, not acceptance or verification. In **Studio → Orders**, Danielle can record verification only after checking independent payment records and entering a private reference. This creates an immutable beta paid receipt and updates the private status page without publishing or deploying. Payment remains separate from pending/preparing/ready/picked-up/canceled fulfillment. Preparation starts only on its own explicit action. Cancellation releases capacity and never claims a refund. Changes are audited and reject stale order versions.
+
+Optional transactional email supports order receipt, verified payment, preparation, and pickup readiness. It is **off** until a beta-only Resend sending key and verified sender are configured. Without email, private tracking works across devices; keep the entire link, including its fragment. Customer emails are collected only with explicit opt-in when sending is enabled on the primary beta. Provider acceptance is recorded separately from delivery; no UI claims delivery. See [order tracking and email setup](docs/ORDER-TRACKING.md).
 
 The basket uses localStorage only as an optional convenience for a visitor; it is never the authority for price, order acceptance, content, authentication, or publishing. Fulfillment management is under **Orders**. Customers/The Roost, Square, recipes, refunds, real customer accounts, and production tax rules remain later integrations, not simulated management screens that imply those services are connected.
 
 ## Architecture and isolation
 
 - `public/`: framework-free ES modules; plain-text DOM construction, editorial farmhouse theme, approved logo and labeled sample illustrations. No third-party scripts, tracking, remote fonts, or external product images.
-- `server/service.mjs`: shared authenticated content/commerce service. SHA-256 hashes of 192-bit random owner keys and session tokens; Secure/HttpOnly/SameSite cookies on HTTPS; same-origin POST enforcement; rate limits; schema, upload, and CSS validation; no public order/customer endpoint.
+- `server/service.mjs`: shared authenticated content/commerce service. SHA-256 hashes of 192-bit random owner keys and session tokens; Secure/HttpOnly/SameSite cookies on HTTPS; same-origin POST enforcement; rate limits; schema, upload, and CSS validation; private capability-protected customer order tracking; no public order listing or administrative access.
 - `server/worker.mjs`: Cloudflare Worker with static assets, security headers, and isolated D1 binding. `schema.sql` only creates this demo’s tables; it must never run against production.
 - `server/local.mjs`: Node HTTP adapter using Node’s SQLite engine and the same service/SQL interface. Database writes persist across development-server restarts. `RR_TEST_DB=:memory:` is for automated testing only.
 - Published site, drafts, and previews are separate server records. No whole-store import, Register theme injection, database/schema changes to the current store, or forwarding to a live endpoint.

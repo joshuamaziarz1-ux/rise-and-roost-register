@@ -18,3 +18,8 @@ database_id = "7824ffe0-d69a-4221-9aec-0f335257477a"
 [vars]
 # Public identifier, not an access key. Only this workspace publishes to the root beta.
 PUBLIC_WORKSPACE_ID = "be1fcd22410ed1f18cab57eddf780aa840c2b2213ab123ae"
+# Transactional email stays off until a verified sender and a beta-only API key exist.
+ORDER_EMAIL_ENABLED = "false"
+
+[triggers]
+crons = ["*/5 * * * *"]

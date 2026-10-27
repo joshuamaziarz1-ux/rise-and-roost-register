@@ -1,4 +1,6 @@
 import * as css from "css-tree";
+import { customerOrder, emailAddress, enqueue } from "./orders.mjs";
+import { trackingPath } from "../public/orders.mjs";
 import { seed, ZONE, localInstant, safeLink } from "../public/model.mjs";
 
 const encoder = new TextEncoder();
@@ -140,7 +142,7 @@ export function validateDocument(doc) {
   for (const page of doc.pages) {
     if (
       !/^\/(?:[a-z0-9-]+)?$/.test(page.slug) ||
-      ["/studio", "/cart", "/product", "/api", "/demo", "/preview"].includes(
+      ["/studio", "/cart", "/product", "/api", "/demo", "/preview", "/orders"].includes(
         page.slug,
       ) ||
       slugs.has(page.slug)
@@ -370,7 +372,7 @@ export function inspectImage(bytes, mime) {
     );
   return true;
 }
-export async function api(request, db, now = Date.now(), { publicWorkspaceId = "" } = {}) {
+export async function api(request, db, now = Date.now(), { publicWorkspaceId = "", emailEnabled = false } = {}) {
   const url = new URL(request.url),
     path = url.pathname;
   const first = (sql, ...args) =>
@@ -456,7 +458,8 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       revision: row.revision,
       publishedRevision: row.published_revision,
       versions: JSON.parse(row.versions_json).map(({ document, ...v }) => v),
-      orders: JSON.parse(row.ledger_json).orders,
+      orders: JSON.parse(row.ledger_json).orders.map((o) => ({ ...o, orderNumber: o.orderNumber || "RR-" + o.id.slice(0, 16).toUpperCase(), version: o.version || 1, trackingPath: trackingPath(row.id, o) })),
+      notificationsEnabled: emailEnabled && row.id === publicWorkspaceId,
       owner: "Danielle · Demo Owner",
       isPrimary: row.id === publicWorkspaceId,
       publishedPath: row.id === publicWorkspaceId ? "/" : "/demo/" + row.id,
@@ -536,6 +539,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       );
       if (!row) fail("This published workspace was not found. Contact the beta operator; saved content has not been reset.", id === publicWorkspaceId ? 503 : 404);
       return json({
+        notificationsEnabled: emailEnabled && id === publicWorkspaceId,
         document: availableDocument(JSON.parse(row.published_json), JSON.parse(row.ledger_json)),
         revision: row.published_revision,
         availabilityRevision: row.ledger_version,
@@ -699,7 +703,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           );
         const ledger = JSON.parse(row.ledger_json),
           prior = ledger.orders.find((o) => o.requestId === input.requestId);
-        if (prior) return json(prior);
+        if (prior) return json(customerOrder(prior, row.id));
         if (input.revision !== row.published_revision)
           fail(
             "The published site changed. Refresh your basket and review the latest prices and deadlines.",
@@ -709,13 +713,33 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           fail(
             "This demo has reached its order limit. Create a new workspace.",
           );
+        const customer = { emailOptIn: false };
+        if (input.emailOptIn === true) {
+          if (!emailEnabled || row.id !== publicWorkspaceId)
+            fail("Email updates are not configured for this beta site. Leave email updates off and use your private status page.", 409);
+          const email = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
+          if (!emailAddress(email)) fail("Enter a valid email address for order updates.");
+          customer.email = email;
+          customer.emailOptIn = true;
+          customer.consentedAt = new Date(now).toISOString();
+        }
         const order = {
           ...quote(JSON.parse(row.published_json), ledger, input, now),
           id: token(),
           requestId: input.requestId,
+          trackingKey: token(),
+          version: 1,
+          customer,
+          notifications: [],
+          merchant: (() => {
+            const { name, address, email } = JSON.parse(row.published_json).business;
+            return { name, address, email };
+          })(),
           at: new Date(now).toISOString(),
           audit: [{ action: "Demo request", at: new Date(now).toISOString() }],
         };
+        order.orderNumber = "RR-" + order.id.slice(0, 16).toUpperCase();
+        enqueue(order, "received", order.at, token);
         ledger.orders.unshift(order);
         const result = await run(
           "UPDATE workspaces SET ledger_json=?,ledger_version=ledger_version+1 WHERE id=? AND ledger_version=? AND published_revision=?",
@@ -724,51 +748,97 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           row.ledger_version,
           row.published_revision,
         );
-        if (result.meta.changes === 1) return json(order, 201);
+        if (result.meta.changes === 1) return json(customerOrder(order, row.id), 201);
       }
       fail(
         "Another order reserved capacity. Review availability and try again.",
         409,
       );
     }
-    if (path === "/api/order-status" && request.method === "POST") {
+    const tracking = /^\/api\/order-tracking\/([a-f0-9]{48})\/([a-f0-9]{48})(\/report)?$/.exec(path);
+    if (tracking && ((request.method === "GET" && !tracking[3]) || (request.method === "POST" && tracking[3]))) {
+      const raw = /^Bearer ([a-f0-9]{48})$/.exec(request.headers.get("Authorization") || "")?.[1];
+      if (!raw) fail("Use the complete private tracking link from your order confirmation.", 401);
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const row = await first("SELECT * FROM workspaces WHERE id=?", tracking[1]);
+        const ledger = row && JSON.parse(row.ledger_json);
+        const order = ledger?.orders.find((o) => o.id === tracking[2]);
+        if (!order?.trackingKey || await hash(raw) !== await hash(order.trackingKey)) {
+          await rateLimit("tracking-denied", 60);
+          fail("This private tracking link is invalid. Check the complete link or contact the farm.", 404);
+        }
+        if (request.method === "GET") return json(customerOrder(order, row.id));
+        if (order.status === "canceled") fail("This order was canceled. Contact the farm about payment.", 409);
+        if (["reported", "verified"].includes(order.paymentStatus)) return json(customerOrder(order, row.id));
+        order.paymentStatus = "reported";
+        order.paymentReportedAt = new Date(now).toISOString();
+        order.version = (order.version || 1) + 1;
+        order.audit.push({ action: "Payment reported by customer; not verified", at: order.paymentReportedAt });
+        const result = await run("UPDATE workspaces SET ledger_json=?,ledger_version=ledger_version+1 WHERE id=? AND ledger_version=?",
+          JSON.stringify(ledger), row.id, row.ledger_version);
+        if (result.meta.changes === 1) return json(customerOrder(order, row.id));
+      }
+      fail("Another update arrived first. Refresh your order status and try again.", 409);
+    }
+    if (["/api/order-status", "/api/order-fulfillment", "/api/order-payment", "/api/order-link"].includes(path) && request.method === "POST") {
       const row = await owner(),
         ledger = JSON.parse(row.ledger_json),
         order = ledger.orders.find((o) => o.id === input.id);
-      if (
-        !order ||
-        !["pending", "ready", "picked-up", "canceled"].includes(input.status)
-      )
-        fail("Choose an existing demo order and fulfillment status.");
-      const transitions = {
-        pending: ["pending", "ready", "canceled"],
-        ready: ["ready", "picked-up", "canceled"],
-        "picked-up": ["picked-up"],
-        canceled: ["canceled"],
-      };
-      if (!transitions[order.status].includes(input.status))
-        fail(
-          "Completed or canceled orders cannot be reopened. Create a new request instead.",
-          409,
-        );
-      order.status = input.status;
-      order.audit.push({
-        action: input.status,
-        author: "Danielle · Demo Owner",
-        at: new Date(now).toISOString(),
-      });
+      if (!order) fail("Choose an existing order.");
+      if (path !== "/api/order-status" && input.version !== (order.version || 1))
+        fail("This order changed on another device. Refresh orders before trying again.", 409);
+      const at = new Date(now).toISOString();
+      let action;
+      if (path === "/api/order-link") {
+        if (order.trackingKey) return json({ ...order, trackingPath: trackingPath(row.id, order) });
+        order.trackingKey = token();
+        order.orderNumber ||= "RR-" + order.id.slice(0, 16).toUpperCase();
+        action = "Private tracking link enabled for existing order";
+      } else if (path === "/api/order-payment") {
+        if (order.status === "canceled") fail("Canceled orders cannot be verified here. Check records and handle any refund separately.", 409);
+        if (order.paymentStatus === "verified") return json(order);
+        if (input.independentlyVerified !== true || !["bank_record", "cash_record", "external_record"].includes(input.method) ||
+          typeof input.evidence !== "string" || input.evidence.trim().length < 5 || input.evidence.length > 500)
+          fail("Confirm that you checked an independent payment record and enter its reference (5–500 characters). A customer report alone is not verification.");
+        order.paymentStatus = "verified";
+        order.paymentVerifiedAt = at;
+        order.verification = { method: input.method, evidence: input.evidence.trim(), at, author: "Danielle · Demo Owner" };
+        order.paidReceipt = {
+          number: "BETA-PAID-" + order.id.slice(0, 16).toUpperCase(),
+          orderNumber: order.orderNumber || "RR-" + order.id.slice(0, 16).toUpperCase(),
+          issuedAt: at, paidAt: at, total: order.total, currency: "USD", lines: copy(order.lines),
+          verification: "Independent payment record checked by Danielle",
+          merchant: order.merchant || { name: "Rise & Roost" },
+          beta: true, websiteProcessedPayment: false,
+        };
+        enqueue(order, "verified", at, token);
+        action = "Payment independently verified; beta paid receipt issued";
+      } else {
+        const transitions = {
+          pending: ["pending", "preparing", "ready", "canceled"],
+          preparing: ["preparing", "ready", "canceled"],
+          ready: ["ready", "picked-up", "canceled"],
+          "picked-up": ["picked-up"], canceled: ["canceled"],
+        };
+        if (!Object.hasOwn(transitions, input.status)) fail("Choose an existing order and fulfillment status.");
+        if (!transitions[order.status]?.includes(input.status))
+          fail("Completed, canceled, or advanced orders cannot move backward. Refresh before trying again.", 409);
+        if (input.status === order.status) return json(order);
+        order.status = input.status;
+        const timestamp = { preparing: "preparingAt", ready: "readyAt", "picked-up": "pickedUpAt", canceled: "canceledAt" }[input.status];
+        if (timestamp) order[timestamp] = at;
+        enqueue(order, input.status, at, token);
+        action = "Fulfillment: " + input.status;
+      }
+      order.version = (order.version || 1) + 1;
+      order.audit.push({ action, author: "Danielle · Demo Owner", at });
       const result = await run(
         "UPDATE workspaces SET ledger_json=?,ledger_version=ledger_version+1 WHERE id=? AND ledger_version=?",
-        JSON.stringify(ledger),
-        row.id,
-        row.ledger_version,
+        JSON.stringify(ledger), row.id, row.ledger_version,
       );
       if (result.meta.changes !== 1)
-        fail(
-          "Another device updated orders. Refresh before trying again.",
-          409,
-        );
-      return json(order);
+        fail("Another device updated orders. Refresh before trying again.", 409);
+      return json({ ...order, trackingPath: trackingPath(row.id, order) });
     }
     fail("This action was not found.", 404);
   } catch (error) {

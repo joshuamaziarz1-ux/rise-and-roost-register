@@ -1,0 +1,11 @@
+/* The existing farmhouse stylesheet remains unchanged. This affects receipts
+   only when the customer uses the browser's print / save PDF dialog. */
+@media print {
+  @page { margin: 20mm; }
+  #notice, .demo-bar, .site-header, .skip-link { display: none !important; }
+  .tracking-page.has-paid-receipt > :not(.paid-receipt),
+  .paid-receipt button { display: none !important; }
+  .tracking-page { width: 100%; max-width: none; margin: 0; padding: 0; }
+  .paid-receipt { border: 0; padding: 0; break-inside: avoid; }
+  .site-root { background: white; color: black; }
+}
