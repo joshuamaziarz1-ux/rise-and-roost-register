@@ -172,6 +172,7 @@ test("products, upload/crop, varieties, price, pickup cutoff, and simulated cart
     .fill("A sample description, made our own.");
   await page.getByLabel("Price ($)", { exact: true }).fill("11.50");
   await page.getByLabel("Category", { exact: true }).fill("Bakery");
+  await page.getByLabel("Total demo stock (0 = sold out)", { exact: true }).fill("2");
   await page.getByLabel("Replace photo 1", { exact: true }).setInputFiles({
     name: "not-a-photo.svg", mimeType: "image/svg+xml", buffer: Buffer.from("<svg/>")
   });
@@ -236,6 +237,8 @@ test("products, upload/crop, varieties, price, pickup cutoff, and simulated cart
     .click();
   await expect(page.locator(".receipt")).toContainText("no payment collected");
   await expect(page.locator(".receipt")).toContainText("$23.00");
+  await page.goto("/demo/" + id + "/product/bread");
+  await expect(page.getByRole("button", { name: "Sold out", exact: true })).toBeDisabled();
 });
 
 test("Sold Out, in-store and hidden availability persist; failed saves recover without discarding edits", async ({ page, context }) => {
@@ -275,6 +278,17 @@ test("Sold Out, in-store and hidden availability persist; failed saves recover w
   await expect(visitor.getByRole("heading", { name: "This item is unavailable." })).toBeVisible();
   await visitor.goto("/demo/" + id + "/shop");
   await expect(visitor.getByRole("heading", { name: "Slow Sunday sourdough", exact: true })).toHaveCount(0);
+  // Root checkout must not sign Danielle out or restore an already submitted basket.
+  await visitor.goto("/product/bread");
+  await visitor.getByRole("button", { name: "Add to basket", exact: true }).click();
+  await visitor.locator(".basket-link").click();
+  const pickup = visitor.getByLabel("Choose your pickup", { exact: true });
+  await pickup.selectOption(await pickup.locator("option:not([disabled])").nth(1).getAttribute("value"));
+  await visitor.getByRole("button", { name: "Request a demo preorder", exact: true }).click();
+  await expect(visitor.locator(".receipt")).toContainText("no payment collected");
+  expect((await (await page.request.get("/api/studio")).json()).id).toBe(id);
+  await visitor.goto("/cart");
+  await expect(visitor.locator("main")).toContainText("Your basket is waiting for something good.");
   await visitor.close();
 });
 

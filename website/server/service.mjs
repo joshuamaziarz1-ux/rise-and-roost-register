@@ -326,6 +326,22 @@ export function quote(doc, ledger, input, now = Date.now()) {
     simulated: true,
   };
 }
+// Publish aggregate availability, never order details or customer/owner credentials.
+export function availableDocument(document, ledger) {
+  const doc = copy(document);
+  const units = new Map(), orders = new Map();
+  for (const order of ledger.orders) {
+    if (order.status === "canceled") continue;
+    orders.set(order.pickupId, (orders.get(order.pickupId) || 0) + 1);
+    for (const line of order.lines)
+      units.set(line.productId, (units.get(line.productId) || 0) + line.qty);
+  }
+  for (const product of doc.products)
+    product.stock = Math.max(0, product.stock - (units.get(product.id) || 0));
+  for (const pickup of doc.pickups)
+    pickup.capacity = Math.max(0, pickup.capacity - (orders.get(pickup.id) || 0));
+  return doc;
+}
 export function inspectImage(bytes, mime) {
   if (bytes.length > 2000000 || bytes.length < 24)
     fail("Use a JPG, PNG, or WebP smaller than 2 MB.");
@@ -469,7 +485,7 @@ export async function api(request, db, now = Date.now()) {
         version.at,
       );
       return json(
-        {
+        input.customerDemo === true ? { id, publishedRevision: 1 } : {
           id,
           accessKey,
           ...ownerResult(
@@ -477,7 +493,7 @@ export async function api(request, db, now = Date.now()) {
           ),
         },
         201,
-        { "Set-Cookie": await sessionCookie(id) },
+        input.customerDemo === true ? {} : { "Set-Cookie": await sessionCookie(id) },
       );
     }
     if (path === "/api/login" && request.method === "POST") {
@@ -508,15 +524,16 @@ export async function api(request, db, now = Date.now()) {
     }
     if (path === "/api/site" && request.method === "GET") {
       const id = url.searchParams.get("workspace");
-      if (!id) return json({ document: seed(now), revision: 1, id: "" });
+      if (!id) return json({ document: seed(now), revision: 1, availabilityRevision: 0, id: "" });
       const row = await first(
-        "SELECT published_json,published_revision FROM workspaces WHERE id=?",
+        "SELECT published_json,published_revision,ledger_json,ledger_version FROM workspaces WHERE id=?",
         id,
       );
       if (!row) fail("This demo workspace was not found.", 404);
       return json({
-        document: JSON.parse(row.published_json),
+        document: availableDocument(JSON.parse(row.published_json), JSON.parse(row.ledger_json)),
         revision: row.published_revision,
+        availabilityRevision: row.ledger_version,
         id,
       });
     }

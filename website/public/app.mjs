@@ -12,6 +12,7 @@ if (
 } else {
   let doc,
     revision = 1,
+    availabilityRevision = 0,
     workspace = "",
     isPreview = false,
     prefix = "",
@@ -484,11 +485,13 @@ if (
         action.disabled = true;
         try {
           if (!workspace) {
-            const created = await request("/api/workspaces", {});
+            const created = await request("/api/workspaces", { customerDemo: true });
             workspace = created.id;
             revision = created.publishedRevision;
             prefix = "/demo/" + workspace;
             history.replaceState({}, "", prefix + "/cart");
+            cart.originatedAtRoot = true;
+            saveCart();
           }
           receipt = await request("/api/orders", {
             workspaceId: workspace,
@@ -503,6 +506,10 @@ if (
               unitPrice: l.p.price + l.v.extra,
             })),
           });
+          // Root checkout moves into an isolated demo; clear the originating basket too.
+          if (cart.originatedAtRoot) {
+            try { localStorage.removeItem("rr-beta-cart:"); } catch {}
+          }
           cart = { lines: [], pickupId: "", requestId: crypto.randomUUID() };
           saveCart();
           render();
@@ -757,6 +764,7 @@ if (
     if (editing && previewDocumentReceived) return;
     doc = result.document;
     revision = result.revision || 1;
+    availabilityRevision = result.availabilityRevision || 0;
     workspace = result.id || workspace;
     render();
   }
@@ -768,11 +776,13 @@ if (
         const result = await request(
           "/api/site" + (workspace ? "?workspace=" + workspace : ""),
         );
-        if (result.revision !== revision) {
+        if (result.revision !== revision || result.availabilityRevision !== availabilityRevision) {
+          const contentChanged = result.revision !== revision;
           doc = result.document;
           revision = result.revision;
+          availabilityRevision = result.availabilityRevision;
           render();
-          notify(
+          if (contentChanged) notify(
             "The published website has updated. Please review your basket before requesting.",
           );
         }

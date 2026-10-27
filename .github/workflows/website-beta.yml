@@ -51,7 +51,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
       - id: opt-in
         run: |
-          case "$(git log -1 --format=%s)" in
+          subject=$(git -c safe.directory="$GITHUB_WORKSPACE" log -1 --format=%s)
+          case "$subject" in
             *'[verify-beta]'*) echo 'enabled=true' >> "$GITHUB_OUTPUT" ;;
           esac
       - uses: actions/setup-node@v5

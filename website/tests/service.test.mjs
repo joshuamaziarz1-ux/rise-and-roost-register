@@ -309,6 +309,39 @@ test("all administrative writes require an owner session and other owners cannot
   await h.call("/api/workspaces", {});
   assert.equal((await h.call("/api/order-status", { id: order.id, status: "canceled" })).status, 400);
 });
+test("root customer demos preserve an existing Studio session and never disclose an owner key", async () => {
+  const h = harness();
+  const { data: owner } = await h.call("/api/workspaces", {});
+  const cookie = h.cookie;
+  const demo = await h.call("/api/workspaces", { customerDemo: true });
+  assert.equal(demo.status, 201);
+  assert.equal(demo.response.headers.get("Set-Cookie"), null);
+  assert.equal(demo.data.accessKey, undefined);
+  assert.equal(demo.data.draft, undefined);
+  assert.equal(h.cookie, cookie);
+  assert.equal((await h.call("/api/studio")).data.id, owner.id);
+});
+test("public availability reflects reservations and cancellation without exposing orders or changing owner stock", async () => {
+  const h = harness();
+  const { data: s } = await h.call("/api/workspaces", {});
+  const document = clone(s.draft);
+  document.products[0].stock = 1;
+  document.pickups[0].capacity = 1;
+  const saved = (await h.call("/api/draft", { revision: s.revision, document })).data;
+  const current = (await h.call("/api/publish", { revision: saved.revision })).data;
+  const { data: order } = await h.call("/api/orders", orderInput(current));
+  const pub = (await h.call("/api/site?workspace=" + s.id, undefined, { anonymous: true })).data;
+  assert.equal(pub.document.products[0].stock, 0);
+  assert.equal(pub.document.pickups[0].capacity, 0);
+  assert.equal(pub.availabilityRevision, 2);
+  assert.equal(pub.orders, undefined);
+  assert.equal((await h.call("/api/studio")).data.published.products[0].stock, 1);
+  await h.call("/api/order-status", { id: order.id, status: "canceled" });
+  const reopened = (await h.call("/api/site?workspace=" + s.id)).data;
+  assert.equal(reopened.document.products[0].stock, 1);
+  assert.equal(reopened.document.pickups[0].capacity, 1);
+  assert.equal(reopened.availabilityRevision, pub.availabilityRevision + 1);
+});
 test("requests use authoritative prices and preserve explicit unpaid status", async () => {
   const h = harness(),
     { data: s } = await h.call("/api/workspaces", {}),
