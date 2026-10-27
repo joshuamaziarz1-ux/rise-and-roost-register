@@ -57,3 +57,12 @@ The recovered workspace retained every source change after the app restart. Befo
 
 
 Synthetic acceptance screenshots: [desktop tracking](screenshots/order-tracking-desktop.png), [iPhone tracking](screenshots/order-tracking-iphone.png), and [Studio orders](screenshots/studio-orders-desktop.png). They contain no owner access key, customer email address, or private tracking URL.
+
+
+Active beta deployment: `6ab2c002-f1b3-4c66-a719-96f14bf15b60`, version `bb9a5c9f-dc36-45df-b53b-2db8bb2b732b`, deployed October 27, 2026 at 4:29 p.m. EDT. Source: `12e0bd9d1dab61adc47a6dbcda3ea1c7a84d50e0`. HTTPS website/Studio and all new static asset hashes were verified after deployment. The five-minute beta retry schedule is configured; email stays off.
+
+
+Post-deployment API acceptance passed 58 HTTPS requests (including security/auth, persistence, publishing, uploads, pricing, capacity, and cutoff cases). Its observed median response time from the coding environment was 401 ms; this is a smoke measurement, not a load test. [GitHub source CI and hosted tracking acceptance](https://github.com/joshuamaziarz1-ux/rise-and-roost-register/actions/runs/40578755961) records the independent checks for this release.
+
+
+**Final source CI passed:** 41 backend tests and 40 browser cases, the independent HTTPS root/demo synchronization check, Worker smoke, hosted API acceptance, and all five hosted order-tracking browser flows. All jobs in [run 40578755961](https://github.com/joshuamaziarz1-ux/rise-and-roost-register/actions/runs/40578755961) are green on deployed application source `12e0bd9d1dab61adc47a6dbcda3ea1c7a84d50e0`. Hosted order screenshots are attached to that run as `hosted-order-tracking-screenshots`. The final data preservation check after hosted acceptance retained every one of the original 86 workspace fingerprints.
