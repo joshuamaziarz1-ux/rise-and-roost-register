@@ -1,5 +1,5 @@
 // Read-only hosted check: never signs in, publishes, or modifies the owner's site.
-import { chromium } from 'playwright';
+import { chromium, webkit } from 'playwright';
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import assert from 'node:assert/strict';
@@ -7,7 +7,13 @@ const origin = 'https://rise-roost-beta.joshua-maziarz1.workers.dev';
 const config = await readFile(new URL('../wrangler.toml', import.meta.url), 'utf8');
 const id = /PUBLIC_WORKSPACE_ID\s*=\s*"([a-f0-9]{48})"/.exec(config)?.[1];
 assert.ok(id, 'A specific existing workspace must be configured.');
-const browser = await chromium.launch(existsSync('/usr/bin/chromium') ? { executablePath: '/usr/bin/chromium' } : {});
+const useWebKit = process.env.RR_SYNC_BROWSER === 'webkit';
+const { default: browserConfig } = await import('../playwright.config.mjs');
+const launchOptions = useWebKit
+  ? browserConfig.projects.find((p) => p.name === 'desktop-webkit').use.launchOptions
+  : existsSync('/usr/bin/chromium') ? { executablePath: '/usr/bin/chromium' } : {};
+const proxy = process.env.RR_SYNC_PROXY === '1' ? process.env.HTTPS_PROXY || process.env.HTTP_PROXY : '';
+const browser = await (useWebKit ? webkit : chromium).launch({ ...launchOptions, ...(proxy ? { proxy: { server: proxy } } : {}) });
 try {
   const a = await browser.newContext();
   const b = await browser.newContext();
@@ -15,8 +21,8 @@ try {
   const demo = await b.newPage();
   await site.goto(origin + '/shop');
   await demo.goto(origin + '/demo/' + id + '/shop');
-  await site.locator('.product-card').first().waitFor();
-  await demo.locator('.product-card').first().waitFor();
+  await site.locator('.site-header').waitFor();
+  await demo.locator('.site-header').waitFor();
   const products = (page) => page.locator('.product-card').allTextContents();
   const rootProducts = await products(site);
   const demoProducts = await products(demo);
@@ -33,6 +39,8 @@ try {
     assert.deepEqual(rootProducts, demoProducts);
     await site.reload();
     await demo.reload();
+    await site.locator('.site-header').waitFor();
+    await demo.locator('.site-header').waitFor();
     assert.deepEqual(await products(site), await products(demo));
     assert.equal((await a.request.get(origin + '/api/site')).headers()['cache-control'], 'no-store');
     console.log(JSON.stringify({ passed: true, independentBrowserSessions: 2, rootAndDemoMatch: true, publishedRevision: root.revision, rootCache: 'no-store', ownerDataModified: false }));
