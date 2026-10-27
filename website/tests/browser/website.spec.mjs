@@ -3,7 +3,10 @@ import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 
 test.beforeEach(async ({ context }) => {
-  await context.setExtraHTTPHeaders({ "CF-Connecting-IP": randomUUID() });
+  // Only the local adapter needs synthetic rate-limit buckets. At the edge,
+  // Cloudflare supplies its own trusted client-IP header.
+  if (!process.env.RR_BETA_BASE_URL)
+    await context.setExtraHTTPHeaders({ "CF-Connecting-IP": randomUUID() });
 });
 async function owner(page) {
   await page.goto("/studio");
@@ -90,7 +93,7 @@ test("first-run Studio edits draft, previews, publishes across contexts, and res
   ).toBeVisible();
   const otherContext = await browser.newContext({
     ...info.project.use,
-    extraHTTPHeaders: { "CF-Connecting-IP": randomUUID() },
+    extraHTTPHeaders: process.env.RR_BETA_BASE_URL ? {} : { "CF-Connecting-IP": randomUUID() },
   });
   const visitor = await otherContext.newPage();
   await visitor.goto("/demo/" + id);

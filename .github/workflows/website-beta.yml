@@ -67,7 +67,7 @@ jobs:
         if: steps.opt-in.outputs.enabled == 'true'
       - run: node tests/hosted-api.mjs
         if: steps.opt-in.outputs.enabled == 'true'
-      - run: npm run test:browser
+      - run: npm run test:browser -- --max-failures=1
         if: steps.opt-in.outputs.enabled == 'true'
       - id: evidence
         run: npm run screenshots

@@ -45,7 +45,7 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"], ["html", { open: "never" }]],
   // Remote traces can contain the throwaway owner's one-time private access key.
-  use: { baseURL, trace: process.env.RR_BETA_BASE_URL ? "off" : "retain-on-failure" },
+  use: { baseURL, actionTimeout: 30000, navigationTimeout: 30000, trace: process.env.RR_BETA_BASE_URL ? "off" : "retain-on-failure" },
   webServer: process.env.RR_BETA_BASE_URL
     ? undefined
     : {
