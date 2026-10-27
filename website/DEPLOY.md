@@ -28,6 +28,12 @@ npm run deploy
 
 Record the actual HTTPS address printed by Wrangler, the website branch commit SHA, D1 ID, and deployment time. Add that specific preview host to the cloud environment’s allowlist if required for verification. Do not invent or assume a hostname. No Supabase credentials, Square credentials, production data copies, migration of PR #3, or custom-domain changes belong in this procedure.
 
+## Main published site
+
+`PUBLIC_WORKSPACE_ID` selects the existing owner workspace whose **published** D1 record the root website reads. It is a public identifier, not an access key. Do not automatically select the newest workspace, let arbitrary demo publishers replace it, or create/copy a new owner site during a deployment. The configured primary workspace shows **BETA WEBSITE · OWNER** in Studio and links to `/`; separate test workspaces link only to their own `/demo/<id>` site. The main `/studio?workspace=<id>` URL prefills the correct saved workspace and still requires the private key. Preserve existing rows and verify root and explicit workspace APIs return the same ID/revision/document.
+
+Local integration fixtures set `RR_PUBLIC_WORKSPACE_ID` for their own temporary SQLite database. They never change the hosted owner’s data. Hosted primary-site checks are read-only; order/edit simulations use newly created demo workspaces.
+
 ## Required deployed acceptance
 
 Open the actual HTTPS deployment in a browser, then repeat the automated flows against it using a dedicated test workspace:

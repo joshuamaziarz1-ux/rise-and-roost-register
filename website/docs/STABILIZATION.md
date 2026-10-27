@@ -1,4 +1,6 @@
-# Beta stabilization — October 27, 2026
+# Earlier beta stabilization — October 27, 2026
+
+**Superseded for publishing behavior:** [PUBLISHING-SYNC.md](PUBLISHING-SYNC.md) records the later correction connecting the root website to the owner’s saved D1 publication. The root is no longer a separate starter site. The results below preserve the earlier stabilization evidence.
 
 Website: https://rise-roost-beta.joshua-maziarz1.workers.dev/
 
