@@ -49,9 +49,9 @@ jobs:
       - uses: actions/checkout@v5
       - id: opt-in
         run: |
-          if git log -1 --format=%s | rg -q '\[verify-beta\]'; then
-            echo 'enabled=true' >> "$GITHUB_OUTPUT"
-          fi
+          case "$(git log -1 --format=%s)" in
+            *'[verify-beta]'*) echo 'enabled=true' >> "$GITHUB_OUTPUT" ;;
+          esac
       - uses: actions/setup-node@v5
         if: steps.opt-in.outputs.enabled == 'true'
         with:
