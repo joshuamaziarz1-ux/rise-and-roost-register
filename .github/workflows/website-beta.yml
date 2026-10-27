@@ -31,4 +31,45 @@ jobs:
       - run: npm run check
         env:
           WRANGLER_SEND_METRICS: 'false'
+  hosted-beta:
+    # Explicit operator opt-in on this beta branch. No account credentials or deploy step.
+    if: github.head_ref == 'codex/issue-7-website-studio'
+    needs: test
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+      options: --ipc=host
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: website
+    env:
+      RR_BETA_BASE_URL: https://rise-roost-beta.joshua-maziarz1.workers.dev
+    steps:
+      - uses: actions/checkout@v5
+      - id: opt-in
+        run: |
+          if git log -1 --format=%s | rg -q '\[verify-beta\]'; then
+            echo 'enabled=true' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-node@v5
+        if: steps.opt-in.outputs.enabled == 'true'
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: npm ci
+        if: steps.opt-in.outputs.enabled == 'true'
+      - run: npm run test:worker
+        if: steps.opt-in.outputs.enabled == 'true'
+      - run: npm run test:browser
+        if: steps.opt-in.outputs.enabled == 'true'
+      - run: npm run screenshots
+        if: steps.opt-in.outputs.enabled == 'true'
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.opt-in.outputs.enabled == 'true'
+        with:
+          name: hosted-beta-screenshots
+          path: website/docs/screenshots/*.png
+          retention-days: 7
 # Intentionally no deployment step, production credentials, or write permissions.
