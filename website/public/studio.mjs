@@ -11,6 +11,7 @@ export async function start(root) {
     dirty = false,
     timer,
     saving = false,
+    publishing = false,
     accessKey;
   let undo = [],
     redo = [],
@@ -43,6 +44,8 @@ export async function start(root) {
     if (el)
       el.textContent = saving
         ? "Saving draft…"
+        : publishing
+          ? "Publishing demo…"
         : dirty
           ? "Unsaved draft"
           : "Draft saved";
@@ -1199,19 +1202,33 @@ export async function start(root) {
       button(
         "Publish demo",
         guard(async () => {
-          await save();
-          if (
-            !confirm(
-              "Publish the saved draft to your isolated demo? This never changes the production store.",
-            )
-          )
-            return;
-          adopt(await request("/api/publish", { revision: state.revision }));
-          notify(
-            "Published to your private demo. Other browsers update within five seconds.",
-          );
+          if (publishing) return;
+          publishing = true;
+          document.querySelector("#publish-demo").disabled = true;
+          try {
+            await save();
+            if (!confirm("Publish the saved draft to your isolated demo? This never changes the production store.")) return;
+            savedLabel();
+            const snapshot = JSON.stringify(doc);
+            const result = await request("/api/publish", { revision: state.revision });
+            if (snapshot === JSON.stringify(doc)) adopt(result);
+            else {
+              // Keep edits made while a slower network request was publishing.
+              state = result;
+              dirty = true;
+              preview();
+              clearTimeout(timer);
+              timer = setTimeout(() => guard(save)(), 1000);
+            }
+            notify("Published to your private demo. Other browsers update within five seconds.");
+          } finally {
+            publishing = false;
+            savedLabel();
+            const action = document.querySelector("#publish-demo");
+            if (action) action.disabled = false;
+          }
         }),
-        { class: "primary-link", id: "publish-demo" },
+        { class: "primary-link", id: "publish-demo", disabled: publishing },
       ),
     );
     root.replaceChildren(
@@ -1283,7 +1300,7 @@ export async function start(root) {
               h(
                 "p",
                 { id: "saved-status", role: "status" },
-                dirty ? "Unsaved draft" : "Draft saved",
+                publishing ? "Publishing demo…" : dirty ? "Unsaved draft" : "Draft saved",
               ),
             ),
             actions,

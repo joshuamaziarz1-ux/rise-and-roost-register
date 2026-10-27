@@ -719,6 +719,9 @@ if (
             ),
       );
     }
+    const main = site.querySelector("main");
+    main.id = "main-content";
+    main.tabIndex = -1;
     site.prepend(
       h("a", { href: "#main-content", class: "skip-link" }, "Skip to content"),
     );

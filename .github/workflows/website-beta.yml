@@ -53,7 +53,12 @@ jobs:
         run: |
           subject=$(git -c safe.directory="$GITHUB_WORKSPACE" log -1 --format=%s)
           case "$subject" in
-            *'[verify-beta]'*) echo 'enabled=true' >> "$GITHUB_OUTPUT" ;;
+            *'[verify-beta]'*)
+              echo 'enabled=true' >> "$GITHUB_OUTPUT"
+              echo 'suite=full' >> "$GITHUB_OUTPUT" ;;
+            *'[verify-pages]'*)
+              echo 'enabled=true' >> "$GITHUB_OUTPUT"
+              echo 'suite=pages' >> "$GITHUB_OUTPUT" ;;
           esac
       - uses: actions/setup-node@v5
         if: steps.opt-in.outputs.enabled == 'true'
@@ -68,7 +73,9 @@ jobs:
       - run: node tests/hosted-api.mjs
         if: steps.opt-in.outputs.enabled == 'true'
       - run: npm run test:browser -- --max-failures=1
-        if: steps.opt-in.outputs.enabled == 'true'
+        if: steps.opt-in.outputs.suite == 'full'
+      - run: npm run test:browser -- --grep 'responsive public' --max-failures=1
+        if: steps.opt-in.outputs.suite == 'pages'
       - id: evidence
         run: npm run screenshots
         if: steps.opt-in.outputs.enabled == 'true'

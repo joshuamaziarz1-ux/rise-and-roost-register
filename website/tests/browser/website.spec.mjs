@@ -28,8 +28,8 @@ async function save(page) {
 async function publish(page) {
   page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Publish demo", exact: true }).click();
-  await expect(page.locator("#saved-status")).toHaveText("Draft saved");
-  await expect(page.locator("#notice")).toContainText("Published");
+  await expect(page.locator("#notice")).toHaveText(/^Published to your private demo\./);
+  await expect(page.getByRole("button", { name: "Publish demo", exact: true })).toBeEnabled();
 }
 const nav = (page, label) =>
   page
@@ -54,6 +54,8 @@ test("responsive public pages, links, products, and empty basket load without br
     const response = await page.goto(path);
     expect(response.status()).toBe(200);
     await expect(page.locator(".site-header")).toBeVisible();
+    await expect(page.locator("main#main-content")).toHaveCount(1);
+    await expect(page.locator(".skip-link")).toHaveAttribute("href", "#main-content");
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth + 1,
@@ -129,7 +131,17 @@ test("first-run Studio edits draft, previews, publishes across contexts, and res
   await expect(secondOwner.getByLabel("Heading", { exact: true })).toHaveValue(
     "Fresh beginnings with Danielle.",
   );
-  await publish(page);
+  await page.route("**/api/publish", async (route) => {
+    const response = await route.fetch();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await route.fulfill({ response });
+  }, { times: 1 });
+  const publication = publish(page);
+  await expect(page.locator("#saved-status")).toHaveText("Publishing demo…");
+  await page.getByLabel("Heading", { exact: true }).fill("A newer private draft.");
+  await publication;
+  await expect(page.getByLabel("Heading", { exact: true })).toHaveValue("A newer private draft.");
+  await save(page);
   await expect(visitor.locator("h1")).toHaveText(
     "Fresh beginnings with Danielle.",
     { timeout: 12000 },
