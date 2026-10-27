@@ -1,27 +1,28 @@
 # Isolated beta deployment
 
-Activated October 26, 2026 at 4:47 p.m. EDT (America/New_York).
+Updated October 27, 2026 at 8:28 a.m. EDT (America/New_York).
 
 | Item | Verified state |
 | --- | --- |
+| Website | https://rise-roost-beta.joshua-maziarz1.workers.dev/ |
+| Website Studio | https://rise-roost-beta.joshua-maziarz1.workers.dev/studio |
 | Worker | `rise-roost-beta` only |
-| Database | Newly created `rise-roost-beta-db`; exact `DB` binding verified through Cloudflare API |
-| Other binding | Static website assets (`ASSETS`) only; no Cloudflare credentials in the Worker |
-| Deployment | `ac8eb5e0-6201-4146-bbcb-7bcdc7dc3d34` |
-| Active version | `69e892e8-d827-4f7e-a46b-0622ee404689`, 100% traffic, source `wrangler` |
-| workers.dev | Enabled on this Worker; version previews disabled |
-| Application source | `b776958272daecd8c2d474f217fb17787a70ca58`; public design/source unchanged |
-| Authentication | Account API token verified active; credentials not recorded here |
+| Database | Existing `rise-roost-beta-db`, UUID `7824ffe0-d69a-4221-9aec-0f335257477a`; exact `DB` binding verified through Cloudflare API |
+| Other binding | Static website assets (`ASSETS`) only; no Square, Supabase, or Cloudflare credentials bound to the Worker |
+| Deployment | `a5364d29-1b83-4c07-a62b-fbb5e8bcf3c5` |
+| Active version | `39040f75-c99d-4305-a4d8-4a884998dea0`, 100% traffic |
+| Application source | `7cb44ff0175f950025c6eb180a1c1515d8f78fc2`; subsequent changes are tests/documentation |
+| workers.dev | Enabled; version previews disabled; no custom domain |
+| Authentication | Account API token verified active; credentials never recorded here |
+| Data preservation | No schema/reset/import on redeployment. The original saved workspace is checked against a private SHA-256 fingerprint of its draft, published content, history, order ledger, and revision fields. |
 | Production | Register/Admin files match original main; no live Supabase, Square, DNS, custom-domain, or main-branch changes |
 
-The new database initially contained only Cloudflare's internal table. Its demo-only `workspaces`, `sessions`, `previews`, `assets`, and `limits` tables were initialized using the supported D1 query API. Wrangler's file-import path failed during upload processing; no production database was involved. Direct schema initialization and subsequent binding checks succeeded.
+See [the stabilization report](STABILIZATION.md) for hosted test evidence and screenshots.
 
-Wrangler uploaded the website and activated the version successfully, then exited nonzero because its final account-wide workers.dev hostname lookup was denied. The actual deployment and 100% traffic were independently confirmed through the specific beta Worker's deployment API. Its only database binding is the new isolated D1 database.
+## Deployment with the narrow token
 
-## Remaining HTTPS acceptance
+Wrangler successfully uploaded the website and activated this version, then exited nonzero because its final account-wide workers.dev hostname lookup was denied. The actual deployment and 100% traffic were independently confirmed through the specific beta Worker's deployment API. Its only database binding remains the existing isolated D1 database; no database was recreated or migrated.
 
-The account-level `GET /accounts/{account_id}/workers/subdomain` endpoint requires **Workers Scripts Read** (or Write), which the current narrower token does not provide. Additional account-wide write permissions are unnecessary. Supplying the existing public workers.dev URL from the beta Worker's Dashboard **Visit** link avoids changing token scope.
+The owner supplied the public workers.dev URL, so no account-wide permission expansion is required. The environment's exact beta hostname addition and updated startup instructions were saved as a configuration draft. Direct requests from this cloud instance require that draft to be reviewed/saved and published; GitHub Actions can perform public HTTPS acceptance without Cloudflare credentials. No DNS permission is needed.
 
-The public hostname has been requested. Until it is supplied, the externally reachable HTTPS website and `/studio` cannot be opened or verified, and no URL is invented here. The configured network allowlist will also need the exact public beta hostname for remote testing if it is not already reachable.
-
-Fresh automated checks passed: 17 backend tests and all 25 desktop/mobile Chromium and WebKit browser tests (42 total). These exercised the local application, not the unavailable public hostname. Hosted smoke, owner login/edit/draft/preview/publish/restore, and screenshots must run against the actual URL before claiming hosted readiness.
+The initial October 26 deployment was `ac8eb5e0-6201-4146-bbcb-7bcdc7dc3d34`, version `69e892e8-d827-4f7e-a46b-0622ee404689`. It created and initialized only the new beta D1 database. Current stabilization redeployments retained that database and all original saved workspace content.

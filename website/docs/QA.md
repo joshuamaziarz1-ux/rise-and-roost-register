@@ -1,4 +1,6 @@
-# Website beta verification — October 26, 2026
+# Website beta verification
+
+The current October 27 stabilization results are in [STABILIZATION.md](STABILIZATION.md). The report below preserves the earlier October 26 development checks.
 
 This report covers the new `website/` project on `codex/issue-7-website-studio`. It does not reuse PR #3’s historical test count. Main remains `ab27be06d0ad7a999d4ca122ed30373c69b04435`; PR #3 remains open/draft and unmerged at `c3b28a369aa90c2f03895a9cf315f4e0f410cbb5`.
 
@@ -50,4 +52,4 @@ No host-check bypass is needed for this supported custom-executable configuratio
 
 These show locally served content, not a deployed HTTPS hostname. No physical MacBook, iMac, iPhone, Android, or Windows acceptance is claimed. All product imagery is explicitly marked sample illustration or synthetic upload; the approved logo is reused.
 
-**Deployment update:** Cloudflare authentication is now configured and the isolated `rise-roost-beta` Worker is active at 100% with its own new `rise-roost-beta-db`. Fresh local reruns passed all 42 tests. Public HTTPS and Studio acceptance are waiting for the public workers.dev hostname: the current token permits deployment but denies the account-wide hostname lookup. See [the deployment record](BETA-DEPLOYMENT.md) for verified IDs, scope, and the minimal remaining input. No production Supabase, Square, DNS, Register, or PR #3 deployment was performed.
+**Deployment update:** The owner supplied the public workers.dev hostname. The isolated beta has been stabilized and redeployed using the existing D1 database. See [the current stabilization report](STABILIZATION.md) and [deployment record](BETA-DEPLOYMENT.md). No production Supabase, Square, DNS, Register, or PR #3 deployment was performed.
