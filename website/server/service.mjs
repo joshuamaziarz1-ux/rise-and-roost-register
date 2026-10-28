@@ -1,6 +1,7 @@
 import * as css from "css-tree";
 import { customerOrder, emailAddress, enqueue } from "./orders.mjs";
 import { trackingPath } from "../public/orders.mjs";
+import { normalizeDeviceCode } from "../public/access.mjs";
 import { seed, ZONE, localInstant, safeLink } from "../public/model.mjs";
 
 const encoder = new TextEncoder();
@@ -422,34 +423,43 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       if (row.count > max)
         fail("Too many attempts. Please try again in an hour.", 429);
     };
+    const requestedOwnerId = request.headers.get("X-RR-Workspace") || "";
+    if (requestedOwnerId && !/^[a-f0-9]{48}$/.test(requestedOwnerId)) fail("Use a valid workspace identifier.");
+    let authenticated;
+    const cookieValue = (name) => (request.headers.get("Cookie") || "").split(";").map((p) => p.trim()).find((p) => p.startsWith(name + "="))?.slice(name.length + 1);
+    const cookie = (name, raw, seconds) => `${name}=${raw}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${seconds}${url.protocol === "https:" ? "; Secure" : ""}`;
+    const sessionCookies = (id, raw, seconds = 43200) => [cookie("rr_studio", raw, seconds), cookie("rr_studio_" + id, raw, seconds)];
+    const withCookies = (response, values) => {
+      for (const value of values) response.headers.append("Set-Cookie", value);
+      return response;
+    };
+    const preserveLegacy = async (values) => {
+      const raw = cookieValue("rr_studio");
+      if (/^[a-f0-9]{48}$/.test(raw || "")) {
+        const previous = await first("SELECT * FROM sessions WHERE hash=? AND expires>?", await hash(raw), now);
+        if (previous && !values.some((v) => v.startsWith("rr_studio_" + previous.workspace_id + "=")) && cookieValue("rr_studio_" + previous.workspace_id) !== raw)
+          values.push(cookie("rr_studio_" + previous.workspace_id, raw, Math.max(1, Math.floor((previous.expires - now) / 1000))));
+      }
+      return values;
+    };
     const sessionCookie = async (id) => {
       const raw = token();
-      await run(
-        "INSERT INTO sessions(hash,workspace_id,expires) VALUES(?,?,?)",
-        await hash(raw),
-        id,
-        now + 12 * 3600000,
-      );
-      return `rr_studio=${raw}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200${url.protocol === "https:" ? "; Secure" : ""}`;
+      await run("INSERT INTO sessions(hash,workspace_id,expires) VALUES(?,?,?)", await hash(raw), id, now + 12 * 3600000);
+      authenticated = { raw, workspace_id: id, expires: now + 12 * 3600000, hash: await hash(raw) };
+      return preserveLegacy(sessionCookies(id, raw));
     };
     const owner = async () => {
-      const cookie = /(?:^|;\s*)rr_studio=([a-f0-9]{48})(?:;|$)/.exec(
-        request.headers.get("Cookie") || "",
-      );
-      const session =
-        cookie &&
-        (await first(
-          "SELECT * FROM sessions WHERE hash=? AND expires>?",
-          await hash(cookie[1]),
-          now,
-        ));
-      if (!session) fail("Sign in to your private demo workspace.", 401);
-      const row = await first(
-        "SELECT * FROM workspaces WHERE id=?",
-        session.workspace_id,
-      );
-      if (!row) fail("This demo workspace no longer exists.", 404);
-      return row;
+      const scoped = (request.headers.get("Cookie") || "").split(";").map((p) => p.trim()).filter((p) => /^rr_studio_[a-f0-9]{48}=/.test(p));
+      const candidates = requestedOwnerId ? [cookieValue("rr_studio_" + requestedOwnerId), cookieValue("rr_studio")]
+        : [cookieValue("rr_studio"), publicWorkspaceId ? cookieValue("rr_studio_" + publicWorkspaceId) : undefined, ...(scoped.length === 1 ? [scoped[0].split("=")[1]] : [])];
+      for (const raw of candidates) {
+        if (!/^[a-f0-9]{48}$/.test(raw || "")) continue;
+        const session = await first("SELECT * FROM sessions WHERE hash=? AND expires>?", await hash(raw), now);
+        if (!session || (requestedOwnerId && session.workspace_id !== requestedOwnerId)) continue;
+        const row = await first("SELECT * FROM workspaces WHERE id=?", session.workspace_id);
+        if (row) { authenticated = { ...session, raw }; return row; }
+      }
+      fail("This browser is not signed in to the requested workspace. Use that workspace's own access key or connect from a currently signed-in owner device. Sessions expire after 12 hours.", 401);
     };
     const ownerResult = (row) => ({
       id: row.id,
@@ -461,6 +471,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       orders: JSON.parse(row.ledger_json).orders.map((o) => ({ ...o, orderNumber: o.orderNumber || "RR-" + o.id.slice(0, 16).toUpperCase(), version: o.version || 1, trackingPath: trackingPath(row.id, o) })),
       notificationsEnabled: emailEnabled && row.id === publicWorkspaceId,
       owner: "Danielle · Demo Owner",
+      sessionExpiresAt: authenticated ? new Date(authenticated.expires).toISOString() : undefined,
       isPrimary: row.id === publicWorkspaceId,
       publishedPath: row.id === publicWorkspaceId ? "/" : "/demo/" + row.id,
       studioPath: "/studio?workspace=" + row.id,
@@ -492,43 +503,79 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         JSON.stringify([version]),
         version.at,
       );
-      return json(
-        input.customerDemo === true ? { id, publishedRevision: 1 } : {
-          id,
-          accessKey,
-          ...ownerResult(
-            await first("SELECT * FROM workspaces WHERE id=?", id),
-          ),
-        },
-        201,
-        input.customerDemo === true ? {} : { "Set-Cookie": await sessionCookie(id) },
-      );
+      if (input.customerDemo === true) return json({ id, publishedRevision: 1 }, 201);
+      const cookies = await sessionCookie(id);
+      return withCookies(json({ id, accessKey, ...ownerResult(await first("SELECT * FROM workspaces WHERE id=?", id)) }, 201), cookies);
     }
     if (path === "/api/login" && request.method === "POST") {
       await rateLimit("login", 30);
-      const row =
-        typeof input.id === "string" &&
-        (await first("SELECT * FROM workspaces WHERE id=?", input.id));
-      if (
-        !row ||
-        typeof input.accessKey !== "string" ||
-        input.accessKey.length > 100 ||
-        (await hash(input.id + input.accessKey)) !== row.owner_hash
-      )
-        fail("Check your workspace ID and private access key.", 401);
-      return json(ownerResult(row), 200, {
-        "Set-Cookie": await sessionCookie(row.id),
-      });
+      const id = typeof input.id === "string" ? input.id.trim() : "";
+      const accessKey = typeof input.accessKey === "string" ? input.accessKey.trim() : "";
+      const row = /^[a-f0-9]{48}$/.test(id) && await first("SELECT * FROM workspaces WHERE id=?", id);
+      if (!row || accessKey.length > 100 || !accessKey || (await hash(id + accessKey)) !== row.owner_hash)
+        fail("These workspace details do not match. Each private demo has its own key; the main website needs its original matching pair. Sessions last 12 hours. No key or saved website has been reset.", 401);
+      if (requestedOwnerId && requestedOwnerId !== id) fail("These details belong to a different workspace. Open its own Studio URL; they cannot unlock the workspace selected here.", 409);
+      const cookies = await sessionCookie(id);
+      return withCookies(json(ownerResult(row)), cookies);
     }
     if (path === "/api/logout" && request.method === "POST") {
-      const raw = /rr_studio=([a-f0-9]{48})/.exec(
-        request.headers.get("Cookie") || "",
-      )?.[1];
-      if (raw) await run("DELETE FROM sessions WHERE hash=?", await hash(raw));
-      return json({ ok: true }, 200, {
-        "Set-Cookie":
-          "rr_studio=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0",
-      });
+      const names = requestedOwnerId ? ["rr_studio_" + requestedOwnerId, "rr_studio"] : ["rr_studio"];
+      const clear = [];
+      for (const name of names) {
+        const raw = cookieValue(name);
+        if (!/^[a-f0-9]{48}$/.test(raw || "")) continue;
+        const session = await first("SELECT * FROM sessions WHERE hash=?", await hash(raw));
+        if (requestedOwnerId && session && session.workspace_id !== requestedOwnerId) continue;
+        await run("UPDATE sessions SET expires=0 WHERE hash=?", await hash(raw));
+        clear.push(cookie(name, "", 0));
+      }
+      if (!clear.length) clear.push(cookie(requestedOwnerId ? "rr_studio_" + requestedOwnerId : "rr_studio", "", 0));
+      return withCookies(json({ ok: true }), clear);
+    }
+    if (path === "/api/studio-info" && request.method === "GET")
+      return json({ mainWorkspaceId: publicWorkspaceId, mainStudioPath: publicWorkspaceId ? "/studio?workspace=" + publicWorkspaceId : "", sessionHours: 12 });
+    if (path === "/api/device-start" && request.method === "POST") {
+      await rateLimit("device-start", 15);
+      const id = typeof input.workspaceId === "string" ? input.workspaceId : "";
+      if (!/^[a-f0-9]{48}$/.test(id) || !await first("SELECT id FROM workspaces WHERE id=?", id)) fail("Open the Studio URL for the workspace you want to connect to.", 404);
+      if ((await first("SELECT count(*) AS n FROM device_links WHERE expires>? AND consumed_at IS NULL", now)).n >= 200) fail("Too many connection requests are pending. Try again after they expire.", 429);
+      const requestId = token(), raw = token(), code = token().slice(0, 10).toUpperCase(), expires = now + 10 * 60000;
+      await run("INSERT INTO device_links(id,workspace_id,code_hash,recipient_hash,created_at,expires) VALUES(?,?,?,?,?,?)", requestId, id, await hash("device-code:" + code), await hash(raw), now, expires);
+      return withCookies(json({ requestId, workspaceId: id, code: code.slice(0, 4) + "-" + code.slice(4, 8) + "-" + code.slice(8), expiresAt: new Date(expires).toISOString() }, 201), [cookie("rr_pair_" + requestId, raw, 600)]);
+    }
+    if (["/api/device-review", "/api/device-approve"].includes(path) && request.method === "POST") {
+      const row = await owner();
+      await rateLimit("device-review", 30);
+      const code = normalizeDeviceCode(input.code);
+      if (!/^[A-F0-9]{10}$/.test(code)) fail("Enter the temporary code shown on the computer you want to connect.");
+      const link = await first("SELECT * FROM device_links WHERE code_hash=? AND expires>? AND consumed_at IS NULL", await hash("device-code:" + code), now);
+      if (!link) fail("This connection code is invalid, expired, or already used. Start again on the other computer.", 404);
+      if (link.workspace_id !== row.id) fail("This code requests a different workspace. Only an owner signed in to that exact workspace can approve it. A private demo cannot authorize the main website.", 403);
+      if (path === "/api/device-review") return json({ requestId: link.id, workspaceId: row.id, isPrimary: row.id === publicWorkspaceId, expiresAt: new Date(link.expires).toISOString() });
+      if (input.confirmed !== true || input.requestId !== link.id) fail("Review this request and explicitly approve the matching code on your other computer.");
+      const result = await run("UPDATE device_links SET approved_by=?,approved_at=? WHERE id=? AND approved_by IS NULL AND consumed_at IS NULL AND expires>?", authenticated.hash, now, link.id, now);
+      if (result.meta.changes !== 1) fail("This connection request was already approved or expired. Check the other computer.", 409);
+      return json({ approved: true, workspaceId: row.id });
+    }
+    if (path === "/api/device-claim" && request.method === "POST") {
+      if (!/^[a-f0-9]{48}$/.test(input.requestId || "")) fail("Start a connection request on this computer first.");
+      const raw = cookieValue("rr_pair_" + input.requestId);
+      const link = await first("SELECT * FROM device_links WHERE id=?", input.requestId);
+      if (!link || !/^[a-f0-9]{48}$/.test(raw || "") || await hash(raw) !== link.recipient_hash) fail("Only the browser that started this request can connect. Start again on this computer.", 401);
+      if (link.consumed_at !== null) fail("This connection code has already been used. Sign in normally or start a new request.", 409);
+      if (link.expires <= now) fail("This connection code expired. Start a new request.", 410);
+      if (!link.approved_by) return json({ status: "pending", expiresAt: new Date(link.expires).toISOString() });
+      const approver = await first("SELECT * FROM sessions WHERE hash=? AND workspace_id=? AND expires>?", link.approved_by, link.workspace_id, now);
+      if (!approver) fail("The approving owner's session expired or was signed out. A currently authenticated owner must approve a new request.", 401);
+      const sessionRaw = token(), sessionHash = await hash(sessionRaw), expires = now + 12 * 3600000;
+      const results = await db.batch([
+        db.prepare("UPDATE device_links SET consumed_at=?,claim_hash=? WHERE id=? AND consumed_at IS NULL AND expires>? AND EXISTS(SELECT 1 FROM sessions WHERE hash=device_links.approved_by AND workspace_id=device_links.workspace_id AND expires>?)").bind(now, sessionHash, link.id, now, now),
+        db.prepare("INSERT INTO sessions(hash,workspace_id,expires) SELECT claim_hash,workspace_id,? FROM device_links WHERE id=? AND claim_hash=?").bind(expires, link.id, sessionHash),
+      ]);
+      if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) fail("This request changed or was already used. Start again on the other computer.", 409);
+      authenticated = { raw: sessionRaw, hash: sessionHash, workspace_id: link.workspace_id, expires };
+      const row = await first("SELECT * FROM workspaces WHERE id=?", link.workspace_id);
+      return withCookies(json({ status: "connected", ...ownerResult(row) }), await preserveLegacy([...sessionCookies(row.id, sessionRaw), cookie("rr_pair_" + link.id, "", 0)]));
     }
     if (path === "/api/site" && request.method === "GET") {
       const id = url.searchParams.get("workspace") || publicWorkspaceId;
@@ -579,8 +626,13 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         },
       });
     }
-    if (path === "/api/studio" && request.method === "GET")
-      return json(ownerResult(await owner()));
+    if (path === "/api/studio" && request.method === "GET") {
+      const row = await owner();
+      const response = json(ownerResult(row));
+      if (cookieValue("rr_studio_" + row.id) !== authenticated.raw)
+        response.headers.append("Set-Cookie", cookie("rr_studio_" + row.id, authenticated.raw, Math.max(1, Math.floor((authenticated.expires - now) / 1000))));
+      return response;
+    }
     if (path === "/api/upload" && request.method === "POST") {
       const row = await owner();
       const count = await first(
@@ -691,10 +743,12 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         !/^[a-f0-9-]{20,60}$/.test(input.requestId)
       )
         fail("Invalid request ID.");
+      if (input.storefront === "main" && (!publicWorkspaceId || input.workspaceId !== publicWorkspaceId))
+        fail("The main website workspace changed or is unavailable. Reload the public website before placing an order; no separate demo order was created.", 409);
       for (let attempt = 0; attempt < 4; attempt++) {
         const row = await first(
           "SELECT * FROM workspaces WHERE id=?",
-          input.workspaceId || "",
+          input.storefront === "main" ? publicWorkspaceId : input.workspaceId || "",
         );
         if (!row)
           fail(

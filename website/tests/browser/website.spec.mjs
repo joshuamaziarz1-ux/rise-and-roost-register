@@ -124,9 +124,8 @@ test("first-run Studio edits draft, previews, publishes across contexts, and res
   await expect(draft.locator(".demo-bar")).toContainText("UNPUBLISHED PREVIEW");
   // A separate Safari/Chrome context signs in without source, local storage, or developer tools.
   const secondOwner = await otherContext.newPage();
-  await secondOwner.goto("/studio");
-  await secondOwner.getByText("Return to an existing workspace").click();
-  await secondOwner.getByLabel("Workspace ID", { exact: true }).fill(id);
+  await secondOwner.goto("/studio?workspace=" + id);
+  await expect(secondOwner.getByLabel("Workspace ID", { exact: true })).toHaveValue(id);
   await secondOwner
     .getByLabel("Private access key", { exact: true })
     .fill(accessKey);

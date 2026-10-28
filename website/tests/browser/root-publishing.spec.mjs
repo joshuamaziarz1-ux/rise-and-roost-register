@@ -23,7 +23,6 @@ test('the primary storefront shares published products across independent sessio
       await expect(editor.getByRole('link', { name: 'Open Website Studio' })).toHaveAttribute('href', '/studio?workspace=' + id);
       expect(await editor.locator('.product-card').allTextContents()).toEqual(await visitor.locator('.product-card').allTextContents());
       await visitor.goto('/studio');
-      await visitor.getByText('Return to an existing workspace', { exact: true }).click();
       await expect(visitor.getByLabel('Workspace ID', { exact: true })).toHaveValue(id);
       expect((await b.request.get('/api/studio')).status()).toBe(401);
       return;

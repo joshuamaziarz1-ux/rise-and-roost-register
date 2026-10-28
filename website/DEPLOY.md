@@ -66,3 +66,8 @@ Wrangler subsequently attempts `GET /accounts/{account_id}/workers/subdomain`, w
 See [ORDER-TRACKING.md](docs/ORDER-TRACKING.md). The tracking release needs **no schema migration, reset, or import**: new order fields and its durable notification outbox are stored atomically in the existing beta ledger JSON. Old records remain unchanged until their owner explicitly enables a tracking link or changes a status. Preserve the current D1 ID and `PUBLIC_WORKSPACE_ID`.
 
 `ORDER_EMAIL_ENABLED = "false"` is intentional. A five-minute beta Worker scheduled handler retries consented notification submissions only when configuration is complete; while off it makes no D1 query or external request. There are no Square/Supabase bindings. Do not insert an email API key into wrangler.toml, GitHub, browser code, source control, or chat. Configure a beta-only Resend key as a Worker secret and a sender already verified with that provider, then explicitly enable email after a controlled recipient test. This task does not authorize DNS or custom-domain changes.
+
+
+## Workspace device authorizations
+
+The workspace-access release adds `device_links` without modifying any saved workspace, credential hash, product, or order. Before deploying that application source to the **existing beta D1 only**, apply `migrations/0001_device_links.sql` once. It contains only `CREATE TABLE IF NOT EXISTS`; do not reset/recreate the database or rerun an import. Retain `PUBLIC_WORKSPACE_ID` and the original D1 binding. Verify existing full workspace fingerprints before/after migration and hosted acceptance. See [workspace access](docs/WORKSPACE-ACCESS.md).

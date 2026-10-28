@@ -4,32 +4,14 @@ import { readFile, mkdir } from "node:fs/promises";
 import { resolve, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import worker from "./worker.mjs";
+import { sqliteD1 } from "./sqlite-adapter.mjs";
 const root = fileURLToPath(new URL("../", import.meta.url));
 await mkdir(resolve(root, ".data"), { recursive: true });
 const sqlite = new DatabaseSync(
   process.env.RR_TEST_DB || resolve(root, ".data/demo.sqlite"),
 );
 sqlite.exec(await readFile(resolve(root, "schema.sql"), "utf8"));
-export const db = {
-  prepare(sql) {
-    return {
-      bind(...args) {
-        args = args.map((v) =>
-          v instanceof ArrayBuffer ? new Uint8Array(v) : v,
-        );
-        return {
-          async first() {
-            return sqlite.prepare(sql).get(...args) || null;
-          },
-          async run() {
-            const result = sqlite.prepare(sql).run(...args);
-            return { meta: { changes: result.changes } };
-          },
-        };
-      },
-    };
-  },
-};
+export const db = sqliteD1(sqlite);
 const types = {
   ".html": "text/html",
   ".mjs": "text/javascript",
@@ -92,7 +74,9 @@ const server = createServer(async (req, res) => {
       }),
       env,
     );
-    res.writeHead(response.status, Object.fromEntries(response.headers));
+    const headers = Object.fromEntries(response.headers);
+    if (response.headers.getSetCookie().length) headers["set-cookie"] = response.headers.getSetCookie();
+    res.writeHead(response.status, headers);
     res.end(Buffer.from(await response.arrayBuffer()));
   } catch {
     res.writeHead(500);

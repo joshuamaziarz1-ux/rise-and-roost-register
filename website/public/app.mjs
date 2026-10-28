@@ -514,6 +514,7 @@ if (
             saveCart();
           }
           receipt = await request("/api/orders", {
+            storefront: prefix.startsWith("/demo/") ? "demo" : "main",
             workspaceId: workspace,
             revision,
             requestId: cart.requestId,

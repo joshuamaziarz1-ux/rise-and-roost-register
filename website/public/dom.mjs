@@ -29,14 +29,15 @@ export function notify(message, error = false) {
   clearTimeout(notify.timer);
   notify.timer = setTimeout(() => (box.className = ""), error ? 12000 : 5000);
 }
-export async function request(path, data) {
+export async function request(path, data, { workspaceId } = {}) {
+  const headers = workspaceId ? { "X-RR-Workspace": workspaceId } : {};
   const response = await fetch(
     path,
     data === undefined
-      ? { cache: "no-store" }
+      ? { cache: "no-store", headers }
       : {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...headers },
           body: JSON.stringify(data),
         },
   );

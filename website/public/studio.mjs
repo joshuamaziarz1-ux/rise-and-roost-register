@@ -1,11 +1,30 @@
-import { h, button, field, request, notify, guard } from "./dom.mjs";
+import { h, button, field, request as apiRequest, notify, guard } from "./dom.mjs";
 import { seed, clone, money } from "./model.mjs";
+import { parseAccessDetails } from "./access.mjs";
 import { paymentLabels, fulfillmentLabels, notificationLabels, eventLabels } from "./orders.mjs";
 
 export async function start(root) {
   const requestedWorkspace = new URLSearchParams(location.search).get("workspace");
   let loginWorkspace = /^[a-f0-9]{48}$/.test(requestedWorkspace || "") ? requestedWorkspace : "";
-  let mainWorkspace = "";
+  let mainWorkspace = "", pairingTimer, accessKeyWorkspace = "", sessionExpired = false;
+  const request = async (path, data) => {
+    const target = state?.id || loginWorkspace || undefined;
+    try {
+      const result = await apiRequest(path, data, { workspaceId: target });
+      if (state?.id === target) { sessionExpired = false; root.querySelector("#studio-session-expired")?.remove(); }
+      return result;
+    } catch (e) {
+      if (e.status === 401 && state?.id === target) { sessionExpired = true; showSessionNotice(); }
+      throw e;
+    }
+  };
+  function showSessionNotice() {
+    if (!state || root.querySelector("#studio-session-expired")) return;
+    root.prepend(h("div", { id: "studio-session-expired", role: "alert", class: "sub-card" },
+      h("strong", {}, "Sign-in required for this workspace."),
+      h("p", {}, "Your session expired or no longer matches. Unsaved edits are still in this tab. Sign in again in a new tab, then retry Save draft here. Creating a private demo will not restore this sign-in."),
+      h("a", { href: state.studioPath, target: "_blank", rel: "noopener" }, "Sign in again to this exact workspace")));
+  }
   let state,
     doc,
     tab = "Home",
@@ -28,6 +47,7 @@ export async function start(root) {
     "Products",
     "Pickup Schedule",
     "Orders",
+    "Workspace Access",
     "Business & Copy",
     "Advanced Design",
     "Version History",
@@ -117,6 +137,9 @@ export async function start(root) {
       { type: "number", min, max },
     );
   function adopt(result) {
+    clearInterval(pairingTimer);
+    sessionExpired = false;
+    if (accessKeyWorkspace !== result.id) accessKey = null;
     state = result;
     doc = clone(result.draft);
     dirty = false;
@@ -175,74 +198,114 @@ export async function start(root) {
     );
   }
   function login() {
-    let id = loginWorkspace || mainWorkspace,
-      key = "";
-    root.replaceChildren(
-      h(
-        "main",
-        { class: "studio-login" },
-        h(
-          "div",
-          { class: "login-brand" },
-          h("img", { src: "/assets/logo.webp", alt: "Rise & Roost logo" }),
-          h("span", {}, "DANIELLE’S WEBSITE STUDIO"),
-        ),
-        h(
-          "div",
-          { class: "login-card" },
-          h("span", { class: "eyebrow" }, "YOUR OWN LITTLE CORNER OF THE FARM"),
-          h("h1", {}, "Make it yours."),
-          h(
-            "p",
-            {},
-            mainWorkspace ? "Return to your saved workspace to edit the beta website. Create a private demo only when you want a separate test site." : "A beautiful beginning, with room for every idea. Create a private demo to edit, preview, and publish sample changes together.",
-          ),
-          button(
-            "Create my private demo",
-            guard(async () => {
-              const result = await request("/api/workspaces", {});
-              accessKey = result.accessKey;
-              adopt(result);
-            }),
-            { class: "primary-link", id: "create-demo" },
-          ),
-          h(
-            "p",
-            { class: "small-note" },
-            "Isolated sample data. No real store changes. No payments.",
-          ),
-          h(
-            "details",
-            { open: !!requestedWorkspace },
-            h("summary", {}, "Return to an existing workspace"),
-            h(
-              "form",
-              {
-                onsubmit: guard(async (e) => {
-                  e.preventDefault();
-                  adopt(await request("/api/login", { id, accessKey: key }));
-                }),
-              },
-              field("Workspace ID", id, (v) => (id = v), {
-                required: true,
-                autocomplete: "off",
-              }),
-              field("Private access key", key, (v) => (key = v), {
-                type: "password",
-                required: true,
-                autocomplete: "current-password",
-              }),
-              h(
-                "button",
-                { class: "secondary-button", type: "submit" },
-                "Sign in",
-              ),
-            ),
-          ),
-        ),
-        h("a", { href: "/" }, "← View the published website"),
-      ),
-    );
+    clearInterval(pairingTimer);
+    let id = loginWorkspace || mainWorkspace, key = "";
+    const feedback = h("p", { class: "small-note", role: "status", id: "workspace-signin-feedback" });
+    const different = h("div");
+    const idField = field("Workspace ID", id, (v) => { id = v.trim(); }, { required: true, autocomplete: "off", readonly: !!loginWorkspace });
+    const keyField = field("Private access key", key, (v) => { key = v; }, { type: "password", required: true, autocomplete: "current-password" });
+    let saved = "";
+    const savedField = field("Paste saved access details", saved, (v) => { saved = v; }, { type: "textarea", autocomplete: "off", spellcheck: "false" });
+    const apply = button("Use these saved details", guard(() => {
+      const parsed = parseAccessDetails(saved);
+      savedField.querySelector("textarea").value = ""; saved = "";
+      if (loginWorkspace && parsed.id !== loginWorkspace) {
+        key = ""; keyField.querySelector("input").value = "";
+        feedback.textContent = "These saved details belong to a different workspace. A private demo's key cannot unlock the main website. Your saved sites have not been changed.";
+        different.replaceChildren(h("a", { href: "/studio?workspace=" + parsed.id }, "Open the workspace named in these saved details"));
+        return;
+      }
+      id = parsed.id; key = parsed.accessKey;
+      idField.querySelector("input").value = id;
+      keyField.querySelector("input").value = key;
+      feedback.textContent = "The matching ID and key are ready. Select Sign in. These details stay only in this tab.";
+      different.replaceChildren();
+    }));
+    const pairing = h("div");
+    const connect = button("Connect from a signed-in computer", guard(async () => {
+      connect.disabled = true;
+      try {
+        const pending = await request("/api/device-start", { workspaceId: id });
+        const message = h("p", { role: "status" }, "Waiting for approval from an owner signed in to this exact workspace.");
+        let checking = false;
+        const check = async () => {
+          if (checking) return;
+          checking = true;
+          try {
+            const result = await request("/api/device-claim", { requestId: pending.requestId });
+            if (result.status === "connected") { adopt(result); notify("This computer is now signed in to the same workspace."); }
+          } catch (e) { clearInterval(pairingTimer); message.textContent = e.message; connect.disabled = false; }
+          finally { checking = false; }
+        };
+        pairing.replaceChildren(h("div", { class: "sub-card" },
+          h("h2", {}, "Approve this computer"),
+          h("p", {}, "On the already signed-in computer, open Workspace Access, enter this code, and explicitly approve this browser. Keep this window open. Only approve a code you requested yourself."),
+          h("output", { "aria-label": "Device connection code" }, pending.code),
+          h("p", { class: "small-note" }, "Workspace: " + pending.workspaceId + ". Expires in 10 minutes. The code cannot sign anyone in without owner approval and this browser's private cookie."),
+          message, button("Check connection", check)));
+        pairingTimer = setInterval(check, 2000);
+      } catch (e) { connect.disabled = false; throw e; }
+    }), { class: "secondary-button", disabled: !id });
+    const form = h("form", { onsubmit: guard(async (e) => {
+      e.preventDefault();
+      // Read DOM values at submit too: Safari/password-manager autofill may not fire input events.
+      id = idField.querySelector("input").value.trim(); key = keyField.querySelector("input").value.trim();
+      if (loginWorkspace && id !== loginWorkspace) throw new Error("Use the matching details for the workspace selected on this page.");
+      const result = await request("/api/login", { id, accessKey: key });
+      key = ""; keyField.querySelector("input").value = "";
+      adopt(result);
+    }) }, idField, keyField, h("button", { class: "primary-link", type: "submit" }, "Sign in"));
+    root.replaceChildren(h("main", { class: "studio-login" },
+      h("div", { class: "login-brand" }, h("img", { src: "/assets/logo.webp", alt: "Rise & Roost logo" }), h("span", {}, "DANIELLE’S WEBSITE STUDIO")),
+      h("div", { class: "login-card" },
+        h("span", { class: "eyebrow" }, id === mainWorkspace && mainWorkspace ? "MAIN BETA WEBSITE" : "WORKSPACE SIGN IN"),
+        h("h1", {}, "Make it yours."),
+        h("p", {}, mainWorkspace ? "Sign in to the saved website you want to edit. Every separate private demo has a different ID and key." : "Sign in to an existing workspace or create a separate private demo."),
+        h("details", { open: !!id }, h("summary", {}, "Return to an existing workspace"), form),
+        feedback, different,
+        h("details", {}, h("summary", {}, "Use the saved ID and key together"), savedField, apply),
+        h("p", { class: "small-note" }, "Sessions expire after 12 hours. An open Studio tab alone is not proof of an active session. If both computers are signed out, you need the original matching key; connecting a device cannot bypass this."),
+        connect, pairing,
+        mainWorkspace && id !== mainWorkspace ? h("p", {}, h("a", { href: "/studio?workspace=" + mainWorkspace }, "Sign in to the original main website")) : null,
+        h("hr"),
+        button("Create my private demo", guard(async () => {
+          const result = await request("/api/workspaces", {});
+          accessKey = result.accessKey; accessKeyWorkspace = result.id;
+          adopt(result);
+        }), { class: "secondary-button", id: "create-demo" }),
+        h("p", { class: "small-note" }, "This creates a different test site. It does not recover or replace the main website or any saved workspace.")),
+      h("a", { href: "/" }, "← View the published website")));
+  }
+  function accessPanel() {
+    let code = "", reviewed;
+    const reviewBox = h("div");
+    return h("div", {}, h("h2", {}, "Workspace Access"),
+      h("p", { class: "workspace-badge" }, state.isPrimary ? "BETA WEBSITE · OWNER" : "PRIVATE DEMO · OWNER"),
+      h("p", {}, "Workspace ID: " + state.id),
+      state.sessionExpiresAt ? h("p", {}, "This session expires: " + new Date(state.sessionExpiresAt).toLocaleString() + ".") : null,
+      h("p", {}, state.isPrimary ? "This is Danielle's original main website. Public website orders appear in this workspace's Orders dashboard." : "This is a separate private demo. It cannot authorize access to the original main website."),
+      h("p", {}, h("a", { href: state.studioPath }, "Studio link for this exact workspace")),
+      !state.isPrimary && state.mainStudioPath ? h("p", {}, h("a", { href: state.mainStudioPath }, "Open the original main website sign-in")) : null,
+      h("h3", {}, "Connect another computer"),
+      h("p", {}, "On the other computer, open this workspace's Studio link and choose Connect from a signed-in computer. Enter the code it shows below, review the workspace, and approve only the browser you requested."),
+      field("Code from the other computer", code, (v) => { code = v; reviewed = null; reviewBox.replaceChildren(); }, { autocomplete: "off", spellcheck: "false", maxlength: 20 }),
+      button("Review connection request", guard(async () => {
+        reviewed = await request("/api/device-review", { code });
+        let confirmed = false;
+        const approve = button("Approve this computer", guard(async () => {
+          if (!confirmed) return notify("Confirm that this is the code on your own other computer before approving.", true);
+          approve.disabled = true;
+          try {
+            await request("/api/device-approve", { code, requestId: reviewed.requestId, confirmed });
+            reviewBox.replaceChildren(h("p", { role: "status" }, "Approved. Only the browser that started this request can finish connecting. Check that computer now."));
+          } finally { approve.disabled = false; }
+        }));
+        reviewBox.replaceChildren(h("div", { class: "sub-card" },
+          h("h3", {}, reviewed.isPrimary ? "Connect to the main beta website" : "Connect to this private demo"),
+          h("p", {}, "Workspace: " + reviewed.workspaceId),
+          field("I recognize this code from my other computer and want that browser to edit this exact workspace", confirmed, (v) => { confirmed = v; }, { type: "checkbox" }), approve));
+      })), reviewBox,
+      h("p", { class: "small-note" }, "Codes expire after 10 minutes and can be used once. The owner session must still be valid when the other computer connects. Keys are never disclosed or reset. Each connected computer receives its own 12-hour session."));
   }
   function quickSetup() {
     const steps = [
@@ -1086,11 +1149,12 @@ export async function start(root) {
       Products: productPanel,
       "Pickup Schedule": pickupPanel,
       Orders: ordersPanel,
+      "Workspace Access": accessPanel,
       "Business & Copy": businessPanel,
       "Advanced Design": advancedPanel,
       "Version History": versionsPanel,
     }[tab]();
-    const credentials = accessKey
+    const credentials = accessKey && accessKeyWorkspace === state.id
       ? h(
           "div",
           { class: "private-credentials" },
@@ -1126,7 +1190,7 @@ export async function start(root) {
                   accessKey +
                   "\nSign in at: " +
                   location.origin +
-                  "/studio",
+                  (state.studioPath || "/studio?workspace=" + state.id),
               );
               notify("Private access details copied. Keep them secure.");
             }),
@@ -1427,6 +1491,7 @@ export async function start(root) {
     frameObserver.observe(previewBox);
     frame.addEventListener("load", resize, { once: true });
     requestAnimationFrame(resize);
+    if (sessionExpired) showSessionNotice();
   }
   window.addEventListener("message", (e) => {
     if (
@@ -1457,22 +1522,23 @@ export async function start(root) {
       const workspaceId = state.id;
       const revision = state.revision;
       const fresh = await request("/api/studio");
-      if (state?.id === workspaceId && state.revision === revision && !dirty && !saving && !publishing && fresh.revision > state.revision) {
+      if (state?.id === workspaceId && fresh.id === workspaceId && state.revision === revision && !dirty && !saving && !publishing && fresh.revision > state.revision) {
         adopt(fresh);
         notify("Loaded the draft saved on your other device.");
       }
     }),
   );
   try {
+    const info = await apiRequest("/api/studio-info");
+    mainWorkspace = info.mainWorkspaceId || "";
+    if (!loginWorkspace) loginWorkspace = mainWorkspace;
+  } catch { /* Explicit saved workspace URLs still work if public metadata is unavailable. */ }
+  try {
     const current = await request("/api/studio");
     if (loginWorkspace && current.id !== loginWorkspace) login();
     else adopt(current);
   } catch (e) {
     if (e.status !== 401) notify(e.message, true);
-    try {
-      const publicSite = await request("/api/site");
-      if (publicSite.isPrimary) mainWorkspace = publicSite.id;
-    } catch {}
     login();
   }
 }
