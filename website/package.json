@@ -1,0 +1,22 @@
+{
+  "name": "rise-roost-website-beta",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server/local.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "playwright test",
+    "test:all": "npm test && npm run test:browser",
+    "deploy": "wrangler deploy",
+    "check": "wrangler deploy --dry-run",
+    "test:worker": "node tests/worker-smoke.mjs",
+    "screenshots": "node tests/capture-evidence.mjs"
+  },
+  "dependencies": {
+    "css-tree": "3.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "wrangler": "4.46.0"
+  }
+}
