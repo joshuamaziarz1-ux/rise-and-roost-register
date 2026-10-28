@@ -84,6 +84,8 @@ jobs:
         if: steps.opt-in.outputs.suite == 'pages'
       - run: npm run test:browser -- --grep 'customer order tracking' --max-failures=1
         if: steps.opt-in.outputs.suite == 'orders'
+      - run: node tests/hosted-logout.mjs
+        if: steps.opt-in.outputs.suite == 'auth'
       - run: npm run test:browser -- --grep 'workspace authentication' --max-failures=1
         if: steps.opt-in.outputs.suite == 'auth'
       - uses: actions/upload-artifact@v4
