@@ -129,6 +129,13 @@ test('public checkout is stored in the main ledger even when a private demo is s
   for (const client of [h.a,h.b]) assert.equal((await h.call(client, '/api/studio', undefined, h.scope)).data.orders[0].id, order.data.id);
   assert.equal((await h.call(h.a, '/api/studio', undefined, { workspaceId: demo.id })).data.orders.length, 0);
 });
+test('legacy sign-out also revokes a valid scoped-only session instead of leaving the browser authenticated', async () => {
+  const h = await fixture(); h.a.cookies.delete('rr_studio');
+  assert.equal((await h.call(h.a, '/api/studio')).status, 200);
+  assert.equal((await h.call(h.a, '/api/logout', {})).status, 200);
+  assert.equal((await h.call(h.a, '/api/studio')).status, 401);
+  assert.equal((await h.call(h.a, '/api/studio', undefined, h.scope)).status, 401);
+});
 test('the local D1 batch rolls back consumption if session insertion fails', async () => {
   const h = await fixture(), p = await h.begin();
   const existing = h.sql.prepare('SELECT hash FROM sessions LIMIT 1').get().hash;

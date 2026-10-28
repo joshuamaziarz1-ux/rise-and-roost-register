@@ -519,17 +519,21 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       return withCookies(json(ownerResult(row)), cookies);
     }
     if (path === "/api/logout" && request.method === "POST") {
-      const names = requestedOwnerId ? ["rr_studio_" + requestedOwnerId, "rr_studio"] : ["rr_studio"];
+      let logoutWorkspaceId = requestedOwnerId;
+      if (!logoutWorkspaceId) {
+        try { logoutWorkspaceId = (await owner()).id; } catch { /* Expired legacy cookies can still be cleared below. */ }
+      }
+      const names = logoutWorkspaceId ? ["rr_studio_" + logoutWorkspaceId, "rr_studio"] : ["rr_studio"];
       const clear = [];
       for (const name of names) {
         const raw = cookieValue(name);
         if (!/^[a-f0-9]{48}$/.test(raw || "")) continue;
         const session = await first("SELECT * FROM sessions WHERE hash=?", await hash(raw));
-        if (requestedOwnerId && session && session.workspace_id !== requestedOwnerId) continue;
+        if (logoutWorkspaceId && session && session.workspace_id !== logoutWorkspaceId) continue;
         await run("UPDATE sessions SET expires=0 WHERE hash=?", await hash(raw));
         clear.push(cookie(name, "", 0));
       }
-      if (!clear.length) clear.push(cookie(requestedOwnerId ? "rr_studio_" + requestedOwnerId : "rr_studio", "", 0));
+      if (!clear.length) clear.push(cookie(logoutWorkspaceId ? "rr_studio_" + logoutWorkspaceId : "rr_studio", "", 0));
       return withCookies(json({ ok: true }), clear);
     }
     if (path === "/api/studio-info" && request.method === "GET")
