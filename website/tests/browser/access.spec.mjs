@@ -25,9 +25,31 @@ test('workspace authentication and device pairing keep the main site, demos and 
       await owner.getByRole('button', { name: 'Sign in', exact: true }).click();
     }
     await expect(owner.locator('.workspace-badge')).toContainText(fixture ? 'BETA WEBSITE' : 'PRIVATE DEMO');
-    const r = await b.request.post('/api/workspaces', { headers: { Origin: origin }, data: {} });
-    expect(r.status()).toBe(201); const demo = await r.json();
     const recipient = await b.newPage();
+    await recipient.goto('/studio');
+    await recipient.getByRole('button', { name: 'Create my private demo', exact: true }).click();
+    await expect(recipient.locator('.private-credentials')).toBeVisible();
+    const demo = {
+      id: await recipient.getByLabel('Workspace ID', { exact: true }).inputValue(),
+      accessKey: await recipient.getByLabel('Private access key', { exact: true }).inputValue(),
+    };
+    // Reproduce the old copied-credentials defect: another tab changes the
+    // generic cookie to a workspace with a newer draft while this key card is open.
+    const snapshot = await (await a.request.get('/api/studio', { headers: { 'X-RR-Workspace': id } })).json();
+    expect((await a.request.post('/api/draft', { headers: { Origin: origin, 'X-RR-Workspace': id }, data: { revision: snapshot.revision, document: snapshot.draft } })).status()).toBe(200);
+    expect((await b.request.post('/api/login', { headers: { Origin: origin, 'X-RR-Workspace': id }, data: { id, accessKey: key } })).status()).toBe(200);
+    const focused = recipient.waitForResponse(r => r.url().endsWith('/api/studio') && r.request().method() === 'GET');
+    await recipient.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await (await focused).finished();
+    await recipient.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(recipient.getByLabel('Workspace ID', { exact: true })).toHaveValue(demo.id);
+    await expect(recipient.getByLabel('Private access key', { exact: true })).toHaveValue(demo.accessKey);
+    // Restore only the legacy selection to the separate demo, leaving scoped
+    // sessions intact. A correct explicit main sign-in remains available.
+    expect((await b.request.post('/api/login', { headers: { Origin: origin, 'X-RR-Workspace': demo.id }, data: { id: demo.id, accessKey: demo.accessKey } })).status()).toBe(200);
+    // Use an independent recipient browser for the device-approval proof below;
+    // its main-scoped session from the simulation above must not authorize it.
+    await b.clearCookies({ name: 'rr_studio_' + id });
     // A private-demo cookie must never make generic /studio open that demo silently.
     await recipient.goto('/studio');
     await expect(recipient.getByLabel('Workspace ID', { exact: true })).toHaveValue(publicId);
