@@ -202,8 +202,8 @@ export async function start(root) {
     let id = loginWorkspace || mainWorkspace, key = "";
     const feedback = h("p", { class: "small-note", role: "status", id: "workspace-signin-feedback" });
     const different = h("div");
-    const idField = field("Workspace ID", id, (v) => { id = v.trim(); }, { required: true, autocomplete: "off", readonly: !!loginWorkspace });
-    const keyField = field("Private access key", key, (v) => { key = v; }, { type: "password", required: true, autocomplete: "current-password" });
+    const idField = field("Workspace ID", id, (v) => { id = v.trim(); }, { required: true, name: "workspace", autocomplete: "username", readonly: !!loginWorkspace });
+    const keyField = field("Private access key", key, (v) => { key = v; }, { type: "password", required: true, name: "access-key", autocomplete: "current-password" });
     let saved = "";
     const savedField = field("Paste saved access details", saved, (v) => { saved = v; }, { type: "textarea", autocomplete: "off", spellcheck: "false" });
     const apply = button("Use these saved details", guard(() => {
@@ -1532,7 +1532,14 @@ export async function start(root) {
     const info = await apiRequest("/api/studio-info");
     mainWorkspace = info.mainWorkspaceId || "";
     if (!loginWorkspace) loginWorkspace = mainWorkspace;
-  } catch { /* Explicit saved workspace URLs still work if public metadata is unavailable. */ }
+  } catch {
+    // A generic URL must not silently fall back to whichever demo cookie exists.
+    if (!loginWorkspace) {
+      login();
+      notify("The default workspace could not be confirmed. Open your saved exact Studio URL or enter its matching access details.", true);
+      return;
+    }
+  }
   try {
     const current = await request("/api/studio");
     if (loginWorkspace && current.id !== loginWorkspace) login();

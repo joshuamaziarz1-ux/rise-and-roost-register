@@ -32,6 +32,10 @@ test('workspace authentication and device pairing keep the main site, demos and 
     await recipient.goto('/studio');
     await expect(recipient.getByLabel('Workspace ID', { exact: true })).toHaveValue(publicId);
     await expect(recipient.locator('.studio-workspace')).toHaveCount(0);
+    await recipient.route('**/api/studio-info', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Temporary metadata outage' }) }), { times: 1 });
+    await recipient.reload();
+    await expect(recipient.locator('#notice')).toContainText('default workspace could not be confirmed');
+    await expect(recipient.locator('.studio-workspace')).toHaveCount(0);
     await recipient.goto('/studio?workspace=' + id);
     await recipient.getByText('Use the saved ID and key together', { exact: true }).click();
     await recipient.getByLabel('Paste saved access details', { exact: true }).fill(`Workspace ID: ${demo.id}\nPrivate access key: ${demo.accessKey}\nSign in at: ${origin}/studio?workspace=${demo.id}`);
