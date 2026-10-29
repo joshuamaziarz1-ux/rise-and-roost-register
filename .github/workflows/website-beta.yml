@@ -31,6 +31,43 @@ jobs:
       - run: npm run check
         env:
           WRANGLER_SEND_METRICS: 'false'
+      - run: npm run check:experience
+        if: github.head_ref == 'codex/customer-experience-roost'
+        env:
+          WRANGLER_SEND_METRICS: 'false'
+      - uses: actions/upload-artifact@v4
+        if: github.head_ref == 'codex/customer-experience-roost'
+        with:
+          name: customer-experience-screenshots
+          path: website/qa-results/customer/*.png
+          retention-days: 7
+  experience-preview:
+    if: github.head_ref == 'codex/customer-experience-roost'
+    needs: test
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v5
+      - id: opt-in
+        run: |
+          subject=$(git log -1 --format=%s)
+          case "$subject" in
+            *'[verify-experience-preview]'*) echo 'enabled=true' >> "$GITHUB_OUTPUT" ;;
+          esac
+      - uses: actions/setup-node@v5
+        if: steps.opt-in.outputs.enabled == 'true'
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: npm ci
+        if: steps.opt-in.outputs.enabled == 'true'
+      - run: npm run test:experience-hosted
+        if: steps.opt-in.outputs.enabled == 'true'
+        env:
+          RR_EXPERIENCE_PREVIEW_URL: https://rise-roost-experience-preview.joshua-maziarz1.workers.dev
   hosted-beta:
     # Explicit operator opt-in on this beta branch. No account credentials or deploy step.
     if: github.head_ref == 'codex/issue-7-website-studio'

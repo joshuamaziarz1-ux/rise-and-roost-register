@@ -1,5 +1,6 @@
 import * as css from "css-tree";
 import { customerOrder, emailAddress, enqueue } from "./orders.mjs";
+import { roostApi, commentsApi, memberFor, customerProfile } from "./roost.mjs";
 import { trackingPath } from "../public/orders.mjs";
 import { normalizeDeviceCode } from "../public/access.mjs";
 import { seed, ZONE, localInstant, safeLink } from "../public/model.mjs";
@@ -373,7 +374,7 @@ export function inspectImage(bytes, mime) {
     );
   return true;
 }
-export async function api(request, db, now = Date.now(), { publicWorkspaceId = "", emailEnabled = false } = {}) {
+export async function api(request, db, now = Date.now(), { publicWorkspaceId = "", emailEnabled = false, customerExperienceEnabled = false } = {}) {
   const url = new URL(request.url),
     path = url.pathname;
   const first = (sql, ...args) =>
@@ -471,12 +472,17 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       orders: JSON.parse(row.ledger_json).orders.map((o) => ({ ...o, orderNumber: o.orderNumber || "RR-" + o.id.slice(0, 16).toUpperCase(), version: o.version || 1, trackingPath: trackingPath(row.id, o) })),
       notificationsEnabled: emailEnabled && row.id === publicWorkspaceId,
       owner: "Danielle · Demo Owner",
+      customerExperienceEnabled,
       sessionExpiresAt: authenticated ? new Date(authenticated.expires).toISOString() : undefined,
       isPrimary: row.id === publicWorkspaceId,
       publishedPath: row.id === publicWorkspaceId ? "/" : "/demo/" + row.id,
       studioPath: "/studio?workspace=" + row.id,
       mainStudioPath: publicWorkspaceId ? "/studio?workspace=" + publicWorkspaceId : "",
     });
+    if (customerExperienceEnabled && path.startsWith("/api/roost/"))
+      return await roostApi({ request, db, now, input, path, json, rateLimit });
+    if (customerExperienceEnabled && (path === "/api/comments" || path === "/api/studio-comments"))
+      return await commentsApi({ request, db, now, input, path, json, rateLimit, owner, publicWorkspaceId });
     if (path === "/api/workspaces" && request.method === "POST") {
       await rateLimit("create", 40);
       if ((await first("SELECT count(*) AS n FROM workspaces")).n >= 200)
@@ -583,13 +589,14 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
     }
     if (path === "/api/site" && request.method === "GET") {
       const id = url.searchParams.get("workspace") || publicWorkspaceId;
-      if (!id) return json({ document: seed(now), revision: 1, availabilityRevision: 0, id: "" });
+      if (!id) return json({ document: seed(now), revision: 1, availabilityRevision: 0, id: "", customerExperienceEnabled: false });
       const row = await first(
         "SELECT published_json,published_revision,ledger_json,ledger_version FROM workspaces WHERE id=?",
         id,
       );
       if (!row) fail("This published workspace was not found. Contact the beta operator; saved content has not been reset.", id === publicWorkspaceId ? 503 : 404);
       return json({
+        customerExperienceEnabled,
         notificationsEnabled: emailEnabled && id === publicWorkspaceId,
         document: availableDocument(JSON.parse(row.published_json), JSON.parse(row.ledger_json)),
         revision: row.published_revision,
@@ -611,6 +618,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         document: JSON.parse(row.document_json),
         id: row.workspace_id,
         preview: true,
+        customerExperienceEnabled,
       });
     }
     if (path.startsWith("/api/assets/") && request.method === "GET") {
@@ -742,6 +750,9 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
     }
     if (path === "/api/orders" && request.method === "POST") {
       await rateLimit("orders", 100);
+      const checkoutMember = customerExperienceEnabled && input.checkoutMode === "member"
+        ? await memberFor(request, db, input.workspaceId, now, true) : null;
+      if (customerExperienceEnabled && input.checkoutMode && !["guest", "member"].includes(input.checkoutMode)) fail("Choose guest or member checkout.");
       if (
         typeof input.requestId !== "string" ||
         !/^[a-f0-9-]{20,60}$/.test(input.requestId)
@@ -772,6 +783,13 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
             "This demo has reached its order limit. Create a new workspace.",
           );
         const customer = { emailOptIn: false };
+        if (customerExperienceEnabled && (input.checkoutMode || input.customerDetails)) {
+          const profile = customerProfile(input.customerDetails);
+          customer.name = profile.name;
+          customer.phone = profile.phone;
+          customer.contactEmail = profile.email;
+        }
+        if (checkoutMember) customer.memberId = checkoutMember.id;
         if (input.emailOptIn === true) {
           if (!emailEnabled || row.id !== publicWorkspaceId)
             fail("Email updates are not configured for this beta site. Leave email updates off and use your private status page.", 409);

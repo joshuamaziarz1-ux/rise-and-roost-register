@@ -12,7 +12,7 @@ export const security = {
 export default {
   async fetch(request, env, ctx) {
     let response = new URL(request.url).pathname.startsWith("/api/")
-      ? await api(request, env.DB, Date.now(), { publicWorkspaceId: env.PUBLIC_WORKSPACE_ID, emailEnabled: emailConfigured(env) })
+      ? await api(request, env.DB, Date.now(), { publicWorkspaceId: env.PUBLIC_WORKSPACE_ID, emailEnabled: emailConfigured(env), customerExperienceEnabled: env.CUSTOMER_EXPERIENCE_ENABLED === "true" })
       : await env.ASSETS.fetch(request);
     if (request.method === "POST" && response.ok && emailConfigured(env))
       ctx?.waitUntil(drainNotifications(env.DB, env));
@@ -21,7 +21,7 @@ export default {
       response.headers.set(key, value);
     if (response.headers.get("Content-Type")?.includes("text/html"))
       response.headers.set("Cache-Control", "no-store");
-    if (new URL(request.url).pathname.startsWith("/orders/"))
+    if (env.REVIEW_BUILD === "true" || /\/(orders|roost|studio)(\/|$)/.test(new URL(request.url).pathname))
       response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
     return response;
   },

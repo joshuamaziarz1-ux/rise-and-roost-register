@@ -1,5 +1,6 @@
 import { h, button, notify, request, guard } from "./dom.mjs";
 import { money, localInstant, pickupLabel } from "./model.mjs";
+import { createCustomerExperience } from "./customer.mjs";
 
 const root = document.querySelector("#app");
 if (
@@ -24,6 +25,8 @@ if (
     notificationsEnabled = false,
     checkoutEmail = "",
     emailOptIn = false;
+  let experience = false, customer, customerWorkspace = "", checkoutMode = "guest";
+  let checkoutProfile = { name: "", email: "", phone: "" };
   const editing = new URLSearchParams(location.search).has("studio-preview");
   let previewDocumentReceived = false;
   const match = location.pathname.match(
@@ -104,6 +107,9 @@ if (
     )
       return;
     doc = e.data.document;
+    experience = !!e.data.customerExperienceEnabled;
+    if (/^[a-f0-9]{48}$/.test(e.data.workspaceId || "")) workspace = e.data.workspaceId;
+    ensureCustomer();
     previewDocumentReceived = true;
     path = e.data.path || "/";
     render();
@@ -129,7 +135,14 @@ if (
           style: { objectPosition: `${photo.x ?? 50}% ${photo.y ?? 50}%` },
         })
       : h("div", { class: "photo-empty" }, "Add your photo in Studio");
+  // Presentation-only cleanup of the known starter wording; saved documents stay intact.
+  const customerCopy = text => !experience ? text : text
+    .replace(" This is our editable starter story — make it yours.", "")
+    .replace(" All schedules shown are examples.", "")
+    .replace(" Sample product and price.", "");
   function card(p) {
+    let selected = p.variants[0];
+    const cardPrice = h("span", {}, money(p.price));
     return h(
       "article",
       { class: "product-card" },
@@ -137,7 +150,7 @@ if (
         "/product/" + p.id,
         [
           img(p.images[0]),
-          p.placeholder
+          p.placeholder && !experience
             ? h("span", { class: "sample-photo" }, "Sample illustration")
             : null,
         ],
@@ -149,15 +162,18 @@ if (
         h(
           "small",
           {},
-          [p.category, availabilityLabel(p)].filter(Boolean).join(" · "),
+          experience ? (soldOut(p) ? doc.ui.soldOut : p.category) : [p.category, availabilityLabel(p)].filter(Boolean).join(" · "),
         ),
         link("/product/" + p.id, h("h3", {}, p.name)),
         h(
           "div",
           { class: "price-line" },
-          h("span", {}, money(p.price)),
+          cardPrice,
           link("/product/" + p.id, "↗", "round-link"),
         ),
+        experience ? h("div", { class: "quick-add" },
+          p.variants.length > 1 ? h("select", { "aria-label": "Choose variety for " + p.name, onchange: e => { selected = p.variants.find(v => v.id === e.target.value); cardPrice.textContent = money(p.price + selected.extra); } }, p.variants.map(v => h("option", { value: v.id }, v.name + (v.extra ? " · +" + money(v.extra) : "")))) : null,
+          button(soldOut(p) ? doc.ui.soldOut : p.channel === "store" ? doc.ui.inStore : "Add to basket", () => add(p, selected), { class: "primary-link", disabled: soldOut(p) || p.channel === "store" || isPreview || editing, "aria-label": soldOut(p) ? p.name + " is sold out" : "Add " + p.name + " to basket" })) : null,
       ),
     );
   }
@@ -191,9 +207,14 @@ if (
           section.type === "hero" ? doc.business.tagline : section.type === "faq" ? doc.ui.faqTitle : page.id === "about" ? doc.business.story : "",
       ),
       heading,
-      section.body ? h("p", {}, section.body) : null,
+      section.body ? h("p", {}, customerCopy(section.body)) : null,
     );
-    if (["hero", "split", "cta"].includes(section.type))
+    if (experience && page.id === "home" && section.type === "hero")
+      copy.append(h("div", { class: "home-choices", "aria-label": "Welcome to Rise & Roost" },
+        link("/shop", "Start Shopping", "primary-link"),
+        link("/roost", "The Roost", "secondary-button"),
+        link("/comments", "Leave a Comment", "secondary-button")));
+    else if (["hero", "split", "cta"].includes(section.type))
       copy.append(link(section.link, section.button + "  ↗", "primary-link"));
     if (section.type === "hero" || section.type === "split") {
       const visual = section.image
@@ -219,11 +240,11 @@ if (
               }),
               h("span", {}, doc.ui.artCaption || "A taste of the everyday good."),
             ),
-            h(
+            !experience ? h(
               "span",
               { class: "sample-photo" },
               "Illustrated placeholders · Your photos go here",
-            ),
+            ) : null,
           );
       s.append(h("div", { class: "section-inner editorial" }, copy, visual));
     } else if (section.type === "products") {
@@ -237,7 +258,7 @@ if (
             { class: "product-grid" },
             doc.products.filter((p) => p.active).map(card),
           ),
-          h("p", { class: "small-note" }, doc.ui.productNote),
+          !experience ? h("p", { class: "small-note" }, doc.ui.productNote) : null,
         ),
       );
     } else if (section.type === "faq") {
@@ -385,7 +406,7 @@ if (
         "div",
         {},
         img(p.images[0], "detail-image"),
-        p.placeholder
+        p.placeholder && !experience
           ? h(
               "p",
               { class: "small-note" },
@@ -411,7 +432,7 @@ if (
         link("/shop", "← " + doc.ui.continue),
         h("p", { class: "eyebrow" }, [p.category, availabilityLabel(p)].filter(Boolean).join(" · ")),
         h("h1", {}, p.name),
-        h("p", {}, p.description),
+        h("p", {}, customerCopy(p.description)),
         price,
         h("label", { class: "field" }, doc.ui.variety || "Variety", select),
         action,
@@ -424,11 +445,11 @@ if (
       return h(
         "main",
         { class: "section-inner empty-state receipt" },
-        h("span", { class: "eyebrow" }, "DEMO · NO PAYMENT"),
-        h("h1", {}, doc.ui.simulated),
+        !experience ? h("span", { class: "eyebrow" }, "DEMO · NO PAYMENT") : null,
+        h("h1", {}, experience ? "Thank you. Your preorder is in." : doc.ui.simulated),
         h("p", {}, "Order number: " + (receipt.orderNumber || receipt.id.slice(0, 10))),
         h("p", {}, pickupLabel(receipt.pickup)),
-        h(
+        !experience ? h(
           "p",
           {},
           doc.ui.orderBy +
@@ -437,15 +458,16 @@ if (
             " at " +
             receipt.pickup.cutoffTime +
             " (Indianapolis)",
-        ),
+        ) : null,
         h("h2", {}, money(receipt.total)),
         h(
           "p",
           {},
-          "Your beta request was received. Open Track your order for its current payment, preparation, and pickup status. This website has not processed a payment.",
+          experience ? "Follow your payment and pickup status using your private order link. Payment is confirmed only after independent verification." : "Your beta request was received. Open Track your order for its current payment, preparation, and pickup status. This website has not processed a payment.",
         ),
         receipt.trackingPath ? h("p", {}, h("a", { href: receipt.trackingPath, class: "primary-link" }, "Track your order")) : null,
-        h("p", { class: "small-note" }, "Save your private tracking link to view this order on another device. Email is optional and is sent only when configured and requested."),
+        h("p", { class: "small-note" }, experience ? "Save your private tracking link. This test preorder does not process a payment." : "Save your private tracking link to view this order on another device. Email is optional and is sent only when configured and requested."),
+        experience ? link("/roost", customer?.member ? "View my Roost orders" : "Explore The Roost", "secondary-button") : null,
         link("/shop", doc.ui.continue, "secondary-button"),
       );
     const lines = cart.lines
@@ -498,10 +520,20 @@ if (
       onchange: (e) => { emailOptIn = e.target.checked; emailInput.required = emailOptIn; },
     });
     emailInput.required = emailOptIn;
+    const customerFields = experience ? h("div", { class: "checkout-details" },
+      h("h2", {}, "Your pickup details"),
+      h("p", { class: "small-note" }, "We’ll know who your order is for."),
+      ...[["Name", "name", "text", "name"], ["Email (optional)", "email", "email", "email"], ["Phone (optional)", "phone", "tel", "tel"]].map(([label, key, type, autocomplete]) => h("label", { class: "field" }, label,
+        h("input", { name: "checkout-" + key, type, autocomplete, required: key === "name", maxlength: key === "name" ? 80 : key === "phone" ? 32 : 254, value: checkoutProfile[key], oninput: e => checkoutProfile[key] = e.target.value })))) : null;
     const action = button(
-      doc.ui.checkout,
+      experience ? "Place preorder" : doc.ui.checkout,
       guard(async () => {
         if (emailOptIn && !emailInput.reportValidity()) return;
+        if (experience) {
+          const fields = [...customerFields.querySelectorAll("input")];
+          if (fields.some(input => !input.reportValidity())) return;
+          for (const key of ["name", "email", "phone"]) checkoutProfile[key] = customerFields.querySelector('[name="checkout-' + key + '"]').value;
+        }
         action.disabled = true;
         try {
           if (!workspace) {
@@ -522,6 +554,7 @@ if (
             emailOptIn: notificationsEnabled && emailOptIn,
             email: checkoutEmail,
             total,
+            ...(experience ? { checkoutMode, customerDetails: checkoutProfile } : {}),
             lines: lines.map((l) => ({
               productId: l.productId,
               variantId: l.variantId,
@@ -535,6 +568,7 @@ if (
           }
           cart = { lines: [], pickupId: "", requestId: crypto.randomUUID() };
           saveCart();
+          if (experience) void customer.refresh(false);
           render();
         } finally {
           action.disabled = false;
@@ -549,6 +583,10 @@ if (
       "main",
       { class: "section-inner cart-page" },
       h("h1", {}, doc.ui.cart),
+      experience && lines.length ? h("div", { class: "checkout-mode", "aria-label": "Checkout options" },
+        button("Guest checkout", () => { checkoutMode = "guest"; render(); }, { class: checkoutMode === "guest" ? "active" : "", "aria-pressed": checkoutMode === "guest" }),
+        customer?.member ? button("Use my Roost details", () => { checkoutMode = "member"; checkoutProfile = { ...customer.member.profile }; render(); }, { class: checkoutMode === "member" ? "active" : "", "aria-pressed": checkoutMode === "member" }) : link("/roost", "Already a member? Sign in"),
+        h("p", {}, checkoutMode === "guest" ? "No account needed." : "This order will be saved in your Roost.")) : null,
       !lines.length
         ? h(
             "div",
@@ -619,11 +657,12 @@ if (
                   h("strong", {}, money(l.qty * (l.p.price + l.v.extra))),
                 ),
               ),
+              customerFields,
             ),
             h(
               "aside",
               { class: "order-summary" },
-              h("span", { class: "eyebrow" }, "SIMULATION ONLY"),
+              !experience ? h("span", { class: "eyebrow" }, "SIMULATION ONLY") : null,
               h("h2", {}, doc.ui.pickup),
               select,
               chosen
@@ -641,23 +680,23 @@ if (
                     ),
                   )
                 : null,
-              h("p", {}, doc.ui.policy),
+              !experience ? h("p", {}, doc.ui.policy) : null,
               h(
                 "div",
                 { class: "total" },
-                h("span", {}, "Demo total"),
+                h("span", {}, experience ? "Total" : "Demo total"),
                 h("strong", {}, money(total)),
               ),
-              h("label", { class: "field" }, h("span", {}, "Email for order updates (optional)"), emailInput),
-              h("label", { class: "field" }, h("span", {}, "Email me order receipt, verified payment, preparation, and pickup readiness"), emailConsent),
+              !experience || notificationsEnabled ? h("label", { class: "field" }, h("span", {}, "Email for order updates (optional)"), emailInput) : null,
+              !experience || notificationsEnabled ? h("label", { class: "field" }, h("span", {}, "Email me order receipt, verified payment, preparation, and pickup readiness"), emailConsent) : null,
               h("p", { class: "small-note" }, notificationsEnabled
                 ? "Transactional updates only. Provider acceptance is shown on your private tracking page; inbox delivery is not guaranteed."
-                : "Email is not connected for this beta site. You will receive a private order tracking link instead."),
+                : experience ? "Your confirmation includes a private order tracking link." : "Email is not connected for this beta site. You will receive a private order tracking link instead."),
               action,
               h(
                 "p",
                 { class: "small-note" },
-                "No card details. No payment. No real order.",
+                experience ? "Test preorder · No payment is processed. Save your private tracking link." : "No card details. No payment. No real order.",
               ),
             ),
           ),
@@ -668,7 +707,7 @@ if (
     const t = doc.theme;
     document.title = doc.business.name + " · Website beta";
     const site = h("div", {
-      class: "site-root",
+      class: "site-root" + (experience ? " experience" : ""),
       style: {
         "--paper": t.background,
         "--surface": t.surface,
@@ -691,8 +730,8 @@ if (
         { class: "demo-bar" },
         isPreview
           ? "UNPUBLISHED PREVIEW · Read only · Simulation disabled"
-          : "WEBSITE BETA · Sample products · No real payments",
-        h("a", { href: studioPath }, "Open Website Studio ↗"),
+          : experience ? "Private review · Test orders only · No payments" : "WEBSITE BETA · Sample products · No real payments",
+        !experience ? h("a", { href: studioPath }, "Open Website Studio ↗") : null,
       ),
       h("div", { class: "announcement" }, doc.ui.announcement),
       h(
@@ -709,14 +748,14 @@ if (
         h(
           "nav",
           { "aria-label": "Main navigation" },
-          doc.pages
+          experience ? [link("/shop", "Shop", path === "/shop" ? "active" : ""), link("/roost", "The Roost", path === "/roost" ? "active" : "")] : doc.pages
             .filter((p) => p.showInNav)
             .map((p) => link(p.slug, p.title, path === p.slug ? "active" : "")),
         ),
         link(
           "/cart",
           [
-            doc.ui.cart,
+            experience ? "Basket" : doc.ui.cart,
             h(
               "span",
               { class: "basket-count" },
@@ -728,6 +767,8 @@ if (
       ),
     );
     if (path === "/cart") site.append(renderCart());
+    else if (experience && path === "/roost") site.append(customer.roost());
+    else if (experience && path === "/comments") site.append(customer.commentPage());
     else if (path.startsWith("/product/"))
       site.append(productDetail(path.split("/")[2]));
     else {
@@ -770,14 +811,16 @@ if (
             "div",
             {},
             h("strong", {}, doc.business.hours),
-            h("p", {}, doc.business.address),
+            h("p", {}, experience && doc.business.address === "Add your farm stand address in Website Studio" ? "Pickup details are included with your order." : doc.business.address),
           ),
           h(
             "div",
             {},
-            doc.pages.map((p) => link(p.slug, p.title)),
-            h("p", { class: "small-note" }, doc.ui.terms),
-            h("p", { class: "small-note" }, doc.ui.privacy),
+            (experience ? doc.pages.filter(p => ["/about", "/visit", "/terms"].includes(p.slug)) : doc.pages).map((p) => link(p.slug, p.title)),
+            experience ? link("/comments", "Leave a Comment") : null,
+            experience ? h("a", { href: studioPath }, "Website Studio") : null,
+            !experience ? h("p", { class: "small-note" }, doc.ui.terms) : null,
+            !experience ? h("p", { class: "small-note" }, doc.ui.privacy) : null,
           ),
         ),
       ),
@@ -787,6 +830,14 @@ if (
     root.replaceChildren(betaNotice, site);
   }
   let loadSequence = 0;
+  function ensureCustomer() {
+    if (experience && workspace && customerWorkspace !== workspace) {
+      customerWorkspace = workspace;
+      customer = createCustomerExperience({ workspaceId: workspace, link, navigate, render, readOnly: isPreview || editing,
+        onMember: member => { checkoutMode = member ? "member" : "guest"; if (member) checkoutProfile = { ...member.profile }; } });
+      void customer.refresh();
+    }
+  }
   const siteEndpoint = () => isPreview
     ? "/api/preview/" + match[2]
     : "/api/site" + (prefix.startsWith("/demo/") ? "?workspace=" + workspace : "");
@@ -802,11 +853,14 @@ if (
     const changed = result.id !== workspace || result.revision !== revision;
     if (!force && !changed && result.availabilityRevision === availabilityRevision) return;
     doc = result.document;
+    experience = !!result.customerExperienceEnabled;
     notificationsEnabled = !!result.notificationsEnabled;
     revision = result.revision || 1;
     availabilityRevision = result.availabilityRevision || 0;
     workspace = result.id || workspace;
+    ensureCustomer();
     studioPath = result.studioPath || (result.id ? "/studio?workspace=" + result.id : "/studio");
+    if (!force && experience && path === "/roost") await customer.refresh(false);
     render();
     if (!force && changed) notify("The published website has updated. Please review your basket before requesting.");
   }

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { randomBytes, createHash } from 'node:crypto';
 import { seed } from '../public/model.mjs';
-export async function primaryFixture() {
+export async function primaryFixture({ experience = false, port = 4182, hostname = '127.0.0.1' } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'rr-sync-'));
   const dbFile = join(directory, 'test.sqlite');
   const id = randomBytes(24).toString('hex');
@@ -22,7 +22,7 @@ export async function primaryFixture() {
   sqlite.close();
   const child = spawn(process.execPath, ['server/local.mjs'], {
     cwd: fileURLToPath(new URL('../', import.meta.url)),
-    env: { ...process.env, RR_TEST_DB: dbFile, RR_PUBLIC_WORKSPACE_ID: id, PORT: '4182' },
+    env: { ...process.env, RR_TEST_DB: dbFile, RR_PUBLIC_WORKSPACE_ID: id, RR_CUSTOMER_EXPERIENCE: String(experience), PORT: String(port) },
     stdio: 'ignore',
   });
   const close = async () => {
@@ -34,7 +34,7 @@ export async function primaryFixture() {
   };
   try {
     for (let attempt = 0; attempt < 100; attempt++) {
-      try { if ((await fetch('http://127.0.0.1:4182/api/site')).ok) return { id, key, origin: 'http://127.0.0.1:4182', close }; } catch {}
+      try { if ((await fetch('http://' + hostname + ':' + port + '/api/site')).ok) return { id, key, origin: 'http://' + hostname + ':' + port, close }; } catch {}
       if (child.exitCode !== null) throw new Error('Isolated publishing fixture exited before readiness.');
       await new Promise((resolve) => setTimeout(resolve, 50));
     }

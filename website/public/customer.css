@@ -1,0 +1,111 @@
+/* Customer experience additions inherit the approved farmhouse theme. */
+.experience .site-header { position: sticky; top: 0; z-index: 20; background: var(--paper); min-height: 88px; }
+.experience .basket-link { min-height: 48px; padding: 10px 18px; background: var(--green); color: white; border-radius: var(--button-radius); font-size: 14px; font-weight: 600; }
+.experience .basket-count { background: #ffffff25; min-width: 25px; }
+.experience .home-choices { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.experience .secondary-button { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; text-decoration: none; font-size: 13px; line-height: 1.4; }
+.experience .quick-add { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.experience .quick-add select { width: 100%; font-size: 13px; }
+.experience .quick-add button { width: 100%; }
+.experience .quick-add select + button { margin-top: 0; }
+.experience .product-grid { align-items: stretch; }
+.experience .product-card { display: flex; flex-direction: column; }
+.experience .product-info { display: flex; flex-direction: column; flex: 1; }
+.experience .product-info .quick-add { margin-top: auto; padding-top: 18px; }
+.experience .price-line { margin-bottom: 12px; }
+.experience .round-link { display: none; }
+.experience .page-intro { max-width: 720px; padding: 54px 0 30px; }
+.experience .page-intro h1 { margin: 10px 0 20px; }
+.experience .page-intro p { margin: 0; max-width: 560px; }
+.experience .roost-page, .experience .comments-page { padding-bottom: 80px; }
+.experience .roost-layout { display: grid; grid-template-columns: minmax(0,1.25fr) minmax(0,1fr); gap: 40px; align-items: start; }
+.experience .roost-layout > *, .experience .roost-layout aside { min-width: 0; }
+.experience .join-roost, .experience .roost-signin, .experience .roost-profile, .experience .comment-form, .experience .account-controls, .experience .comment-thanks { border: 1px solid #67745326; border-radius: var(--radius); background: var(--surface); padding: 32px; }
+.experience .roost-layout h2 { font-size: 30px; letter-spacing: -.6px; margin-top: 0; }
+.experience .roost-layout p { font-size: 15px; }
+.experience .roost-signin details { margin: 28px 0; }
+.experience summary { cursor: pointer; min-height: 44px; padding: 12px 0; font-size: 14px; }
+.experience .guest-reminder { border-top: 1px solid #67745326; padding-top: 14px; margin-top: 28px; }
+.experience .guest-reminder a { width: 100%; }
+.experience .account-controls { margin-top: 20px; }
+.experience .account-controls button { display: block; margin-top: 15px; max-width: 100%; }
+.experience .account-controls .text-button { font-size: 13px; min-height: 44px; }
+.experience .member-order { border: 1px solid #67745326; border-radius: var(--radius); background: var(--surface); padding: 24px; margin: 20px 0; }
+.experience .member-order h3 { font: 600 13px system-ui; letter-spacing: .4px; overflow-wrap: anywhere; }
+.experience .member-order .order-state { font-size: 12px; color: var(--ink); }
+.experience .member-order-bottom, .experience .panel-heading, .comment-moderation .panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.experience .member-order-bottom .primary-link { padding: 12px 20px; }
+.experience .claim-order { margin-top: 30px; }
+.experience .gentle-empty { border-top: 1px solid #67745326; padding: 22px 0; }
+.experience .recovery-card { background: #ede9db; border: 1px solid #c0b89f; border-radius: var(--radius); padding: 24px; margin: 0 0 30px; }
+.experience .recovery-card input { display: block; width: 100%; min-height: 48px; margin: 12px 0; padding: 10px; border: 1px solid #b5beaf; border-radius: 4px; font: 12px monospace; }
+.experience .recovery-card button { margin: 8px 10px 0 0; }
+.experience .checkout-mode { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 0 0 24px; }
+.experience .checkout-mode button, .experience .checkout-mode a { min-height: 44px; padding: 12px 18px; border: 1px solid #b5beaf; background: transparent; color: var(--ink); border-radius: var(--button-radius); text-decoration: none; font-size: 13px; }
+.experience .checkout-mode button.active { background: var(--green); border-color: var(--green); color: white; }
+.experience .checkout-mode p { width: 100%; margin: 0; font-size: 13px; }
+.experience .cart-layout { grid-template-columns: minmax(0,1.3fr) minmax(0,1fr); align-items: start; }
+.experience .order-summary { position: sticky; top: 112px; }
+.experience .order-summary h2, .experience .checkout-details h2 { font-size: 28px; letter-spacing: -.6px; }
+.experience .order-summary .primary-link { width: 100%; }
+.experience .checkout-details { margin-top: 32px; border-top: 1px solid #67745326; padding: 22px 0; }
+.experience .checkout-details .small-note { font-size: 13px; }
+.experience .field { font-weight: 500; font-size: 14px; }
+.experience .field input, .experience .field textarea { font-size: 16px; }
+.experience .consent-line { display: flex; align-items: start; gap: 12px; line-height: 1.6; font-size: 14px; }
+.experience .consent-line input { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--green); margin-top: 2px; }
+.experience .comment-honey { display: none; }
+.experience .form-error { color: #853f30; font-size: 14px; line-height: 1.6; }
+.experience .neighbor-notes { padding: 25px 0; }
+.experience blockquote { margin: 24px 0; border-left: 2px solid var(--accent); padding: 0 0 0 22px; }
+.experience blockquote p { font: italic 22px/1.7 var(--heading); color: var(--ink); }
+.experience blockquote cite { font: 12px system-ui; color: var(--muted); }
+.experience .site-footer { margin-top: 0; }
+.experience .footer-grid h2 { font-size: 30px; }
+.experience .site-footer a { min-height: 36px; display: inline-flex; align-items: center; }
+.experience .receipt { max-width: 750px; }
+.comment-moderation .sub-card { margin: 20px 0; }
+.comment-moderation .sub-card > button { margin: 10px 12px 0 0; }
+@media (max-width: 760px) {
+  .experience .section-inner { width: calc(100% - 36px); }
+  .experience .site-header { min-height: 78px; gap: 10px; padding: 8px 0; }
+  .experience .brand { gap: 7px; }
+  .experience .brand img { width: 44px; height: 44px; }
+  .experience .brand span { font-size: 21px; }
+  .experience .site-header nav { display: flex; gap: 0; }
+  .experience .site-header nav a:first-child { display: none; }
+  .experience .site-header nav a { display: inline-flex; align-items: center; min-height: 44px; font-size: 12px; }
+  .experience .basket-link { padding: 8px 12px; font-size: 12px; }
+  .experience .section-hero { padding-top: 30px !important; padding-bottom: 55px !important; }
+  .experience .section-hero h1 { font-size: 43px !important; }
+  .experience .section-copy .eyebrow { margin-bottom: 12px; }
+  .experience .home-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .experience .home-choices .primary-link { grid-column: 1/-1; }
+  .experience .home-choices a { padding: 14px 10px; font-size: 13px; }
+  .experience .editorial { gap: 30px; }
+  .experience .hero-art { margin: 0 15px 0 0; }
+  .experience .hero-art > img, .experience .editorial-image img { height: 330px; }
+  .experience .hero-inset { width: 135px; right: -18px; }
+  .experience .hero-inset img { height: 100px; }
+  .experience .page-intro { padding: 30px 0 24px; }
+  .experience .page-intro h1 { font-size: 38px; }
+  .experience .roost-layout, .experience .cart-layout { grid-template-columns: 1fr; gap: 24px; }
+  .experience .join-roost, .experience .roost-signin, .experience .roost-profile, .experience .account-controls, .experience .comment-form { padding: 24px 20px; }
+  .experience .roost-layout h2 { font-size: 28px; }
+  .experience .order-summary { position: static; }
+  .experience .basket-line { grid-template-columns: 68px minmax(0,1fr) auto; gap: 12px; }
+  .experience .basket-line img { width: 68px; height: 80px; }
+  .experience .basket-line h3 { font-size: 21px; }
+  .experience .quick-add .primary-link { min-height: 48px; }
+  .experience .footer-grid { gap: 24px; padding-top: 30px; padding-bottom: 30px; }
+  .experience .member-order { padding: 20px; }
+  .experience .recovery-card { padding: 20px; }
+}
+@media (max-width: 360px) {
+  .experience .site-header { gap: 7px; }
+  .experience .brand img { width: 36px; height: 36px; }
+  .experience .brand span { font-size: 17px; }
+  .experience .brand { gap: 5px; }
+  .experience .basket-link { padding: 8px; }
+}
+@media (prefers-reduced-motion: reduce) { .experience * { scroll-behavior: auto !important; transition: none !important; } }

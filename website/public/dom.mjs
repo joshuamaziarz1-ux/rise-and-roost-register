@@ -1,6 +1,7 @@
 export function h(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs)) {
+    if (key.startsWith("aria-") && typeof value === "boolean") { node.setAttribute(key, String(value)); continue; }
     if (value === undefined || value === null || value === false) continue;
     if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
     else if (key === "style") {

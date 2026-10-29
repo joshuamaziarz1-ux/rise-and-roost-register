@@ -23,6 +23,8 @@ const types = {
 const env = {
   DB: db,
   PUBLIC_WORKSPACE_ID: process.env.RR_PUBLIC_WORKSPACE_ID || "",
+  CUSTOMER_EXPERIENCE_ENABLED: process.env.RR_CUSTOMER_EXPERIENCE || "false",
+  REVIEW_BUILD: process.env.RR_REVIEW_BUILD || "false",
   ASSETS: {
     async fetch(request) {
       let path = decodeURIComponent(new URL(request.url).pathname);
