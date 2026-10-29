@@ -47,6 +47,7 @@ export async function start(root) {
     "Products",
     "Pickup Schedule",
     "Orders",
+    "Comments",
     "Workspace Access",
     "Business & Copy",
     "Advanced Design",
@@ -59,6 +60,8 @@ export async function start(root) {
       {
         type: "studio-document",
         document: doc,
+        customerExperienceEnabled: !!state.customerExperienceEnabled,
+        workspaceId: state.id,
         path: doc.pages.find((p) => p.id === pageId)?.slug || "/",
       },
       location.origin,
@@ -283,7 +286,7 @@ export async function start(root) {
       h("p", { class: "workspace-badge" }, state.isPrimary ? "BETA WEBSITE · OWNER" : "PRIVATE DEMO · OWNER"),
       h("p", {}, "Workspace ID: " + state.id),
       state.sessionExpiresAt ? h("p", {}, "This session expires: " + new Date(state.sessionExpiresAt).toLocaleString() + ".") : null,
-      h("p", {}, state.isPrimary ? "This is Danielle's original main website. Public website orders appear in this workspace's Orders dashboard." : "This is a separate private demo. It cannot authorize access to the original main website."),
+      h("p", {}, state.isReview ? "This is an isolated review workspace. It cannot change the original beta website or authorize access to its Studio." : state.isPrimary ? "This is Danielle's original main website. Public website orders appear in this workspace's Orders dashboard." : "This is a separate private demo. It cannot authorize access to the original main website."),
       h("p", {}, h("a", { href: state.studioPath }, "Studio link for this exact workspace")),
       !state.isPrimary && state.mainStudioPath ? h("p", {}, h("a", { href: state.mainStudioPath }, "Open the original main website sign-in")) : null,
       h("h3", {}, "Connect another computer"),
@@ -1041,6 +1044,7 @@ export async function start(root) {
       const box = h("article", { class: "sub-card", "aria-label": "Order " + o.orderNumber },
         h("h3", {}, o.orderNumber + " · " + money(o.total)),
         h("p", {}, "BETA ORDER · " + o.pickup.date + " · " + o.pickup.start),
+        o.customer?.name ? h("p", {}, "Pickup for " + o.customer.name + (o.customer.phone ? " · " + o.customer.phone : "")) : null,
         h("p", {}, o.lines.map((l) => `${l.qty} × ${l.name} (${l.variant})`).join(", ")),
         h("p", {}, h("strong", {}, paymentLabels[o.paymentStatus] || "Awaiting payment report")),
         h("p", {}, "Preparation: " + (fulfillmentLabels[o.status] || o.status)));
@@ -1141,6 +1145,23 @@ export async function start(root) {
       ),
     );
   }
+  function commentsPanel() {
+    const list = h("div", { class: "comment-moderation" });
+    const draw = comments => {
+      list.replaceChildren(...(comments.length ? comments.map(c => h("article", { class: "sub-card" },
+        h("div", { class: "panel-heading" }, h("h3", {}, c.name), h("strong", {}, c.status === "approved" ? "Visible on website" : c.status === "hidden" ? "Hidden" : "Waiting for review")),
+        h("p", {}, c.body), h("p", { class: "small-note" }, new Date(c.createdAt).toLocaleDateString()),
+        ...[...["pending", "hidden"].includes(c.status) ? ["approved"] : [], ...c.status !== "hidden" ? ["hidden"] : []].map(status => button(status === "approved" ? "Approve comment" : "Hide comment", guard(async () => {
+          const result = await request("/api/studio-comments", { id: c.id, version: c.version, status }); draw(result.comments);
+          notify(status === "approved" ? "Comment approved for the website." : "Comment hidden. Its original text is preserved.");
+        }), { class: status === "approved" ? "primary-link" : "secondary-button" })))) : [h("p", {}, "No comments yet. New comments will appear here before anyone can see them on the website.")]));
+    };
+    const refresh = async () => draw((await request("/api/studio-comments")).comments);
+    void guard(refresh)();
+    return h("div", {}, h("h2", {}, "Comments from your neighbors"),
+      h("p", {}, "Review each comment before it appears on the website. Hide a comment at any time; its original text stays saved."),
+      button("Refresh comments", guard(refresh), { class: "secondary-button" }), list);
+  }
   function render() {
     frameObserver?.disconnect();
     const panel = {
@@ -1149,6 +1170,7 @@ export async function start(root) {
       Products: productPanel,
       "Pickup Schedule": pickupPanel,
       Orders: ordersPanel,
+      Comments: commentsPanel,
       "Workspace Access": accessPanel,
       "Business & Copy": businessPanel,
       "Advanced Design": advancedPanel,
@@ -1315,11 +1337,11 @@ export async function start(root) {
             h("img", { src: "/assets/logo.webp", alt: "" }),
             h("span", {}, "Website\nStudio"),
           ),
-          h("p", { class: "workspace-badge" }, state.isPrimary ? "BETA WEBSITE · OWNER" : "PRIVATE DEMO · OWNER"),
+          h("p", { class: "workspace-badge" }, state.isPrimary ? state.isReview ? "REVIEW WEBSITE · OWNER" : "BETA WEBSITE · OWNER" : "PRIVATE DEMO · OWNER"),
           h(
             "nav",
             { "aria-label": "Studio navigation" },
-            tabs.map((label) =>
+            tabs.filter(label => label !== "Comments" || state.customerExperienceEnabled).map((label) =>
               button(
                 label === "Website" ? "Website · Simple Edit" : label,
                 () => {
@@ -1340,7 +1362,7 @@ export async function start(root) {
               state.isPrimary ? "View published website ↗" : "View published demo ↗",
             ),
             h("p", { class: "small-note", id: "publishing-destination" },
-              state.isPrimary ? "Publish demo updates the main beta website on every device." : "This is a separate test workspace. Publishing updates its demo link, not the main beta website."),
+              state.isReview ? "Publishing updates only this isolated review website. The public beta is unchanged." : state.isPrimary ? "Publish demo updates the main beta website on every device." : "This is a separate test workspace. Publishing updates its demo link, not the main beta website."),
             !state.isPrimary && state.mainStudioPath ? h("a", { href: state.mainStudioPath }, "Sign in to the main website workspace ↗") : null,
             button(
               "Sign out",

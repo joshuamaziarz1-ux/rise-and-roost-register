@@ -1,0 +1,16 @@
+{
+  "checkedAt": "2026-10-29T19:00:26.049225+00:00",
+  "originalWorkspacesChecked": 125,
+  "allOriginalWorkspacesExactlyUnchanged": true,
+  "originalBetaDeploymentUnchanged": true,
+  "originalBetaSettingsUnchanged": true,
+  "previewExistingWorkspacesChecked": 12,
+  "allExistingPreviewWorkspacesExactlyUnchanged": true,
+  "previewBindingUnchanged": true,
+  "previewDatabaseSeparate": true,
+  "betaWrites": 0,
+  "existingWorkspaceWrites": 0,
+  "previewDeployment": "3f6e8b8d-6f4c-403e-b100-edc28969b211",
+  "previewVersion": "e1167a96-8502-4f58-b4c6-0ab37f7d2ec1",
+  "previewDeploymentCreatedAt": "2026-10-29T18:59:27.186355Z"
+}

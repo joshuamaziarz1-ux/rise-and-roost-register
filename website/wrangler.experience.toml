@@ -1,0 +1,23 @@
+# Isolated customer review only. This is never the public beta's database.
+name = "rise-roost-experience-preview"
+main = "server/worker.mjs"
+compatibility_date = "2025-10-01"
+workers_dev = true
+preview_urls = false
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
+not_found_handling = "single-page-application"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "rise-roost-experience-preview-db"
+database_id = "21352b95-d7f6-406f-8527-4b8dbcebf1bf"
+
+[vars]
+PUBLIC_WORKSPACE_ID = "2a7ca191c1639aaf023b02d96bcd9519fe099333302d9204"
+CUSTOMER_EXPERIENCE_ENABLED = "true"
+REVIEW_BUILD = "true"
+ORDER_EMAIL_ENABLED = "false"

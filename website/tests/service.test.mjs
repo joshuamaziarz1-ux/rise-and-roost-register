@@ -9,7 +9,7 @@ import {
   quote,
   inspectImage,
 } from "../server/service.mjs";
-import { seed, localInstant, safeLink, clone } from "../public/model.mjs";
+import { seed, localInstant, pickupLabel, orderByLabel, customerTime, customerTimestamp, safeLink, clone } from "../public/model.mjs";
 
 const now = Date.parse("2026-10-26T14:00:00Z");
 function database({ blobArrays = false } = {}) {
@@ -108,6 +108,15 @@ test("Indianapolis conversion uses winter/summer offsets and rejects DST gaps, a
   assert.throws(() => localInstant("2026-03-08", "02:30"));
   assert.throws(() => localInstant("2026-11-01", "01:30"));
   assert.throws(() => localInstant("2026-02-30", "18:00"));
+  const pickup = { date: "2026-11-03", start: "15:00", end: "18:00", cutoffDate: "2026-11-02", cutoffTime: "18:00" };
+  assert.equal(pickupLabel(pickup), "Tuesday, November 3 · 3:00 PM – 6:00 PM");
+  assert.equal(orderByLabel(pickup), "Monday, November 2 at 6:00 PM");
+  assert.equal(pickup.start, "15:00");
+  assert.equal(customerTime("2026-01-15T05:00:00Z"), "12:00 AM");
+  assert.equal(customerTime("2026-01-15T17:00:00Z"), "12:00 PM");
+  assert.equal(customerTime("2026-01-15T23:00:00Z"), "6:00 PM");
+  assert.equal(customerTime("2026-07-15T22:00:00Z"), "6:00 PM");
+  assert.equal(customerTimestamp("2026-01-15T23:00:01Z"), "Thursday, January 15, 2026 at 6:00:01 PM");
 });
 test("CSS is parsed, scoped, and rejects external fetches and executable constructs", () => {
   assert.match(

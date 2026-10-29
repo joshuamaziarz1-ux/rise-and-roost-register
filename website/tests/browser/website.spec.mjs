@@ -250,7 +250,7 @@ test("products, upload/crop, varieties, price, pickup cutoff, and simulated cart
     .nth(1)
     .getAttribute("value");
   await select.selectOption(value);
-  await expect(page.locator(".deadline")).toContainText("17:30");
+  await expect(page.locator(".deadline")).toContainText("5:30 PM");
   await expect(page.locator(".total")).toContainText("$23.00");
   await page
     .getByRole("button", { name: "Request a demo preorder", exact: true })

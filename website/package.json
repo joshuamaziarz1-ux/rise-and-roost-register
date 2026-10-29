@@ -4,6 +4,11 @@
   "type": "module",
   "scripts": {
     "dev": "node server/local.mjs",
+    "dev:experience": "node scripts/experience-dev.mjs",
+    "deploy:experience": "wrangler deploy --config wrangler.experience.toml",
+    "check:experience": "wrangler deploy --config wrangler.experience.toml --dry-run",
+    "test:experience-hosted": "node tests/experience-hosted.mjs",
+    "test:experience-browser": "playwright test --config playwright.experience-hosted.config.mjs",
     "test": "node --test tests/*.test.mjs",
     "test:browser": "playwright test",
     "test:all": "npm test && npm run test:browser",
@@ -13,6 +18,7 @@
     "screenshots": "node tests/capture-evidence.mjs"
   },
   "dependencies": {
+    "@simplewebauthn/server": "14.0.3",
     "css-tree": "3.1.0"
   },
   "devDependencies": {

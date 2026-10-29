@@ -1,5 +1,6 @@
 import { BETA_ORIGIN, emailConfigured } from "./orders.mjs";
 import { trackingPath, eventLabels } from "../public/orders.mjs";
+import { pickupLabel } from "../public/model.mjs";
 
 const money = (n) => "$" + (n / 100).toFixed(2);
 // Outbox entries live in the same D1 ledger transaction as the order transition.
@@ -55,7 +56,7 @@ export async function drainNotifications(db, env, { fetcher = fetch, now = Date.
               : n.event === "preparing" ? "Danielle marked your order as Preparing Your Order."
               : "Danielle marked your order Ready for Pickup.",
             `Order total: ${money(order.total)}`,
-            `Pickup: ${order.pickup.date}, ${order.pickup.start}–${order.pickup.end} (America/Indiana/Indianapolis)`,
+            `Pickup: ${pickupLabel(order.pickup)}`,
             "Your private status page (keep this link private):",
             BETA_ORIGIN + trackingPath(row.id, order),
             "This is an isolated website beta. No Square payment was processed. Your status page is the source of current order information. You requested transactional order updates; no marketing messages.",

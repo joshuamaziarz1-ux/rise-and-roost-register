@@ -53,15 +53,32 @@ export function safeLink(value) {
     return false;
   }
 }
+// Customer display only. Stored wall-clock values and scheduling calculations
+// continue to use localInstant and the Indiana time zone above.
+const customerDate = new Intl.DateTimeFormat("en-US", {
+  timeZone: ZONE, weekday: "long", month: "long", day: "numeric",
+});
+const customerClocks = [false, true].map(seconds => new Intl.DateTimeFormat("en-US", {
+  timeZone: ZONE, hour: "numeric", minute: "2-digit", ...(seconds ? { second: "2-digit" } : {}), hour12: true,
+}));
+const customerEvent = new Intl.DateTimeFormat("en-US", {
+  timeZone: ZONE, weekday: "long", month: "long", day: "numeric", year: "numeric",
+  hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true,
+});
+const normalSpaces = text => text.replace(/[\u00a0\u202f]/g, " ");
+export function customerTime(value, seconds = false) {
+  return normalSpaces(customerClocks[Number(seconds)].format(new Date(value)));
+}
+export function customerTimestamp(value) {
+  return normalSpaces(customerEvent.format(new Date(value)));
+}
 export function pickupLabel(p) {
-  return (
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: ZONE,
-      weekday: "long",
-      month: "short",
-      day: "numeric",
-    }).format(localInstant(p.date, p.start)) + ` · ${p.start}–${p.end}`
-  );
+  const start = localInstant(p.date, p.start);
+  return `${customerDate.format(start)} · ${customerTime(start)} – ${customerTime(localInstant(p.date, p.end))}`;
+}
+export function orderByLabel(p) {
+  const cutoff = localInstant(p.cutoffDate, p.cutoffTime);
+  return `${customerDate.format(cutoff)} at ${customerTime(cutoff)}`;
 }
 export function seed(now = Date.now()) {
   const today = new Intl.DateTimeFormat("en-CA", {
