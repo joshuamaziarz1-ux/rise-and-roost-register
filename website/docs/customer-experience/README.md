@@ -27,11 +27,13 @@ Payment reporting remains explicit: **I've Sent Payment** records a report. It d
 
 The database has been created and seeded with the public catalog, its existing image references, and future **test** pickup dates. Original draft, owner hash, orders, customer information, and credentials were not copied. Migration `0002_roost_and_comments.sql` is additive and was applied only to this new preview database. It has not been applied to the public beta database.
 
-**Hosting blocker:** Cloudflare denies both Wrangler's preflight lookup and the standard Worker creation request for this new Worker with HTTP 403, `No access to the specified resource.` The existing token is active, Worker listing works, and separate D1 creation succeeded. The Worker list confirms the proposed name is absent. **There is no hosted preview URL yet.** The existing beta is not a fallback deployment target.
+**Live HTTPS review website:** https://rise-roost-experience-preview.joshua-maziarz1.workers.dev/
 
-To enable hosting, Cloudflare must authorize `Workers Scripts: Edit` for creating/deploying the new preview Worker in this account. The exact denied operation is `PUT /accounts/<account-id>/workers/scripts/rise-roost-experience-preview`. Supply credentials through Network secrets, never chat. Alternatively, an account owner can create this separate Worker and configure its Git deployment from this branch using the `website` root and `npm run deploy:experience`. No production deployment or custom domain is needed. Account-wide protection/routing settings must remain unchanged.
+The existing Cloudflare token authenticated successfully after its account-level Workers Scripts Write permission was updated. No credential value was displayed or replaced. Deployment `17bae09e-5829-4d2b-b96f-b3b0fed0aa5f`, version `edd8b26f-9fe9-4b56-8d69-2fbf4ea22b30`, was activated October 29, 2026 at 2:02 p.m. EDT. The six expected bindings were read back from Cloudflare and verified, including the separate D1 UUID, both review/experience flags, and disabled email. workers.dev is enabled; version preview URLs and custom domains are not configured.
 
-Once authorized, deploy with `npm --prefix website run deploy:experience`, verify the Worker bindings and deployment, then opt into the hosted acceptance probe. Its fixed target rejects the original beta URL, and it creates only its own synthetic private workspaces. A hosted verification run is **not** represented as passed while the Worker is unavailable.
+Deployed application source is `5c3116e57f6e80c25943af66e8230c2caf93c8c4`. Subsequent changes are test automation and documentation. This cloud environment's egress policy blocks direct requests to the new hostname, so hosted acceptance runs on GitHub's runner with normal HTTPS verification. It checks deployed asset hashes, passkey registration/sign-in, remembered sessions, guest/member checkout, tracking/payment reporting, and owner-only comment moderation. All mutations use fresh synthetic private workspaces; neither the review landing workspace nor the existing beta is a test-data target.
+
+Deploy only with `npm --prefix website run deploy:experience`. The opt-in `[verify-experience-preview]` CI job uses the exact new preview origin and rejects the original beta as a target. It has no Cloudflare credentials or deployment step. Hosted browser tests cover the same five profiles using virtual/signing test authenticators; physical biometrics remain owner acceptance.
 
 For local development: `npm --prefix website run dev:experience`. It uses `.data/customer-experience/review.sqlite`, independent of the existing local demo database. Existing review data is retained on restart. Local URLs are developer-only and are not a hosted preview on the user's computers.
 
@@ -46,7 +48,7 @@ Local results:
 | New guest/member/comment journeys within that matrix | 15 passed |
 | Default beta bundle and separate preview bundle | Dry-run builds passed |
 | Runtime dependency audit | 0 reported vulnerabilities |
-| Hosted experience verification | Blocked by Worker creation authorization; not run |
+| Hosted experience verification | Separate preview API and five-profile browser acceptance; see PR #9 CI for run results |
 
 Chromium uses native WebAuthn APIs with a virtual CTAP2 authenticator. Linux WebKit lacks an OS authenticator API, so its test uses a signing software authenticator through the frontend ceremony and the same real server verification. It does **not** validate Apple's Touch ID UI, iCloud Keychain synchronization, or physical Android device prompts. Those require owner acceptance on physical devices. Cookies, cryptographic signatures, challenge replay/expiry, wrong origin, user verification, and cross-workspace isolation are checked automatically.
 
@@ -58,7 +60,7 @@ Screenshots contain only fictional test details and exclude owner keys, recovery
 - [Member dashboard](screenshots/member-roost-desktop.png)
 - [Studio comment moderation](screenshots/studio-comments.png)
 
-Acceptance after hosted preview is available:
+Acceptance on the hosted preview:
 
 1. As a guest, start shopping, choose a variety, add to basket, select pickup, place a test preorder, and retain the private tracking link. Open it in a second browser. Report payment and confirm it remains awaiting verification.
 2. Join The Roost on each intended physical device. Save the recovery key privately. Reload/reopen the browser and confirm it opens the dashboard without another code. Place a member order, verify saved details/history/pickup, sign out, and sign in again with the passkey. Another anonymous customer must see no member details.

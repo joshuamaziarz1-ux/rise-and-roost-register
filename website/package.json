@@ -8,6 +8,7 @@
     "deploy:experience": "wrangler deploy --config wrangler.experience.toml",
     "check:experience": "wrangler deploy --config wrangler.experience.toml --dry-run",
     "test:experience-hosted": "node tests/experience-hosted.mjs",
+    "test:experience-browser": "playwright test --config playwright.experience-hosted.config.mjs",
     "test": "node --test tests/*.test.mjs",
     "test:browser": "playwright test",
     "test:all": "npm test && npm run test:browser",
