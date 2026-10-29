@@ -4,7 +4,8 @@ This change is isolated on `codex/customer-experience-roost`, based on the exist
 
 ## What customers can do
 
-- Home offers **Start Shopping**, **The Roost**, and **Leave a Comment** in the existing farmhouse theme. Existing branding, imagery, colors, and saved content are retained. Known starter instructions are omitted from the customer display only.
+- Home is a dedicated welcome page with **Start Shopping**, **The Roost**, and **Leave a Comment**. It retains the saved welcome, original logo, imagery, farmhouse colors, and typography. Product grids, shopping controls, comment forms, extra story/pickup sections, and decorative labels no longer appear underneath. Saved documents and sections are retained unchanged.
+- **Start Shopping** opens `/shop` directly on the catalog. Inner pages have a single Shop / The Roost / Comments navigation with an active-page indicator; the logo returns home. A sticky basket shows its count throughout shopping and remains available on Home when it has items. The compact footer keeps the original closing message and terms link without repeating the navigation. On tested phone sizes, all three welcome choices fit on the first screen.
 - Add a product/variety directly from the catalog. The basket stays prominent, with a count and one checkout containing pickup details, date, deadline, and authoritative total.
 - Check out as a guest, without signing up. Contact fields are limited to a pickup name and optional email/phone. The confirmation retains the private cross-device tracking link.
 - Optionally join **The Roost** using a passkey. It has its own customer identity, saved pickup details, private order history, tracking links, and pickup information. A valid remembered session opens the dashboard directly for up to 30 days. Reauthentication uses a passkey; no email code is sent on each visit.
@@ -52,19 +53,23 @@ Local results:
 
 Hosted acceptance and the complete regression/build checks passed in [CI run 40927841192](https://github.com/joshuamaziarz1-ux/rise-and-roost-register/actions/runs/40927841192). API tests verify deployed asset hashes against this branch and exercise the live D1-backed application; browser tests use fresh private test workspaces on the real HTTPS preview. The original public beta is never a hosted test target. The [preservation report](preservation.json) confirms all 125 original workspaces, the beta deployment, and settings remained unchanged after the preview deployment.
 
+The landing/shop journey also checks active navigation, all three homepage destinations, logo/back navigation, direct `/shop` loading, basket persistence in a reopened tab, and refresh. The Linux Playwright WebKit build crashes certain sequences combining multi-entry `pushState` history, reload, and subsequent document navigation; this was reproduced on minimal HTML without application code. Navigation/refresh assertions therefore use a separate context from the checkout assertions, with both behaviors still covered. Please include back → another destination → refresh → checkout in physical Safari acceptance.
+
 Chromium uses native WebAuthn APIs with a virtual CTAP2 authenticator. Linux WebKit lacks an OS authenticator API, so its test uses a signing software authenticator through the frontend ceremony and the same real server verification. It does **not** validate Apple's Touch ID UI, iCloud Keychain synchronization, or physical Android device prompts. Those require owner acceptance on physical devices. Cookies, cryptographic signatures, challenge replay/expiry, wrong origin, user verification, and cross-workspace isolation are checked automatically.
 
 Screenshots contain only fictional test details and exclude owner keys, recovery keys, and private tracking URLs:
 
 - [Desktop home](screenshots/home-desktop.png)
 - [Mobile home](screenshots/home-mobile.png)
+- [Desktop shop](screenshots/shop-desktop.png)
+- [Mobile shop](screenshots/shop-mobile.png)
 - [Guest checkout on mobile](screenshots/guest-checkout-mobile.png)
 - [Member dashboard](screenshots/member-roost-desktop.png)
 - [Studio comment moderation](screenshots/studio-comments.png)
 
 Acceptance on the hosted preview:
 
-1. As a guest, start shopping, choose a variety, add to basket, select pickup, place a test preorder, and retain the private tracking link. Open it in a second browser. Report payment and confirm it remains awaiting verification.
+1. Open Home and confirm there is only the welcome and three choices, with no catalog or comment form below. Start Shopping opens `/shop`; verify the logo returns home, the active page is marked, and browser back works. As a guest, choose a variety, add to basket, navigate home and return, reopen/reload the site and check that the basket persists, select pickup, place a test preorder, and retain the private tracking link. Open it in a second browser. Report payment and confirm it remains awaiting verification.
 2. Join The Roost on each intended physical device. Save the recovery key privately. Reload/reopen the browser and confirm it opens the dashboard without another code. Place a member order, verify saved details/history/pickup, sign out, and sign in again with the passkey. Another anonymous customer must see no member details.
 3. Submit a comment and confirm it is not public. In an authenticated **isolated review workspace**, approve it, reload the storefront, then hide it and confirm the text is preserved in Studio. Studio's existing **Create my private demo** remains available on the review host for a separate editor-owned copy; it is not recovery for the original main workspace.
 

@@ -209,7 +209,7 @@ if (
       heading,
       section.body ? h("p", {}, customerCopy(section.body)) : null,
     );
-    if (experience && page.id === "home" && section.type === "hero")
+    if (experience && page.slug === "/" && section.type === "hero")
       copy.append(h("div", { class: "home-choices", "aria-label": "Welcome to Rise & Roost" },
         link("/shop", "Start Shopping", "primary-link"),
         link("/roost", "The Roost", "secondary-button"),
@@ -230,7 +230,7 @@ if (
               src: "/assets/bread.svg",
               alt: "Sample bread illustration; upload your own photography in Studio",
             }),
-            h("div", { class: "art-label" }, doc.ui.heroStamp || "SLOW MADE. SOUL FED."),
+            !experience ? h("div", { class: "art-label" }, doc.ui.heroStamp || "SLOW MADE. SOUL FED.") : null,
             h(
               "div",
               { class: "hero-inset" },
@@ -238,7 +238,7 @@ if (
                 src: "/assets/eggs.svg",
                 alt: "Sample egg illustration",
               }),
-              h("span", {}, doc.ui.artCaption || "A taste of the everyday good."),
+              !experience ? h("span", {}, doc.ui.artCaption || "A taste of the everyday good.") : null,
             ),
             !experience ? h(
               "span",
@@ -703,10 +703,24 @@ if (
           ),
     );
   }
+  function customerPage(page) {
+    if (page.slug === "/") {
+      // Presentation only: never remove or rewrite sections in the saved document.
+      const welcome = page.sections.find(s => s.type === "hero" && !s.hidden) || {
+        type: "hero", id: "welcome", title: doc.business.story, body: "", padding: 72, fontSize: 72, align: "left",
+      };
+      return renderSection(welcome, page);
+    }
+    if (page.slug === "/shop") return h("section", { class: "section-inner shop-page", "aria-label": page.title },
+      h("div", { class: "page-intro" }, h("h1", {}, page.title)),
+      h("div", { class: "product-grid" }, doc.products.filter(p => p.active).map(card)));
+    return page.sections.map(s => renderSection(s, page));
+  }
   function render() {
     if (!doc) return;
     const t = doc.theme;
-    document.title = doc.business.name + " · Website beta";
+    const pageTitle = path === "/" ? "Home" : path === "/roost" ? "The Roost" : path === "/comments" ? "Leave a Comment" : path === "/cart" ? "Basket" : path.startsWith("/product/") ? doc.products.find(p => p.id === path.split("/")[2])?.name : doc.pages.find(p => p.slug === path)?.title;
+    document.title = doc.business.name + (experience ? " · " + (pageTitle || "Page") : " · Website beta");
     const site = h("div", {
       class: "site-root" + (experience ? " experience" : ""),
       style: {
@@ -746,14 +760,19 @@ if (
           ],
           "brand",
         ),
-        h(
+        experience && path === "/" ? null : h(
           "nav",
           { "aria-label": "Main navigation" },
-          experience ? [link("/shop", "Shop", path === "/shop" ? "active" : ""), link("/roost", "The Roost", path === "/roost" ? "active" : "")] : doc.pages
+          experience ? [["/shop", "Shop"], ["/roost", "The Roost"], ["/comments", "Comments"]].map(([href, title]) => {
+            const active = path === href || (href === "/shop" && path.startsWith("/product/"));
+            const item = link(href, title, active ? "active" : "");
+            if (active) item.setAttribute("aria-current", "page");
+            return item;
+          }) : doc.pages
             .filter((p) => p.showInNav)
             .map((p) => link(p.slug, p.title, path === p.slug ? "active" : "")),
         ),
-        link(
+        experience && path === "/" && !cart.lines.length ? null : link(
           "/cart",
           [
             experience ? "Basket" : doc.ui.cart,
@@ -779,7 +798,7 @@ if (
           ? h(
               "main",
               { id: "main-content" },
-              page.sections.map((s) => renderSection(s, page)),
+              experience ? customerPage(page) : page.sections.map(s => renderSection(s, page)),
             )
           : h(
               "main",
@@ -790,12 +809,15 @@ if (
       );
     }
     const main = site.querySelector("main");
+    if (experience) site.querySelector(".brand").setAttribute("aria-label", doc.business.name + " home");
     main.id = "main-content";
     main.tabIndex = -1;
     site.prepend(
       h("a", { href: "#main-content", class: "skip-link" }, "Skip to content"),
     );
-    site.append(
+    site.append(experience ? h("footer", { class: "site-footer" },
+      h("div", { class: "section-inner customer-footer" }, h("p", {}, doc.ui.footer),
+        doc.pages.filter(p => p.slug === "/terms").map(p => link(p.slug, p.title)))) :
       h(
         "footer",
         { class: "site-footer" },

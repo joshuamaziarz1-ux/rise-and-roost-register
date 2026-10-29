@@ -23,10 +23,37 @@ test('hosted HTTPS guest and member shopping, private tracking, remembered sessi
   page.on('pageerror', e => errors.push(e.message));
   await installTestPasskey(page, info, origin);
   try {
+    // Read-only checks on the actual landing site; all orders/accounts below use
+    // a newly created synthetic workspace, never an existing workspace.
+    expect((await page.goto(origin+'/')).status()).toBe(200);
+    await expect(page.locator('.home-choices a')).toHaveCount(3);
+    await expect(page.locator('.product-card, .quick-add, .comment-form')).toHaveCount(0);
+    await mkdir('qa-results/experience-hosted', { recursive: true });
+    await page.screenshot({ path: `qa-results/experience-hosted/public-home-${info.project.name}.png`, fullPage: true });
+    await page.locator('.home-choices').getByRole('link', { name: 'Start Shopping', exact: true }).click();
+    await expect(page).toHaveURL(origin+'/shop');
+    await expect(page.locator('.product-card').first()).toBeVisible();
+    await expect(page.locator('nav [aria-current="page"]')).toHaveText('Shop');
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+    await page.screenshot({ path: `qa-results/experience-hosted/public-shop-${info.project.name}.png`, fullPage: true });
     const r = await page.goto(origin+prefix+'/'); expect(r.status()).toBe(200);
     await expect(page.locator('.home-choices a')).toHaveCount(3);
+    await expect(page.locator('.product-card, .quick-add, .comment-form')).toHaveCount(0);
+    await expect(page.locator('main .site-section')).toHaveCount(1);
+    await expect(page.locator('.site-header nav')).toHaveCount(0);
+    await mkdir('qa-results/experience-hosted', { recursive: true });
+    await page.screenshot({ path: `qa-results/experience-hosted/home-${info.project.name}.png`, fullPage: true });
     await page.locator('.home-choices').getByRole('link', { name: 'Start Shopping', exact: true }).click();
+    await expect(page).toHaveURL(origin+prefix+'/shop');
+    await expect(page.getByRole('heading', { level: 1, name: 'Shop', exact: true })).toBeVisible();
+    await expect(page.locator('nav [aria-current="page"]')).toHaveText('Shop');
+    await expect(page.locator('.product-card')).toHaveCount(3);
+    await page.screenshot({ path: `qa-results/experience-hosted/shop-${info.project.name}.png`, fullPage: true });
     await page.getByRole('button', { name: 'Add Slow Sunday sourdough to basket', exact: true }).click();
+    await page.getByRole('link', { name: 'Rise & Roost home', exact: true }).click();
+    await expect(page.locator('.product-card')).toHaveCount(0);
+    await expect(page.locator('.basket-count')).toHaveText('1');
+    await page.locator('.home-choices').getByRole('link', { name: 'Start Shopping', exact: true }).click();
     await page.locator('.basket-link').click();
     await page.getByLabel('Name', { exact: true }).fill('Synthetic Guest Neighbor');
     await selectPickup(page);

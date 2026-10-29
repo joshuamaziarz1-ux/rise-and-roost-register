@@ -30,10 +30,23 @@ test.describe('isolated customer experience', () => {
     await expect(choices.getByRole('link')).toHaveCount(3);
     await expect(choices.getByRole('link', { name: 'The Roost', exact: true })).toBeVisible();
     await expect(choices.getByRole('link', { name: 'Leave a Comment', exact: true })).toBeVisible();
+    await expect(page.locator('main .site-section')).toHaveCount(1);
+    await expect(page.locator('.product-card, .quick-add, .comment-form')).toHaveCount(0);
+    await expect(page.locator('.site-header nav, .site-header .basket-link')).toHaveCount(0);
+    await expect(page.locator('.art-label')).toHaveCount(0);
+    await expect(page).toHaveTitle('Rise & Roost · Home');
+    const lastChoice = await choices.getByRole('link', { name: 'Leave a Comment', exact: true }).boundingBox();
+    expect(lastChoice.y + lastChoice.height).toBeLessThan(page.viewportSize().height);
     await mkdir('qa-results/customer', { recursive: true });
     await page.screenshot({ path: `qa-results/customer/home-${info.project.name}.png`, fullPage: true });
     await choices.getByRole('link', { name: 'Start Shopping', exact: true }).click();
+    await expect(page).toHaveURL(fixture.origin+'/shop');
+    await expect(page).toHaveTitle('Rise & Roost · Shop');
+    await expect(page.getByRole('heading', { level: 1, name: 'Shop', exact: true })).toBeVisible();
+    await expect(page.locator('.home-choices')).toHaveCount(0);
+    await expect(page.locator('nav [aria-current="page"]')).toHaveText('Shop');
     await imageCheck(page);
+    await page.screenshot({ path: `qa-results/customer/shop-${info.project.name}.png`, fullPage: true });
     const bread = page.locator('.product-card').filter({ has: page.getByRole('heading', { name: 'Slow Sunday sourdough', exact: true }) });
     await bread.getByLabel('Choose variety for Slow Sunday sourdough').selectOption('rosemary');
     await bread.getByRole('button', { name: 'Add Slow Sunday sourdough to basket', exact: true }).click();
@@ -63,6 +76,38 @@ test.describe('isolated customer experience', () => {
     } finally { await second.close(); }
     await page.goto(fixture.origin+'/cart');
     await expect(page.getByText('Your basket is waiting for something good.')).toBeVisible();
+    // Keep navigation/reload coverage in its own browser context. Playwright's
+    // Linux WebKit crashes some multi-entry pushState histories on a subsequent
+    // full navigation, reproducible on empty HTML without any website code.
+    const navigation = await browser.newContext({ ...info.project.use, baseURL: fixture.origin });
+    try {
+      const nav = await navigation.newPage();
+      await nav.goto(fixture.origin+'/shop'); await nav.reload();
+      await expect(nav.locator('.product-card')).toHaveCount(3);
+      await nav.getByRole('button', { name: 'Add Slow Sunday sourdough to basket', exact: true }).click();
+      await nav.getByRole('link', { name: 'Rise & Roost home', exact: true }).click();
+      await expect(nav.locator('.product-card')).toHaveCount(0);
+      await expect(nav.locator('.basket-count')).toHaveText('1');
+      const reopened = await navigation.newPage();
+      await reopened.goto(fixture.origin+'/'); await reopened.reload();
+      await expect(reopened.locator('.basket-count')).toHaveText('1');
+      await expect(reopened.locator('.product-card')).toHaveCount(0);
+      await reopened.close(); await nav.bringToFront();
+      const options = nav.locator('.home-choices');
+      await options.getByRole('link', { name: 'The Roost', exact: true }).click();
+      await expect(nav.getByRole('heading', { name: 'Make yourself at home.' })).toBeVisible();
+      await expect(nav.locator('nav [aria-current="page"]')).toHaveText('The Roost');
+      await nav.getByRole('link', { name: 'Rise & Roost home', exact: true }).click();
+      await options.getByRole('link', { name: 'Leave a Comment', exact: true }).click();
+      await expect(nav.getByLabel('Your comment', { exact: true })).toBeVisible();
+      await expect(nav.locator('nav [aria-current="page"]')).toHaveText('Comments');
+      await nav.goBack(); await expect(options).toBeVisible();
+      await options.getByRole('link', { name: 'Start Shopping', exact: true }).click();
+      await nav.locator('.product-card').first().locator('.product-image').click();
+      await expect(nav).toHaveURL(fixture.origin+'/product/bread');
+      await expect(nav.locator('nav [aria-current="page"]')).toHaveText('Shop');
+      await nav.goBack(); await expect(nav.locator('.product-card')).toHaveCount(3);
+    } finally { await navigation.close(); }
     expect(errors).toEqual([]);
   });
 
