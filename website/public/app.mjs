@@ -1,5 +1,5 @@
 import { h, button, notify, request, guard } from "./dom.mjs";
-import { money, localInstant, pickupLabel } from "./model.mjs";
+import { money, localInstant, pickupLabel, orderByLabel } from "./model.mjs";
 import { createCustomerExperience } from "./customer.mjs";
 import { pickupLocation } from "./pickup-location.mjs";
 
@@ -456,10 +456,7 @@ if (
           {},
           doc.ui.orderBy +
             ": " +
-            receipt.pickup.cutoffDate +
-            " at " +
-            receipt.pickup.cutoffTime +
-            " (Indianapolis)",
+            orderByLabel(receipt.pickup),
         ) : null,
         h("h2", {}, money(receipt.total)),
         h(
@@ -677,10 +674,7 @@ if (
                     h(
                       "p",
                       {},
-                      chosen.cutoffDate +
-                        " at " +
-                        chosen.cutoffTime +
-                        " · America/Indiana/Indianapolis",
+                      orderByLabel(chosen),
                     ),
                   )
                 : null,

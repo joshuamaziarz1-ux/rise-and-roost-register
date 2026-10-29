@@ -15,7 +15,7 @@ async function call(cookies, path, body, extra = {}) {
 for (const path of ['/', '/shop', '/cart', '/roost', '/comments', '/studio']) {
   const r = await fetch(origin+path); check(r.status===200, 'Preview page failed: '+path); check(r.headers.get('x-robots-tag')?.includes('noindex'), 'Review page must be noindex.');
 }
-for (const file of ['app.mjs','customer.mjs','customer.css','dom.mjs','studio.mjs','tracking.mjs','pickup-location.mjs']) {
+for (const file of ['app.mjs','customer.mjs','customer.css','dom.mjs','studio.mjs','tracking.mjs','pickup-location.mjs','model.mjs']) {
   const r = await fetch(origin+'/'+file), body = await r.arrayBuffer();
   check(r.ok && createHash('sha256').update(Buffer.from(body)).digest('hex') === createHash('sha256').update(await readFile(new URL('../public/'+file,import.meta.url))).digest('hex'), 'Deployed source differs: '+file);
 }

@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import { installTestPasskey } from '../install-test-passkey.mjs';
 const origin = process.env.RR_EXPERIENCE_PREVIEW_URL;
+test.use({ locale: 'en-GB', timezoneId: 'Asia/Tokyo' });
 if (origin !== 'https://rise-roost-experience-preview.joshua-maziarz1.workers.dev') throw new Error('Only the separate preview is an allowed target.');
 
 async function freshWorkspace(browser, info) {
@@ -16,6 +17,16 @@ async function freshWorkspace(browser, info) {
 async function selectPickup(page) {
   const pickup = page.getByLabel('Choose your pickup', { exact: true });
   await pickup.selectOption(await pickup.locator('option:not([disabled])').nth(1).getAttribute('value'));
+  await expect(page.locator('.deadline p')).toHaveText(/^[A-Za-z]+, [A-Za-z]+ \d+ at (?:[1-9]|1[0-2]):\d{2} [AP]M$/);
+  await customerClocks(page);
+  return pickup.locator('option:checked').textContent();
+}
+async function customerClocks(page) {
+  const text = await page.locator('main').innerText();
+  expect(text).not.toMatch(/America\/|Indianapolis/);
+  const clocks = text.match(/\b\d{1,2}:\d{2}(?::\d{2})?(?:\s+[AP]M)?/g) || [];
+  expect(clocks.length).toBeGreaterThan(0);
+  for (const clock of clocks) expect(clock.replace(/\s+/g, ' ')).toMatch(/^(?:[1-9]|1[0-2]):\d{2}(?::\d{2})? [AP]M$/);
 }
 async function pickupAddress(page) {
   const location = page.getByRole('region', { name: 'Pickup Location', exact: true });
@@ -64,14 +75,18 @@ test('hosted HTTPS guest and member shopping, private tracking, remembered sessi
     await page.locator('.basket-link').click();
     await pickupAddress(page);
     await page.getByLabel('Name', { exact: true }).fill('Synthetic Guest Neighbor');
-    await selectPickup(page);
+    const guestPickup = await selectPickup(page);
     await page.getByRole('button', { name: 'Place preorder', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Thank you. Your preorder is in.' })).toBeVisible();
+    await expect(page.locator('main')).toContainText(guestPickup);
+    await customerClocks(page);
     await pickupAddress(page);
     const guestTracking = await page.getByRole('link', { name: 'Track your order', exact: true }).getAttribute('href');
     await page.getByRole('link', { name: 'Track your order', exact: true }).click();
     await page.getByRole('button', { name: "I've Sent Payment", exact: true }).click();
     await expect(page.getByLabel('Current order status', { exact: true })).toContainText('Payment Reported');
+    await expect(page.locator('main')).toContainText(guestPickup);
+    await customerClocks(page);
     await pickupAddress(page);
     await expect(page.getByLabel('Current order status', { exact: true })).toContainText('has not been accepted or processed');
     await expect(page.getByLabel('Paid receipt', { exact: true })).toHaveCount(0);
@@ -94,10 +109,12 @@ test('hosted HTTPS guest and member shopping, private tracking, remembered sessi
     await page.locator('.basket-link').click();
     await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Synthetic Member Neighbor');
     await expect(page.getByRole('button', { name: 'Use my Roost details', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await selectPickup(page);
+    const memberPickup = await selectPickup(page);
     await page.getByRole('button', { name: 'Place preorder', exact: true }).click();
     await page.getByRole('link', { name: 'View my Roost orders', exact: true }).click();
     await expect(page.locator('.member-order')).toHaveCount(1);
+    await expect(page.locator('.member-order')).toContainText(memberPickup);
+    await customerClocks(page);
     await expect(page.locator('.member-order')).toContainText('A dozen little sunrises');
     await page.locator('#notice').evaluate(el => el.className='');
     await mkdir('qa-results/experience-hosted', { recursive: true });

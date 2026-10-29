@@ -1,5 +1,5 @@
 import { h, button, guard } from "./dom.mjs";
-import { money, pickupLabel, seed } from "./model.mjs";
+import { money, pickupLabel, orderByLabel, customerTime, customerTimestamp, seed } from "./model.mjs";
 import { paymentLabels, fulfillmentLabels, stages, notificationLabels, eventLabels } from "./orders.mjs";
 import { pickupLocation } from "./pickup-location.mjs";
 
@@ -35,7 +35,7 @@ export async function start(root) {
         order = result;
         appliedSequence = sequence;
         error = "";
-        refreshed = new Date().toLocaleTimeString();
+        refreshed = customerTime(Date.now(), true);
       }
     } catch (e) { if (report || sequence >= appliedSequence) error = e.message; }
     if (report || before !== JSON.stringify(order) || previousError !== error || !order) render();
@@ -44,7 +44,7 @@ export async function start(root) {
       if (checked) checked.textContent = "Last checked: " + refreshed + ". This page checks for changes every five seconds.";
     }
   }
-  const stamp = (at) => at ? new Date(at).toLocaleString(undefined, { timeZone: "America/Indiana/Indianapolis" }) + " (Indianapolis)" : "Not yet recorded";
+  const stamp = (at) => at ? customerTimestamp(at) : "Not yet recorded";
   const stageNote = (label, at) => {
     if (at) return stamp(at);
     if (label === "Payment Reported" && order.paymentStatus === "verified") return "Not reported separately; payment was independently verified";
@@ -93,7 +93,7 @@ export async function start(root) {
           h("li", { class: "sub-card" }, h("strong", {}, label), h("p", {}, stageNote(label, at))))),
         h("h2", {}, "Pickup details"), h("p", {}, pickupLabel(order.pickup)),
         experience ? pickupLocation() : null,
-        h("p", {}, "Order deadline: " + order.pickup.cutoffDate + " at " + order.pickup.cutoffTime + " (Indianapolis)"),
+        h("p", {}, "Order deadline: " + orderByLabel(order.pickup)),
         h("h2", {}, "Your order"),
         h("div", { role: "group", "aria-label": "Order items" }, order.lines.map((line) => h("p", {}, `${line.qty} × ${line.name} (${line.variant}) · ${money(line.qty * line.unitPrice)}`))),
         h("p", {}, h("strong", {}, "Total: " + money(order.total))));

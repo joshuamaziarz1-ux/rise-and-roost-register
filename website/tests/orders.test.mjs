@@ -172,6 +172,8 @@ test('D1 outbox queues only opted-in lifecycle events and records provider accep
   const fetcher = async (url, init) => { calls++; assert.equal(url, 'https://api.resend.com/emails');
     const payload = JSON.parse(init.body); assert.equal(payload.to[0], 'qa@example.test');
     assert.ok(payload.text.includes(o.trackingPath)); assert.equal(payload.text.includes('being baked'), false);
+    assert.match(payload.text, /Pickup: [A-Za-z]+, [A-Za-z]+ \d+ · 3:00 PM – 6:00 PM/);
+    assert.equal(payload.text.includes('America/Indiana/Indianapolis'), false);
     return Response.json({ id: 'provider-accepted-' + calls }); };
   await Promise.all([drainNotifications(h.db, h.env, { fetcher, now }), drainNotifications(h.db, h.env, { fetcher, now })]);
   assert.equal(calls, 1);
