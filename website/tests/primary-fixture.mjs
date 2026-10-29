@@ -22,7 +22,7 @@ export async function primaryFixture({ experience = false, port = 4182, hostname
   sqlite.close();
   const child = spawn(process.execPath, ['server/local.mjs'], {
     cwd: fileURLToPath(new URL('../', import.meta.url)),
-    env: { ...process.env, RR_TEST_DB: dbFile, RR_PUBLIC_WORKSPACE_ID: id, RR_CUSTOMER_EXPERIENCE: String(experience), PORT: String(port) },
+    env: { ...process.env, RR_TEST_DB: dbFile, RR_PUBLIC_WORKSPACE_ID: id, RR_CUSTOMER_EXPERIENCE: String(experience), RR_REVIEW_BUILD: String(experience), PORT: String(port) },
     stdio: 'ignore',
   });
   const close = async () => {

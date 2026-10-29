@@ -286,7 +286,7 @@ export async function start(root) {
       h("p", { class: "workspace-badge" }, state.isPrimary ? "BETA WEBSITE · OWNER" : "PRIVATE DEMO · OWNER"),
       h("p", {}, "Workspace ID: " + state.id),
       state.sessionExpiresAt ? h("p", {}, "This session expires: " + new Date(state.sessionExpiresAt).toLocaleString() + ".") : null,
-      h("p", {}, state.isPrimary ? "This is Danielle's original main website. Public website orders appear in this workspace's Orders dashboard." : "This is a separate private demo. It cannot authorize access to the original main website."),
+      h("p", {}, state.isReview ? "This is an isolated review workspace. It cannot change the original beta website or authorize access to its Studio." : state.isPrimary ? "This is Danielle's original main website. Public website orders appear in this workspace's Orders dashboard." : "This is a separate private demo. It cannot authorize access to the original main website."),
       h("p", {}, h("a", { href: state.studioPath }, "Studio link for this exact workspace")),
       !state.isPrimary && state.mainStudioPath ? h("p", {}, h("a", { href: state.mainStudioPath }, "Open the original main website sign-in")) : null,
       h("h3", {}, "Connect another computer"),
@@ -1337,7 +1337,7 @@ export async function start(root) {
             h("img", { src: "/assets/logo.webp", alt: "" }),
             h("span", {}, "Website\nStudio"),
           ),
-          h("p", { class: "workspace-badge" }, state.isPrimary ? "BETA WEBSITE · OWNER" : "PRIVATE DEMO · OWNER"),
+          h("p", { class: "workspace-badge" }, state.isPrimary ? state.isReview ? "REVIEW WEBSITE · OWNER" : "BETA WEBSITE · OWNER" : "PRIVATE DEMO · OWNER"),
           h(
             "nav",
             { "aria-label": "Studio navigation" },
@@ -1362,7 +1362,7 @@ export async function start(root) {
               state.isPrimary ? "View published website ↗" : "View published demo ↗",
             ),
             h("p", { class: "small-note", id: "publishing-destination" },
-              state.isPrimary ? "Publish demo updates the main beta website on every device." : "This is a separate test workspace. Publishing updates its demo link, not the main beta website."),
+              state.isReview ? "Publishing updates only this isolated review website. The public beta is unchanged." : state.isPrimary ? "Publish demo updates the main beta website on every device." : "This is a separate test workspace. Publishing updates its demo link, not the main beta website."),
             !state.isPrimary && state.mainStudioPath ? h("a", { href: state.mainStudioPath }, "Sign in to the main website workspace ↗") : null,
             button(
               "Sign out",

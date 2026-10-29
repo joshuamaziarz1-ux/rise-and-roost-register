@@ -374,7 +374,7 @@ export function inspectImage(bytes, mime) {
     );
   return true;
 }
-export async function api(request, db, now = Date.now(), { publicWorkspaceId = "", emailEnabled = false, customerExperienceEnabled = false } = {}) {
+export async function api(request, db, now = Date.now(), { publicWorkspaceId = "", emailEnabled = false, customerExperienceEnabled = false, reviewBuild = false } = {}) {
   const url = new URL(request.url),
     path = url.pathname;
   const first = (sql, ...args) =>
@@ -473,6 +473,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       notificationsEnabled: emailEnabled && row.id === publicWorkspaceId,
       owner: "Danielle · Demo Owner",
       customerExperienceEnabled,
+      isReview: reviewBuild,
       sessionExpiresAt: authenticated ? new Date(authenticated.expires).toISOString() : undefined,
       isPrimary: row.id === publicWorkspaceId,
       publishedPath: row.id === publicWorkspaceId ? "/" : "/demo/" + row.id,

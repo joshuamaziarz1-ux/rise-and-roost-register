@@ -12,7 +12,7 @@ export const security = {
 export default {
   async fetch(request, env, ctx) {
     let response = new URL(request.url).pathname.startsWith("/api/")
-      ? await api(request, env.DB, Date.now(), { publicWorkspaceId: env.PUBLIC_WORKSPACE_ID, emailEnabled: emailConfigured(env), customerExperienceEnabled: env.CUSTOMER_EXPERIENCE_ENABLED === "true" })
+      ? await api(request, env.DB, Date.now(), { publicWorkspaceId: env.PUBLIC_WORKSPACE_ID, emailEnabled: emailConfigured(env), customerExperienceEnabled: env.CUSTOMER_EXPERIENCE_ENABLED === "true", reviewBuild: env.REVIEW_BUILD === "true" })
       : await env.ASSETS.fetch(request);
     if (request.method === "POST" && response.ok && emailConfigured(env))
       ctx?.waitUntil(drainNotifications(env.DB, env));

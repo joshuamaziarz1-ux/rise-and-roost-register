@@ -153,6 +153,7 @@ test.describe('isolated customer experience', () => {
     const studioContext = await owner(browser, info);
     try {
       const studio = await studioContext.newPage(); await studio.goto(fixture.origin+'/studio');
+      await expect(studio.locator('.workspace-badge')).toHaveText('REVIEW WEBSITE · OWNER');
       await studio.getByRole('navigation', { name: 'Studio navigation' }).getByRole('button', { name: 'Comments', exact: true }).click();
       await expect(studio.frameLocator('iframe').locator('.home-choices').getByRole('link')).toHaveCount(3);
       await expect(studio.getByText('Waiting for review', { exact: true })).toBeVisible();
