@@ -834,7 +834,7 @@ if (
     if (experience && workspace && customerWorkspace !== workspace) {
       customerWorkspace = workspace;
       customer = createCustomerExperience({ workspaceId: workspace, link, navigate, render, readOnly: isPreview || editing,
-        onMember: member => { checkoutMode = member ? "member" : "guest"; if (member) checkoutProfile = { ...member.profile }; } });
+        onMember: member => { checkoutMode = member ? "member" : "guest"; checkoutProfile = member ? { ...member.profile } : { name: "", email: "", phone: "" }; } });
       void customer.refresh();
     }
   }
@@ -851,7 +851,10 @@ if (
     if (result.id === workspace && (result.revision < revision ||
       (result.revision === revision && result.availabilityRevision < availabilityRevision))) return;
     const changed = result.id !== workspace || result.revision !== revision;
-    if (!force && !changed && result.availabilityRevision === availabilityRevision) return;
+    if (!force && !changed && result.availabilityRevision === availabilityRevision) {
+      if (experience && path === "/roost" && await customer.refresh(false)) render();
+      return;
+    }
     doc = result.document;
     experience = !!result.customerExperienceEnabled;
     notificationsEnabled = !!result.notificationsEnabled;

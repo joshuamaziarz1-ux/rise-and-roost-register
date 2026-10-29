@@ -43,9 +43,11 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
       try {
         const result = await api('/api/roost/me');
         const changed = member?.id !== result.member?.id;
+        const viewChanged = !loaded || changed || JSON.stringify(orders) !== JSON.stringify(result.orders || []);
         member = result.member; orders = result.orders || []; loaded = true;
         if (changed) { profileDraft = member ? { ...member.profile } : undefined; onMember(member); }
-        if (rerender) render();
+        if (rerender && viewChanged) render();
+        return viewChanged;
       } catch (e) { error = e.message; loaded = true; if (rerender) render(); }
       finally { pending = null; }
     })();
@@ -100,7 +102,11 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
         h('aside', {}, form, h('section', { class: 'account-controls' },
           h('h2', {}, 'Your sign-in'), h('p', {}, 'This trusted browser stays signed in for up to 30 days. Sign out on shared computers.'),
           button('Add a passkey on this device', action(() => authenticate('add')), { class: 'secondary-button', disabled: busy }),
-          button('Sign out of The Roost', action(async () => { await api('/api/roost/logout', {}); member = null; orders = []; onMember(null); }), { class: 'text-button', disabled: busy })))));
+          button('Sign out of The Roost', action(async () => {
+            await api('/api/roost/logout', {}); member = null; orders = []; recoveryKey = ''; profileDraft = undefined;
+            Object.assign(joinProfile, { name: '', email: '', phone: '' });
+            Object.assign(commentDraft, { name: '', body: '', consent: false }); onMember(null);
+          }), { class: 'text-button', disabled: busy })))));
     } else {
       const profile = joinProfile;
       const form = h('form', { class: 'join-roost', onsubmit: async e => {

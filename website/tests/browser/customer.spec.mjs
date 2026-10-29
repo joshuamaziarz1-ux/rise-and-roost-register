@@ -105,7 +105,13 @@ test.describe('isolated customer experience', () => {
     await page.getByLabel('Phone (optional)', { exact: true }).fill('555-0101');
     await page.getByRole('button', { name: 'Join with a passkey', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Welcome back, Returning.' })).toBeVisible();
-    await page.getByRole('button', { name: 'I saved my recovery key', exact: true }).click();
+    await expect(page.getByLabel('Roost recovery key', { exact: true })).toBeVisible();
+    // Even an undismissed one-time secret and prefilled contact fields must clear.
+    await page.getByRole('button', { name: 'Sign out of The Roost', exact: true }).click();
+    await expect(page.getByLabel('Roost recovery key', { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel('Name', { exact: true })).toHaveValue('');
+    await page.getByRole('button', { name: 'Sign in with a passkey', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Welcome back, Returning.' })).toBeVisible();
     await page.getByLabel('Phone (optional)', { exact: true }).fill('555-0102');
     await page.getByRole('button', { name: 'Save my details', exact: true }).click();
     await expect(page.locator('#notice')).toHaveText('Your pickup details are saved.');
