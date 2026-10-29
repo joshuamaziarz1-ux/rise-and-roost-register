@@ -30,9 +30,9 @@ The database has been created and seeded with the public catalog, its existing i
 
 **Live HTTPS review website:** https://rise-roost-experience-preview.joshua-maziarz1.workers.dev/
 
-The existing Cloudflare token authenticated successfully after its account-level Workers Scripts Write permission was updated. No credential value was displayed or replaced. Deployment `17bae09e-5829-4d2b-b96f-b3b0fed0aa5f`, version `edd8b26f-9fe9-4b56-8d69-2fbf4ea22b30`, was activated October 29, 2026 at 2:02 p.m. EDT. The six expected bindings were read back from Cloudflare and verified, including the separate D1 UUID, both review/experience flags, and disabled email. workers.dev is enabled; version preview URLs and custom domains are not configured.
+The existing Cloudflare token authenticated successfully. No credential value was displayed or replaced. The simplified Home/Shop update was deployed only to the preview on October 29, 2026 at 2:59 PM EDT. Deployment `3f6e8b8d-6f4c-403e-b100-edc28969b211`, version `e1167a96-8502-4f58-b4c6-0ab37f7d2ec1`, contains application source `a07434bd68f0873e781539904691f3db3ec713c1`. Only `app.mjs` and `customer.css` changed in the uploaded public assets; no D1 migration or workspace write was performed. All six bindings remain unchanged, including the separate D1 UUID, both review/experience flags, and disabled email. workers.dev is enabled; no custom domain was configured. The [landing preservation check](landing-preservation.json) verifies every one of the 125 original workspaces and all 12 preview workspaces that existed before this update are unchanged, along with original beta deployment/settings.
 
-Deployed application source is `5c3116e57f6e80c25943af66e8230c2caf93c8c4`. Subsequent changes are test automation and documentation. This cloud environment's egress policy blocks direct requests to the new hostname, so hosted acceptance runs on GitHub's runner with normal HTTPS verification. It checks deployed asset hashes, passkey registration/sign-in, remembered sessions, guest/member checkout, tracking/payment reporting, and owner-only comment moderation. All mutations use fresh synthetic private workspaces; neither the review landing workspace nor the existing beta is a test-data target.
+This cloud environment's egress policy blocks direct requests to the new hostname, so hosted acceptance runs on GitHub's runner with normal HTTPS verification. It checks deployed asset hashes, passkey registration/sign-in, remembered sessions, guest/member checkout, tracking/payment reporting, and owner-only comment moderation. All mutations use fresh synthetic private workspaces; neither the review landing workspace nor the existing beta is a test-data target.
 
 Deploy only with `npm --prefix website run deploy:experience`. The opt-in `[verify-experience-preview]` CI job uses the exact new preview origin and rejects the original beta as a target. It has no Cloudflare credentials or deployment step. Hosted browser tests cover the same five profiles using virtual/signing test authenticators; physical biometrics remain owner acceptance.
 
@@ -40,7 +40,9 @@ For local development: `npm --prefix website run dev:experience`. It uses `.data
 
 ## Verification
 
-Local results:
+Latest landing/shop validation: **66 backend tests**, **15 customer journeys across five profiles**, and the preview dry-run build passed locally. The full regression matrix and live acceptance run in [PR #9 checks](https://github.com/joshuamaziarz1-ux/rise-and-roost-register/pull/9/checks) for the opt-in verification commit. Live checks include read-only Home/Shop assertions and screenshots on the actual public preview; account/order mutations use only new synthetic workspaces.
+
+Previous complete customer-release verification (before this display refinement):
 
 | Check | Result |
 | --- | --- |
