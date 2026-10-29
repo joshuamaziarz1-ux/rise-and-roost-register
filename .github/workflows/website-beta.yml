@@ -50,6 +50,8 @@ jobs:
         working-directory: website
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - id: opt-in
         run: |
           subject=$(git log -1 --format=%s)
