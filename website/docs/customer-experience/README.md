@@ -48,7 +48,9 @@ Local results:
 | New guest/member/comment journeys within that matrix | 15 passed |
 | Default beta bundle and separate preview bundle | Dry-run builds passed |
 | Runtime dependency audit | 0 reported vulnerabilities |
-| Hosted experience verification | Separate preview API and five-profile browser acceptance; see PR #9 CI for run results |
+| Hosted experience verification | API acceptance and all 10 hosted browser journeys passed across five profiles |
+
+Hosted acceptance and the complete regression/build checks passed in [CI run 40927841192](https://github.com/joshuamaziarz1-ux/rise-and-roost-register/actions/runs/40927841192). API tests verify deployed asset hashes against this branch and exercise the live D1-backed application; browser tests use fresh private test workspaces on the real HTTPS preview. The original public beta is never a hosted test target. The [preservation report](preservation.json) confirms all 125 original workspaces, the beta deployment, and settings remained unchanged after the preview deployment.
 
 Chromium uses native WebAuthn APIs with a virtual CTAP2 authenticator. Linux WebKit lacks an OS authenticator API, so its test uses a signing software authenticator through the frontend ceremony and the same real server verification. It does **not** validate Apple's Touch ID UI, iCloud Keychain synchronization, or physical Android device prompts. Those require owner acceptance on physical devices. Cookies, cryptographic signatures, challenge replay/expiry, wrong origin, user verification, and cross-workspace isolation are checked automatically.
 
