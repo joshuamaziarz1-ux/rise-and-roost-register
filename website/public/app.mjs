@@ -576,6 +576,7 @@ if (
       }),
       {
         class: "primary-link",
+        type: experience ? "submit" : "button",
         disabled: !chosen || !lines.length || isPreview || editing,
       },
     );
@@ -595,8 +596,8 @@ if (
             link("/shop", doc.ui.shop, "primary-link"),
           )
         : h(
-            "div",
-            { class: "cart-layout" },
+            experience ? "form" : "div",
+            { class: "cart-layout", onsubmit: e => e.preventDefault() },
             h(
               "div",
               {},

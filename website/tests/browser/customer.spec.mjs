@@ -75,7 +75,7 @@ test.describe('isolated customer experience', () => {
     await pickup(page);
     await expect(page.locator('.total')).toContainText('$10.00');
     await page.screenshot({ path: `qa-results/customer/guest-checkout-${info.project.name}.png`, fullPage: true });
-    await page.getByRole('button', { name: 'Place preorder', exact: true }).click();
+    await page.getByLabel('Name', { exact: true }).press('Enter');
     await expect(page.getByRole('heading', { name: 'Thank you. Your preorder is in.' })).toBeVisible();
     const tracking = await page.getByRole('link', { name: 'Track your order', exact: true }).getAttribute('href');
     expect((await page.request.get(fixture.origin+'/api/roost/me?workspace='+fixture.id)).status()).toBe(200);
