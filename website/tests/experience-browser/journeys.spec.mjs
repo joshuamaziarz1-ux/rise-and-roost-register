@@ -17,6 +17,13 @@ async function selectPickup(page) {
   const pickup = page.getByLabel('Choose your pickup', { exact: true });
   await pickup.selectOption(await pickup.locator('option:not([disabled])').nth(1).getAttribute('value'));
 }
+async function pickupAddress(page) {
+  const location = page.getByRole('region', { name: 'Pickup Location', exact: true });
+  await expect(location).toContainText('Rise & Roost');
+  await expect(location).toContainText('3431 County Rd. 60');
+  await expect(location).toContainText('Auburn, IN 46706');
+  expect(decodeURIComponent(await location.getByRole('link').getAttribute('href'))).toContain('3431 County Rd. 60, Auburn, IN 46706');
+}
 
 test('hosted HTTPS guest and member shopping, private tracking, remembered session and Studio isolation', async ({ page, browser }, info) => {
   const { owner, site, prefix } = await freshWorkspace(browser, info), errors = [];
@@ -55,14 +62,17 @@ test('hosted HTTPS guest and member shopping, private tracking, remembered sessi
     await expect(page.locator('.basket-count')).toHaveText('1');
     await page.locator('.home-choices').getByRole('link', { name: 'Start Shopping', exact: true }).click();
     await page.locator('.basket-link').click();
+    await pickupAddress(page);
     await page.getByLabel('Name', { exact: true }).fill('Synthetic Guest Neighbor');
     await selectPickup(page);
     await page.getByRole('button', { name: 'Place preorder', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Thank you. Your preorder is in.' })).toBeVisible();
+    await pickupAddress(page);
     const guestTracking = await page.getByRole('link', { name: 'Track your order', exact: true }).getAttribute('href');
     await page.getByRole('link', { name: 'Track your order', exact: true }).click();
     await page.getByRole('button', { name: "I've Sent Payment", exact: true }).click();
     await expect(page.getByLabel('Current order status', { exact: true })).toContainText('Payment Reported');
+    await pickupAddress(page);
     await expect(page.getByLabel('Current order status', { exact: true })).toContainText('has not been accepted or processed');
     await expect(page.getByLabel('Paid receipt', { exact: true })).toHaveCount(0);
     const otherContext = await browser.newContext({ ...info.project.use, baseURL: origin });

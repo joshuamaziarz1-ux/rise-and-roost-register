@@ -70,6 +70,9 @@
 .experience .footer-grid h2 { font-size: 30px; }
 .experience .site-footer a { min-height: 36px; display: inline-flex; align-items: center; }
 .experience .receipt { max-width: 750px; }
+.pickup-location { margin: 20px 0; font-size: 14px; }
+.pickup-location address { margin-top: 8px; font-style: normal; line-height: 1.65; }
+.pickup-location a { text-underline-offset: 3px; }
 .comment-moderation .sub-card { margin: 20px 0; }
 .comment-moderation .sub-card > button { margin: 10px 12px 0 0; }
 @media (max-width: 760px) {

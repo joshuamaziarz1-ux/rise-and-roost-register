@@ -22,6 +22,16 @@ test.describe('isolated customer experience', () => {
     await expect.poll(() => page.locator('.product-image img').evaluateAll(imgs => imgs.every(i => i.complete && i.naturalWidth > 0))).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth+1)).toBe(true);
   }
+  async function pickupAddress(page) {
+    const location = page.getByRole('region', { name: 'Pickup Location', exact: true });
+    await expect(location).toContainText('Rise & Roost');
+    await expect(location).toContainText('3431 County Rd. 60');
+    await expect(location).toContainText('Auburn, IN 46706');
+    const directions = location.getByRole('link');
+    expect(decodeURIComponent(await directions.getAttribute('href'))).toContain('3431 County Rd. 60, Auburn, IN 46706');
+    const agent = await page.evaluate(() => navigator.userAgent);
+    await expect(directions).toHaveAttribute('href', /Android/i.test(agent) ? /^geo:/ : /iPhone|iPad|iPod|Macintosh/i.test(agent) ? /^https:\/\/maps.apple.com\// : /^https:\/\/www.google.com\/maps\/dir\//);
+  }
 
   test('guest journey: three homepage choices, quick add, one checkout, private tracking and reported payment', async ({ page, browser }, info) => {
     const errors = []; page.on('pageerror', e => errors.push(e.message));
@@ -52,6 +62,7 @@ test.describe('isolated customer experience', () => {
     await bread.getByRole('button', { name: 'Add Slow Sunday sourdough to basket', exact: true }).click();
     await expect(page.locator('.basket-count')).toHaveText('1');
     await page.locator('.basket-link').click();
+    await pickupAddress(page);
     await expect(page.getByRole('button', { name: 'Guest checkout', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByText('No account needed.', { exact: true })).toBeVisible();
     await page.getByLabel('Name', { exact: true }).fill('Guest Neighbor');
@@ -60,6 +71,7 @@ test.describe('isolated customer experience', () => {
     await page.screenshot({ path: `qa-results/customer/guest-checkout-${info.project.name}.png`, fullPage: true });
     await page.getByLabel('Name', { exact: true }).press('Enter');
     await expect(page.getByRole('heading', { name: 'Thank you. Your preorder is in.' })).toBeVisible();
+    await pickupAddress(page);
     const tracking = await page.getByRole('link', { name: 'Track your order', exact: true }).getAttribute('href');
     expect((await page.request.get(fixture.origin+'/api/roost/me?workspace='+fixture.id)).status()).toBe(200);
     expect((await (await page.request.get(fixture.origin+'/api/roost/me?workspace='+fixture.id)).json()).member).toBeNull();
@@ -67,6 +79,8 @@ test.describe('isolated customer experience', () => {
     await page.getByRole('link', { name: 'Track your order', exact: true }).click();
     await page.getByRole('button', { name: "I've Sent Payment", exact: true }).click();
     await expect(page.getByLabel('Current order status', { exact: true })).toContainText('Payment Reported');
+    await pickupAddress(page);
+    await page.getByRole('region', { name: 'Pickup Location', exact: true }).screenshot({ path: `qa-results/customer/pickup-location-${info.project.name}.png` });
     await expect(page.getByLabel('Current order status', { exact: true })).toContainText('has not been accepted or processed');
     const second = await browser.newContext({ ...info.project.use, baseURL: fixture.origin });
     try {

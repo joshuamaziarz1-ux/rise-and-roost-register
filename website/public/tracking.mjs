@@ -1,6 +1,7 @@
 import { h, button, guard } from "./dom.mjs";
 import { money, pickupLabel, seed } from "./model.mjs";
 import { paymentLabels, fulfillmentLabels, stages, notificationLabels, eventLabels } from "./orders.mjs";
+import { pickupLocation } from "./pickup-location.mjs";
 
 export async function start(root) {
   const match = /^\/orders\/([a-f0-9]{48})\/([a-f0-9]{48})\/?$/.exec(location.pathname);
@@ -8,6 +9,7 @@ export async function start(root) {
   const endpoint = match && `/api/order-tracking/${match[1]}/${match[2]}`;
   let order, busy = false, error = "", refreshed = "", refreshSequence = 0, appliedSequence = 0;
   let doc = seed();
+  let experience = false;
   const robots = h("meta", { name: "robots", content: "noindex,nofollow,noarchive" });
   document.head.append(robots);
   document.head.append(h("link", { rel: "stylesheet", href: "/tracking.css" }));
@@ -90,6 +92,7 @@ export async function start(root) {
         h("ol", { "aria-label": "Order stages" }, stages(order).map(([label, at]) =>
           h("li", { class: "sub-card" }, h("strong", {}, label), h("p", {}, stageNote(label, at))))),
         h("h2", {}, "Pickup details"), h("p", {}, pickupLabel(order.pickup)),
+        experience ? pickupLocation() : null,
         h("p", {}, "Order deadline: " + order.pickup.cutoffDate + " at " + order.pickup.cutoffTime + " (Indianapolis)"),
         h("h2", {}, "Your order"),
         h("div", { role: "group", "aria-label": "Order items" }, order.lines.map((line) => h("p", {}, `${line.qty} × ${line.name} (${line.variant}) · ${money(line.qty * line.unitPrice)}`))),
@@ -123,7 +126,11 @@ export async function start(root) {
   if (match) {
     try {
       const r = await fetch("/api/site?workspace=" + match[1], { cache: "no-store" });
-      if (r.ok) doc = (await r.json()).document;
+      if (r.ok) {
+        const site = await r.json();
+        doc = site.document;
+        experience = !!site.customerExperienceEnabled;
+      }
     } catch { /* Order access still works when storefront content is unavailable. */ }
   }
   await refresh();

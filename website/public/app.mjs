@@ -1,6 +1,7 @@
 import { h, button, notify, request, guard } from "./dom.mjs";
 import { money, localInstant, pickupLabel } from "./model.mjs";
 import { createCustomerExperience } from "./customer.mjs";
+import { pickupLocation } from "./pickup-location.mjs";
 
 const root = document.querySelector("#app");
 if (
@@ -449,6 +450,7 @@ if (
         h("h1", {}, experience ? "Thank you. Your preorder is in." : doc.ui.simulated),
         h("p", {}, "Order number: " + (receipt.orderNumber || receipt.id.slice(0, 10))),
         h("p", {}, pickupLabel(receipt.pickup)),
+        experience ? pickupLocation() : null,
         !experience ? h(
           "p",
           {},
@@ -666,6 +668,7 @@ if (
               !experience ? h("span", { class: "eyebrow" }, "SIMULATION ONLY") : null,
               h("h2", {}, doc.ui.pickup),
               select,
+              experience ? pickupLocation() : null,
               chosen
                 ? h(
                     "div",
