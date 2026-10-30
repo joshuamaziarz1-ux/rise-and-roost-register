@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { randomBytes, createHash } from 'node:crypto';
 import { seed } from '../public/model.mjs';
-export async function primaryFixture({ experience = false, port = 4182, hostname = '127.0.0.1' } = {}) {
+export async function primaryFixture({ experience = false, management = false, port = 4182, hostname = '127.0.0.1' } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'rr-sync-'));
   const dbFile = join(directory, 'test.sqlite');
   const id = randomBytes(24).toString('hex');
@@ -22,7 +22,7 @@ export async function primaryFixture({ experience = false, port = 4182, hostname
   sqlite.close();
   const child = spawn(process.execPath, ['server/local.mjs'], {
     cwd: fileURLToPath(new URL('../', import.meta.url)),
-    env: { ...process.env, RR_TEST_DB: dbFile, RR_PUBLIC_WORKSPACE_ID: id, RR_CUSTOMER_EXPERIENCE: String(experience), RR_REVIEW_BUILD: String(experience), PORT: String(port) },
+    env: { ...process.env, RR_TEST_DB: dbFile, RR_PUBLIC_WORKSPACE_ID: id, RR_CUSTOMER_EXPERIENCE: String(experience), RR_REVIEW_BUILD: String(experience), RR_STUDIO_MANAGEMENT: String(management), PORT: String(port) },
     stdio: 'ignore',
   });
   const close = async () => {

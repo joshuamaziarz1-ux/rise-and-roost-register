@@ -78,6 +78,7 @@ export async function start(root) {
       main.append(h("div", { class: "order-summary", "aria-live": "polite", "aria-label": "Current order status" },
         h("h2", {}, fulfillmentLabels[order.status] || "Order Received"),
         h("p", {}, paymentLabels[order.paymentStatus] || "Awaiting payment report"),
+        order.paymentCorrectedAt ? h('p', {}, 'An owner corrected a mistaken payment-verification record. Payment is awaiting independent verification; the previous receipt is no longer valid.') : null,
         order.paymentStatus === "reported" ? h("p", {}, "Thank you — your payment has been reported. Danielle still needs to verify it independently. It has not been accepted or processed by this website.") : null,
         order.paymentStatus === "verified" ? h("p", {}, "Danielle recorded independent payment verification. Your beta paid receipt is below. Payment verification does not mean preparation has started.") : null,
         order.status === "canceled" ? h("p", {}, "This order was canceled. Contact the farm about any payment or refund; this website does not issue refunds.") : null,
@@ -86,13 +87,13 @@ export async function start(root) {
           try { await refresh(true); }
           finally { busy = false; render(); }
         }), { class: "primary-link", disabled: busy }) : null,
-        h("p", { class: "small-note" }, "Use the payment arrangements agreed with the farm. This button reports payment only; it does not charge a card or transfer money.")));
+        h("p", { class: "small-note" }, (doc.business.paymentInstructions || "Use the payment arrangements agreed with the farm.") + " This button reports payment only; it does not charge a card or transfer money.")));
       main.append(h("h2", {}, "Order progress"),
         h("p", {}, "Payment and preparation are tracked separately. A stage is complete only when its own event is recorded."),
         h("ol", { "aria-label": "Order stages" }, stages(order).map(([label, at]) =>
           h("li", { class: "sub-card" }, h("strong", {}, label), h("p", {}, stageNote(label, at))))),
         h("h2", {}, "Pickup details"), h("p", {}, pickupLabel(order.pickup)),
-        experience ? pickupLocation() : null,
+        experience ? pickupLocation({ pickupAddress: order.pickupAddress }) : null,
         h("p", {}, "Order deadline: " + orderByLabel(order.pickup)),
         h("h2", {}, "Your order"),
         h("div", { role: "group", "aria-label": "Order items" }, order.lines.map((line) => h("p", {}, `${line.qty} × ${line.name} (${line.variant}) · ${money(line.qty * line.unitPrice)}`))),
@@ -112,6 +113,7 @@ export async function start(root) {
           h("p", {}, "This beta receipt records Danielle's independent verification. No payment was processed by this website or its Square integration."),
           button("Print or save receipt as PDF", () => window.print(), { class: "secondary-button" })));
       }
+      if (order.refunds?.length) main.append(h('section', { class: 'sub-card', 'aria-label': 'Recorded refunds' }, h('h2', {}, 'Recorded refunds'), order.refunds.map(r => h('p', {}, money(r.amount) + ' · ' + stamp(r.at))), h('p', {}, 'An owner checked independent refund records. This website did not process these refunds. The original paid receipt remains part of the order history.')));
       main.append(h("h2", {}, "Email updates"),
         order.emailOptIn ? h("div", {}, order.notifications.map((n) => h("p", {}, `${eventLabels[n.event]}: ${notificationLabels[n.status] || "Submission not confirmed"}`)))
           : h("p", {}, "Email updates were not requested. This page updates automatically; keep its private link."),

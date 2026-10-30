@@ -4,6 +4,7 @@ import { roostApi, commentsApi, memberFor, customerProfile } from "./roost.mjs";
 import { trackingPath } from "../public/orders.mjs";
 import { normalizeDeviceCode } from "../public/access.mjs";
 import { seed, ZONE, localInstant, safeLink } from "../public/model.mjs";
+import { managementApi, holdsInventory, productionLimit, structure } from './management.mjs';
 
 const encoder = new TextEncoder();
 const token = () =>
@@ -95,6 +96,8 @@ export function validateDocument(doc) {
     fail("Pickup times must use America/Indiana/Indianapolis.");
   if (!doc.business.name?.trim() || !doc.theme || !doc.ui)
     fail("Business name, theme, and website copy are required.");
+  if (doc.business.pickupAddress && ['name', 'street', 'city'].some(key => typeof doc.business.pickupAddress[key] !== 'string' || !doc.business.pickupAddress[key].trim() || doc.business.pickupAddress[key].length > 200)) fail('Check the pickup address fields.');
+  if (doc.business.paymentInstructions !== undefined && (typeof doc.business.paymentInstructions !== 'string' || doc.business.paymentInstructions.length > 3000)) fail('Use payment instructions of no more than 3,000 characters.');
   if (
     doc.business.email &&
     !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(doc.business.email)
@@ -195,6 +198,8 @@ export function validateDocument(doc) {
     fail("Use no more than 60 demo products.");
   const products = new Set();
   for (const p of doc.products) {
+    if (p.inventoryMode !== undefined && !['legacy', 'physical', 'production'].includes(p.inventoryMode)) fail('Choose a valid inventory model.');
+    if (p.lowStockThreshold !== undefined && !integer(p.lowStockThreshold, 0, 10000)) fail('Check the low-stock threshold.');
     if (!keyPattern.test(p.id) || products.has(p.id) || !p.name?.trim())
       fail("Products need unique IDs and names.");
     products.add(p.id);
@@ -234,6 +239,7 @@ export function validateDocument(doc) {
   )
     fail("Use unique pickup windows, up to 100.");
   for (const p of doc.pickups) {
+    for (const [id, value] of Object.entries(p.productionLimits || {})) if (!doc.products.some(product => product.id === id) || !integer(value, 0, 10000)) fail('Check production limits for this pickup.');
     if (!keyPattern.test(p.id) || !integer(p.capacity, 0, 10000))
       fail("Check pickup capacity.");
     let start, end, cutoff;
@@ -252,6 +258,7 @@ export function validateDocument(doc) {
   return doc;
 }
 export function quote(doc, ledger, input, now = Date.now()) {
+  if (doc.orderingPaused) fail('New ordering is paused. Please check back soon.', 409);
   if (
     !Array.isArray(input.lines) ||
     !input.lines.length ||
@@ -270,7 +277,7 @@ export function quote(doc, ledger, input, now = Date.now()) {
       409,
     );
   const active = ledger.orders.filter(
-    (o) => o.pickupId === pickup.id && o.status !== "canceled",
+    (o) => o.pickupId === pickup.id && holdsInventory(o),
   );
   if (active.length >= pickup.capacity)
     fail("This pickup window is full.", 409);
@@ -285,6 +292,7 @@ export function quote(doc, ledger, input, now = Date.now()) {
       !product ||
       !variant ||
       !product.active ||
+      product.archived || product.soldOut ||
       product.channel !== "preorder" ||
       !integer(line.qty, 1, 99)
     )
@@ -297,13 +305,13 @@ export function quote(doc, ledger, input, now = Date.now()) {
       .filter((l) => l.productId === product.id)
       .reduce((n, l) => n + l.qty, 0);
     const allBooked = ledger.orders
-      .filter((o) => o.status !== "canceled")
+      .filter(holdsInventory)
       .flatMap((o) => o.lines)
       .filter((l) => l.productId === product.id)
       .reduce((n, l) => n + l.qty, 0);
     if (
-      booked + sameProductQty > product.capacity ||
-      allBooked + sameProductQty > product.stock
+      (product.inventoryMode !== 'physical' && booked + sameProductQty > productionLimit(product, pickup)) ||
+      (product.inventoryMode !== 'production' && allBooked + sameProductQty > product.stock)
     )
       fail(product.name + " has reached its capacity.", 409);
     const unitPrice = product.price + variant.extra;
@@ -332,19 +340,34 @@ export function quote(doc, ledger, input, now = Date.now()) {
   };
 }
 // Publish aggregate availability, never order details or customer/owner credentials.
-export function availableDocument(document, ledger) {
+export function availableDocument(document, ledger, { managed = false, now = Date.now() } = {}) {
   const doc = copy(document);
   const units = new Map(), orders = new Map();
   for (const order of ledger.orders) {
-    if (order.status === "canceled") continue;
+    if (!holdsInventory(order)) continue;
     orders.set(order.pickupId, (orders.get(order.pickupId) || 0) + 1);
     for (const line of order.lines)
       units.set(line.productId, (units.get(line.productId) || 0) + line.qty);
   }
-  for (const product of doc.products)
-    product.stock = Math.max(0, product.stock - (units.get(product.id) || 0));
+  const perPickup = new Map();
+  for (const order of ledger.orders.filter(holdsInventory)) for (const line of order.lines) {
+    const key = order.pickupId + ':' + line.productId; perPickup.set(key, (perPickup.get(key) || 0) + line.qty);
+  }
+  for (const product of doc.products) {
+    if (product.inventoryMode !== 'production') product.stock = Math.max(0, product.stock - (units.get(product.id) || 0));
+    else {
+      const remaining = doc.pickups.filter(p => !p.closed && localInstant(p.cutoffDate, p.cutoffTime) > now).map(p => Math.max(0, productionLimit(product, p) - (perPickup.get(p.id + ':' + product.id) || 0)));
+      product.stock = product.capacity = Math.max(0, ...remaining);
+    }
+    if (product.archived) product.active = false;
+    if (product.soldOut) product.stock = 0;
+  }
   for (const pickup of doc.pickups)
     pickup.capacity = Math.max(0, pickup.capacity - (orders.get(pickup.id) || 0));
+  if (managed) {
+    for (const p of doc.pickups) p.productionRemaining = Object.fromEntries(doc.products.filter(v => v.inventoryMode === 'production').map(product => [product.id, Math.max(0, productionLimit(document.products.find(v => v.id === product.id), p) - (perPickup.get(p.id + ':' + product.id) || 0))]));
+    doc.pickups = doc.orderingPaused ? [] : doc.pickups.filter(p => !p.closed && p.capacity > 0 && localInstant(p.cutoffDate, p.cutoffTime) > now && localInstant(p.date, p.start) > now);
+  }
   return doc;
 }
 export function inspectImage(bytes, mime) {
@@ -374,7 +397,7 @@ export function inspectImage(bytes, mime) {
     );
   return true;
 }
-export async function api(request, db, now = Date.now(), { publicWorkspaceId = "", emailEnabled = false, customerExperienceEnabled = false, reviewBuild = false } = {}) {
+export async function api(request, db, now = Date.now(), { publicWorkspaceId = "", emailEnabled = false, customerExperienceEnabled = false, reviewBuild = false, studioManagementEnabled = false } = {}) {
   const url = new URL(request.url),
     path = url.pathname;
   const first = (sql, ...args) =>
@@ -473,6 +496,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       notificationsEnabled: emailEnabled && row.id === publicWorkspaceId,
       owner: "Danielle · Demo Owner",
       customerExperienceEnabled,
+      studioManagementEnabled,
       isReview: reviewBuild,
       sessionExpiresAt: authenticated ? new Date(authenticated.expires).toISOString() : undefined,
       isPrimary: row.id === publicWorkspaceId,
@@ -483,7 +507,15 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
     if (customerExperienceEnabled && path.startsWith("/api/roost/"))
       return await roostApi({ request, db, now, input, path, json, rateLimit });
     if (customerExperienceEnabled && (path === "/api/comments" || path === "/api/studio-comments"))
-      return await commentsApi({ request, db, now, input, path, json, rateLimit, owner, publicWorkspaceId });
+      { if (studioManagementEnabled && path === '/api/studio-comments' && request.method === 'POST') fail('Use Website Studio comment management so changes are audited.', 403); return await commentsApi({ request, db, now, input, path, json, rateLimit, owner, publicWorkspaceId }); }
+    if (studioManagementEnabled && request.method === 'POST' && ['/api/draft', '/api/publish', '/api/restore', '/api/order-payment', '/api/order-status', '/api/order-fulfillment'].includes(path)) {
+      await owner(); fail('Use Website Studio management controls. The approved layout is locked and business changes require an audit record.', 403);
+    }
+    if (studioManagementEnabled && path.startsWith('/api/manage/')) {
+      const row = await owner();
+      const actor = { id: 'workspace-session:' + authenticated.hash.slice(0, 16), name: 'Owner · workspace access', authentication: 'workspace_access' };
+      return await managementApi({ request, db, now, row, actor, input, path, json, validateDocument, ownerResult });
+    }
     if (path === "/api/workspaces" && request.method === "POST") {
       await rateLimit("create", 40);
       if ((await first("SELECT count(*) AS n FROM workspaces")).n >= 200)
@@ -544,7 +576,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       return withCookies(json({ ok: true }), clear);
     }
     if (path === "/api/studio-info" && request.method === "GET")
-      return json({ mainWorkspaceId: publicWorkspaceId, mainStudioPath: publicWorkspaceId ? "/studio?workspace=" + publicWorkspaceId : "", sessionHours: 12 });
+      return json({ mainWorkspaceId: publicWorkspaceId, mainStudioPath: publicWorkspaceId ? "/studio?workspace=" + publicWorkspaceId : "", sessionHours: 12, studioManagementEnabled });
     if (path === "/api/device-start" && request.method === "POST") {
       await rateLimit("device-start", 15);
       const id = typeof input.workspaceId === "string" ? input.workspaceId : "";
@@ -599,9 +631,10 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       return json({
         customerExperienceEnabled,
         notificationsEnabled: emailEnabled && id === publicWorkspaceId,
-        document: availableDocument(JSON.parse(row.published_json), JSON.parse(row.ledger_json)),
+        document: availableDocument(JSON.parse(row.published_json), JSON.parse(row.ledger_json), { managed: studioManagementEnabled, now }),
         revision: row.published_revision,
         availabilityRevision: row.ledger_version,
+        studioManagementEnabled,
         id,
         isPrimary: id === publicWorkspaceId,
         studioPath: "/studio?workspace=" + id,
@@ -706,6 +739,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       }
       if (path === "/api/publish") document = JSON.parse(row.draft_json);
       document = validateDocument(copy(document));
+      if (studioManagementEnabled && structure(document) !== structure(JSON.parse(row.published_json))) fail('The approved layout is locked in Website Studio. Edit wording or images only.', 403);
       const serialized = JSON.stringify(document);
       const assetIds = [
         ...serialized.matchAll(/\/api\/assets\/([a-f0-9]{48})/g),
@@ -809,8 +843,8 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           customer,
           notifications: [],
           merchant: (() => {
-            const { name, address, email } = JSON.parse(row.published_json).business;
-            return { name, address, email };
+            const { name, address, email, pickupAddress } = JSON.parse(row.published_json).business;
+            return { name, address, email, ...(studioManagementEnabled ? { pickupAddress: pickupAddress || { name: 'Rise & Roost', street: '3431 County Rd. 60', city: 'Auburn, IN 46706' } } : {}) };
           })(),
           at: new Date(now).toISOString(),
           audit: [{ action: "Demo request", at: new Date(now).toISOString() }],

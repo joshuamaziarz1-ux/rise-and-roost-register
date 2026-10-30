@@ -19,12 +19,14 @@ const types = {
   ".svg": "image/svg+xml",
   ".webp": "image/webp",
   ".png": "image/png",
+  '.webmanifest': 'application/manifest+json',
 };
 const env = {
   DB: db,
   PUBLIC_WORKSPACE_ID: process.env.RR_PUBLIC_WORKSPACE_ID || "",
   CUSTOMER_EXPERIENCE_ENABLED: process.env.RR_CUSTOMER_EXPERIENCE || "false",
   REVIEW_BUILD: process.env.RR_REVIEW_BUILD || "false",
+  STUDIO_MANAGEMENT_ENABLED: process.env.RR_STUDIO_MANAGEMENT || 'false',
   ASSETS: {
     async fetch(request) {
       let path = decodeURIComponent(new URL(request.url).pathname);

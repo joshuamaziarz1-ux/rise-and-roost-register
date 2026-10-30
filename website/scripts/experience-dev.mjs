@@ -7,7 +7,7 @@ import { randomBytes, createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { seed } from '../public/model.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
-const directory = resolve(root, '.data/customer-experience');
+const directory = resolve(root, process.env.RR_STUDIO_MANAGEMENT === 'true' ? '.data/studio-management' : '.data/customer-experience');
 await mkdir(directory, { recursive: true });
 let state;
 try { state = JSON.parse(await readFile(resolve(directory, 'state.json'), 'utf8')); }
