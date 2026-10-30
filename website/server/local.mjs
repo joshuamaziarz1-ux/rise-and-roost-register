@@ -5,6 +5,7 @@ import { resolve, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import worker from "./worker.mjs";
 import { sqliteD1 } from "./sqlite-adapter.mjs";
+import { PREVIEW_HOST, PREVIEW_DATABASE } from './preview-access.mjs';
 const root = fileURLToPath(new URL("../", import.meta.url));
 await mkdir(resolve(root, ".data"), { recursive: true });
 const sqlite = new DatabaseSync(
@@ -19,12 +20,14 @@ const types = {
   ".svg": "image/svg+xml",
   ".webp": "image/webp",
   ".png": "image/png",
+  '.webmanifest': 'application/manifest+json',
 };
 const env = {
   DB: db,
   PUBLIC_WORKSPACE_ID: process.env.RR_PUBLIC_WORKSPACE_ID || "",
   CUSTOMER_EXPERIENCE_ENABLED: process.env.RR_CUSTOMER_EXPERIENCE || "false",
   REVIEW_BUILD: process.env.RR_REVIEW_BUILD || "false",
+  STUDIO_MANAGEMENT_ENABLED: process.env.RR_STUDIO_MANAGEMENT || 'false',
   ASSETS: {
     async fetch(request) {
       let path = decodeURIComponent(new URL(request.url).pathname);
@@ -52,7 +55,26 @@ const env = {
     },
   },
 };
-const server = createServer(async (req, res) => {
+// Test-only infrastructure simulation, never imported by the deployed Worker.
+// The local server binds 127.0.0.1 and requires an explicitly isolated test DB.
+const accessTest = process.env.RR_PREVIEW_ACCESS_TEST === 'true' && !!process.env.RR_TEST_DB;
+if (accessTest) Object.assign(env, {
+  PREVIEW_ACCESS_MODE: 'cloudflare-access', PREVIEW_DATABASE_ID: PREVIEW_DATABASE,
+  ORDER_EMAIL_ENABLED: 'false',
+  PREVIEW_ACCESS_UNTIL: new Date(Date.now() + 86400000).toISOString(),
+  PREVIEW_TESTER_EMAILS: JSON.stringify(['owner-a@example.test', 'owner-b@example.test']),
+  CF_ACCESS_TEAM_DOMAIN: process.env.RR_TEST_ACCESS_TEAM,
+  CF_ACCESS_AUD: process.env.RR_TEST_ACCESS_AUD,
+});
+if (accessTest) {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (url, init) => String(url) === env.CF_ACCESS_TEAM_DOMAIN + '/cdn-cgi/access/certs'
+    ? Promise.resolve(new Response(process.env.RR_TEST_ACCESS_JWKS, { headers: { 'Content-Type': 'application/json' } })) : originalFetch(url, init);
+}
+// Playwright keeps an API connection idle while the independent browser edits
+// and publishes. Node 24's default six-second close can race the next GET.
+// Keep local development connections alive through a complete UI journey.
+const server = createServer({ keepAliveTimeout: 60000 }, async (req, res) => {
   try {
     const chunks = [];
     let size = 0;
@@ -65,20 +87,29 @@ const server = createServer(async (req, res) => {
       }
       chunks.push(chunk);
     }
-    const url = "http://" + req.headers.host + req.url;
-    const response = await worker.fetch(
-      new Request(url, {
+    const origin = 'http://' + req.headers.host;
+    const url = (accessTest ? 'https://' + PREVIEW_HOST : origin) + req.url;
+    const headers = new Headers(req.headers);
+    if (accessTest) {
+      if (headers.get('Origin') === origin) headers.set('Origin', 'https://' + PREVIEW_HOST);
+      // Simulate the Access edge passing its signed authorization cookie as a
+      // JWT header. The Worker still performs real signature/claim validation.
+      if (!headers.has('Cf-Access-Jwt-Assertion')) {
+        const jwt = (headers.get('Cookie') || '').split(';').map(s => s.trim()).find(s => s.startsWith('CF_Authorization='))?.slice('CF_Authorization='.length);
+        if (jwt) headers.set('Cf-Access-Jwt-Assertion', jwt);
+      }
+    }
+    const request = new Request(url, {
         method: req.method,
-        headers: req.headers,
+        headers,
         body: ["GET", "HEAD"].includes(req.method)
           ? undefined
           : Buffer.concat(chunks),
-      }),
-      env,
-    );
-    const headers = Object.fromEntries(response.headers);
-    if (response.headers.getSetCookie().length) headers["set-cookie"] = response.headers.getSetCookie();
-    res.writeHead(response.status, headers);
+      });
+    const response = await worker.fetch(request, env);
+    const responseHeaders = Object.fromEntries(response.headers);
+    if (response.headers.getSetCookie().length) responseHeaders["set-cookie"] = response.headers.getSetCookie();
+    res.writeHead(response.status, responseHeaders);
     res.end(Buffer.from(await response.arrayBuffer()));
   } catch {
     res.writeHead(500);

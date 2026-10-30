@@ -1,0 +1,11 @@
+{
+  "id": "/studio",
+  "name": "Rise & Roost Website Studio",
+  "short_name": "Website Studio",
+  "start_url": "/studio",
+  "scope": "/studio",
+  "display": "standalone",
+  "background_color": "#faf7f0",
+  "theme_color": "#3e5946",
+  "icons": [{ "src": "/assets/logo.webp", "sizes": "any", "type": "image/webp", "purpose": "any" }]
+}

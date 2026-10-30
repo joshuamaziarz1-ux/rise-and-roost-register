@@ -21,3 +21,7 @@ PUBLIC_WORKSPACE_ID = "2a7ca191c1639aaf023b02d96bcd9519fe099333302d9204"
 CUSTOMER_EXPERIENCE_ENABLED = "true"
 REVIEW_BUILD = "true"
 ORDER_EMAIL_ENABLED = "false"
+STUDIO_MANAGEMENT_ENABLED = "true"
+# Direct testing remains OFF until the exact preview hostname is protected by
+# Cloudflare Access for the two approved testers and its policy is verified.
+# See docs/studio-management/PRIVATE-TESTING.md. No IP restrictions are used.

@@ -450,7 +450,7 @@ if (
         h("h1", {}, experience ? "Thank you. Your preorder is in." : doc.ui.simulated),
         h("p", {}, "Order number: " + (receipt.orderNumber || receipt.id.slice(0, 10))),
         h("p", {}, pickupLabel(receipt.pickup)),
-        experience ? pickupLocation() : null,
+        experience ? pickupLocation({ pickupAddress: receipt.pickupAddress }) : null,
         !experience ? h(
           "p",
           {},
@@ -498,6 +498,7 @@ if (
       doc.pickups.map((p) => {
         const closed =
           p.closed ||
+          cart.lines.some(line => p.productionRemaining?.[line.productId] !== undefined && p.productionRemaining[line.productId] < cart.lines.filter(l => l.productId === line.productId).reduce((n, l) => n + l.qty, 0)) ||
           Date.now() >= localInstant(p.cutoffDate, p.cutoffTime) ||
           p.capacity === 0;
         return h(
@@ -665,7 +666,7 @@ if (
               !experience ? h("span", { class: "eyebrow" }, "SIMULATION ONLY") : null,
               h("h2", {}, doc.ui.pickup),
               select,
-              experience ? pickupLocation() : null,
+              experience ? pickupLocation(doc.business) : null,
               chosen
                 ? h(
                     "div",
@@ -873,6 +874,7 @@ if (
     const changed = result.id !== workspace || result.revision !== revision;
     if (!force && !changed && result.availabilityRevision === availabilityRevision) {
       if (experience && path === "/roost" && await customer.refresh(false)) render();
+      if (experience && path === '/comments') await customer.refreshComments();
       return;
     }
     doc = result.document;
@@ -884,6 +886,10 @@ if (
     ensureCustomer();
     studioPath = result.studioPath || (result.id ? "/studio?workspace=" + result.id : "/studio");
     if (!force && experience && path === "/roost") await customer.refresh(false);
+    if (!force && experience && path === '/comments') {
+      await customer.refreshComments(changed ? false : true);
+      if (!changed) return;
+    }
     render();
     if (!force && changed) notify("The published website has updated. Please review your basket before requesting.");
   }

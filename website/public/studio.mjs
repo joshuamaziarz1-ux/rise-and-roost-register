@@ -6,7 +6,7 @@ import { paymentLabels, fulfillmentLabels, notificationLabels, eventLabels } fro
 export async function start(root) {
   const requestedWorkspace = new URLSearchParams(location.search).get("workspace");
   let loginWorkspace = /^[a-f0-9]{48}$/.test(requestedWorkspace || "") ? requestedWorkspace : "";
-  let mainWorkspace = "", pairingTimer, accessKeyWorkspace = "", sessionExpired = false;
+  let mainWorkspace = "", pairingTimer, accessKeyWorkspace = "", sessionExpired = false, managementEnabled = false, previewDirectAccess = false;
   const request = async (path, data) => {
     const target = state?.id || loginWorkspace || undefined;
     try {
@@ -139,6 +139,9 @@ export async function start(root) {
         }),
       { type: "number", min, max },
     );
+  function previewUnavailable() {
+    root.replaceChildren(h('main', { class: 'studio-login' }, h('h1', {}, 'Testing access needs verification'), h('p', {}, 'Reopen Website Studio to verify your Cloudflare Access session. Existing website data has not been changed.'), button('Reopen Website Studio', () => location.reload(), { class: 'primary-link' })));
+  }
   function adopt(result) {
     clearInterval(pairingTimer);
     sessionExpired = false;
@@ -149,6 +152,12 @@ export async function start(root) {
     loginWorkspace = result.id;
     if (result.mainStudioPath) mainWorkspace = new URL(result.mainStudioPath, location.origin).searchParams.get("workspace");
     history.replaceState({}, "", result.studioPath || "/studio?workspace=" + result.id);
+    if (result.studioManagementEnabled) {
+      const credentials = accessKeyWorkspace === result.id ? accessKey : null;
+      state = null; doc = null; accessKey = null;
+      import('./management.mjs').then(m => m.start(root, result, credentials)).catch(e => notify(e.message, true));
+      return;
+    }
     render();
   }
   async function upload(file) {
@@ -201,6 +210,7 @@ export async function start(root) {
     );
   }
   function login() {
+    if (previewDirectAccess) { previewUnavailable(); return; }
     clearInterval(pairingTimer);
     let id = loginWorkspace || mainWorkspace, key = "";
     const feedback = h("p", { class: "small-note", role: "status", id: "workspace-signin-feedback" });
@@ -242,7 +252,7 @@ export async function start(root) {
         };
         pairing.replaceChildren(h("div", { class: "sub-card" },
           h("h2", {}, "Approve this computer"),
-          h("p", {}, "On the already signed-in computer, open Workspace Access, enter this code, and explicitly approve this browser. Keep this window open. Only approve a code you requested yourself."),
+          h("p", {}, "On the already signed-in computer, open " + (managementEnabled ? "Settings" : "Workspace Access") + ", enter this code, and explicitly approve this browser. Keep this window open. Only approve a code you requested yourself."),
           h("output", { "aria-label": "Device connection code" }, pending.code),
           h("p", { class: "small-note" }, "Workspace: " + pending.workspaceId + ". Expires in 10 minutes. The code cannot sign anyone in without owner approval and this browser's private cookie."),
           message, button("Check connection", check)));
@@ -259,17 +269,17 @@ export async function start(root) {
       adopt(result);
     }) }, idField, keyField, h("button", { class: "primary-link", type: "submit" }, "Sign in"));
     root.replaceChildren(h("main", { class: "studio-login" },
-      h("div", { class: "login-brand" }, h("img", { src: "/assets/logo.webp", alt: "Rise & Roost logo" }), h("span", {}, "DANIELLE’S WEBSITE STUDIO")),
+      h("div", { class: "login-brand" }, h("img", { src: "/assets/logo.webp", alt: "Rise & Roost logo" }), h("span", {}, managementEnabled ? "RISE & ROOST WEBSITE STUDIO" : "DANIELLE’S WEBSITE STUDIO")),
       h("div", { class: "login-card" },
-        h("span", { class: "eyebrow" }, id === mainWorkspace && mainWorkspace ? "MAIN BETA WEBSITE" : "WORKSPACE SIGN IN"),
-        h("h1", {}, "Make it yours."),
+        h("span", { class: "eyebrow" }, id === mainWorkspace && mainWorkspace ? managementEnabled ? "MAIN PREVIEW WEBSITE" : "MAIN BETA WEBSITE" : "WORKSPACE SIGN IN"),
+        h("h1", {}, managementEnabled ? "Welcome back." : "Make it yours."),
         h("p", {}, mainWorkspace ? "Sign in to the saved website you want to edit. Every separate private demo has a different ID and key." : "Sign in to an existing workspace or create a separate private demo."),
         h("details", { open: !!id }, h("summary", {}, "Return to an existing workspace"), form),
         feedback, different,
         h("details", {}, h("summary", {}, "Use the saved ID and key together"), savedField, apply),
         h("p", { class: "small-note" }, "Sessions expire after 12 hours. An open Studio tab alone is not proof of an active session. If both computers are signed out, you need the original matching key; connecting a device cannot bypass this."),
         connect, pairing,
-        mainWorkspace && id !== mainWorkspace ? h("p", {}, h("a", { href: "/studio?workspace=" + mainWorkspace }, "Sign in to the original main website")) : null,
+        mainWorkspace && id !== mainWorkspace ? h("p", {}, h("a", { href: "/studio?workspace=" + mainWorkspace }, managementEnabled ? "Sign in to the main preview website" : "Sign in to the original main website")) : null,
         h("hr"),
         button("Create my private demo", guard(async () => {
           const result = await request("/api/workspaces", {});
@@ -1552,9 +1562,17 @@ export async function start(root) {
   );
   try {
     const info = await apiRequest("/api/studio-info");
+    managementEnabled = !!info.studioManagementEnabled;
+    previewDirectAccess = !!info.previewDirectAccess;
     mainWorkspace = info.mainWorkspaceId || "";
-    if (!loginWorkspace) loginWorkspace = mainWorkspace;
-  } catch {
+    if (previewDirectAccess) { loginWorkspace = mainWorkspace; history.replaceState({}, '', '/studio'); }
+    else if (!loginWorkspace) loginWorkspace = mainWorkspace;
+  } catch (e) {
+    if (e.previewAccessRequired) { previewUnavailable(); return; }
+    if (!e.status) {
+      root.replaceChildren(h('main', { class: 'studio-login' }, h('h1', {}, 'Website Studio is temporarily unavailable'), h('p', {}, 'Please reopen Studio to check your connection. Existing website data has not been changed.'), button('Reopen Website Studio', () => location.reload(), { class: 'primary-link' })));
+      return;
+    }
     // A generic URL must not silently fall back to whichever demo cookie exists.
     if (!loginWorkspace) {
       login();
