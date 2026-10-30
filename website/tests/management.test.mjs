@@ -87,11 +87,13 @@ test('concurrent owner edits conflict and uncertain retries cannot apply an adju
   const h = await fixture(), s = await h.snapshot();
   const p = { ...s.published.products[0], archived: false, soldOut: false, inventoryMode: 'physical' };
   const input = { revision: s.revision, ledgerVersion: s.ledgerVersion, operationId: crypto.randomUUID(), product: p, available: 4 };
-  const results = await Promise.all([h.call(h.owner, '/api/manage/product', input), h.call(h.owner, '/api/manage/product', { ...input, operationId: crypto.randomUUID(), available: 5 })]);
+  const inputs = [input, { ...input, operationId: crypto.randomUUID(), available: 5 }];
+  const results = await Promise.all(inputs.map(value => h.call(h.owner, '/api/manage/product', value)));
   assert.deepEqual(results.map(r => r.status).sort(), [200, 409]);
-  const retry = await h.call(h.owner, '/api/manage/product', input); assert.equal(retry.status, 200); assert.equal(retry.data.duplicate, true);
-  assert.equal((await h.call(h.owner, '/api/manage/product', { ...input, available: 9 })).status, 409);
-  assert.equal((await h.snapshot()).management.products[0].available, 4);
+  const winner = inputs[results.findIndex(r => r.status === 200)];
+  const retry = await h.call(h.owner, '/api/manage/product', winner); assert.equal(retry.status, 200); assert.equal(retry.data.duplicate, true);
+  assert.equal((await h.call(h.owner, '/api/manage/product', { ...winner, available: 9 })).status, 409);
+  assert.equal((await h.snapshot()).management.products[0].available, winner.available);
 });
 test('abandoning an unconfirmed operation fences late arrival without undoing a committed save', async () => {
   const h = await fixture(), operationId = crypto.randomUUID(), s = await h.snapshot();
