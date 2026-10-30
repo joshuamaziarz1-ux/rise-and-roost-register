@@ -5,6 +5,7 @@ import { trackingPath } from "../public/orders.mjs";
 import { normalizeDeviceCode } from "../public/access.mjs";
 import { seed, ZONE, localInstant, safeLink } from "../public/model.mjs";
 import { managementApi, holdsInventory, productionLimit, structure } from './management.mjs';
+import { isPreviewGrant } from './preview-access.mjs';
 
 const encoder = new TextEncoder();
 const token = () =>
@@ -397,7 +398,7 @@ export function inspectImage(bytes, mime) {
     );
   return true;
 }
-export async function api(request, db, now = Date.now(), { publicWorkspaceId = "", emailEnabled = false, customerExperienceEnabled = false, reviewBuild = false, studioManagementEnabled = false } = {}) {
+export async function api(request, db, now = Date.now(), { publicWorkspaceId = "", emailEnabled = false, customerExperienceEnabled = false, reviewBuild = false, studioManagementEnabled = false, previewGrant } = {}) {
   const url = new URL(request.url),
     path = url.pathname;
   const first = (sql, ...args) =>
@@ -411,6 +412,8 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       .bind(...args)
       .run();
   try {
+    if (previewGrant && (!isPreviewGrant(previewGrant) || previewGrant.expiresAt <= now || previewGrant.workspaceId !== publicWorkspaceId || !reviewBuild || !studioManagementEnabled)) fail('The private testing restriction could not be verified.', 403);
+    if (previewGrant && (path === '/api/workspaces' || path === '/api/login' || path === '/api/logout' || path.startsWith('/api/device-'))) fail('This private preview uses its existing website and network restriction. Workspace creation and sign-in changes are disabled.', 403);
     if (
       request.method !== "GET" &&
       request.headers.get("Origin") !== url.origin
@@ -473,6 +476,13 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       return preserveLegacy(sessionCookies(id, raw));
     };
     const owner = async () => {
+      if (previewGrant) {
+        if (requestedOwnerId && requestedOwnerId !== publicWorkspaceId) fail('This test session can manage only the existing main preview website.', 403);
+        const row = await first('SELECT * FROM workspaces WHERE id=?', publicWorkspaceId);
+        if (!row) fail('The existing preview workspace is unavailable. No replacement was created.', 503);
+        authenticated = { expires: previewGrant.expiresAt, preview: true };
+        return row;
+      }
       const scoped = (request.headers.get("Cookie") || "").split(";").map((p) => p.trim()).filter((p) => /^rr_studio_[a-f0-9]{48}=/.test(p));
       const candidates = requestedOwnerId ? [cookieValue("rr_studio_" + requestedOwnerId), cookieValue("rr_studio")]
         : [cookieValue("rr_studio"), publicWorkspaceId ? cookieValue("rr_studio_" + publicWorkspaceId) : undefined, ...(scoped.length === 1 ? [scoped[0].split("=")[1]] : [])];
@@ -497,12 +507,14 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       owner: "Danielle · Demo Owner",
       customerExperienceEnabled,
       studioManagementEnabled,
+      previewDirectAccess: !!previewGrant,
+      previewAccessExpiresAt: previewGrant ? new Date(previewGrant.expiresAt).toISOString() : undefined,
       isReview: reviewBuild,
       sessionExpiresAt: authenticated ? new Date(authenticated.expires).toISOString() : undefined,
       isPrimary: row.id === publicWorkspaceId,
       publishedPath: row.id === publicWorkspaceId ? "/" : "/demo/" + row.id,
-      studioPath: "/studio?workspace=" + row.id,
-      mainStudioPath: publicWorkspaceId ? "/studio?workspace=" + publicWorkspaceId : "",
+      studioPath: previewGrant ? '/studio' : "/studio?workspace=" + row.id,
+      mainStudioPath: previewGrant ? '/studio' : publicWorkspaceId ? "/studio?workspace=" + publicWorkspaceId : "",
     });
     if (customerExperienceEnabled && path.startsWith("/api/roost/"))
       return await roostApi({ request, db, now, input, path, json, rateLimit });
@@ -513,7 +525,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
     }
     if (studioManagementEnabled && path.startsWith('/api/manage/')) {
       const row = await owner();
-      const actor = { id: 'workspace-session:' + authenticated.hash.slice(0, 16), name: 'Owner · workspace access', authentication: 'workspace_access' };
+      const actor = previewGrant ? previewGrant.actor : { id: 'workspace-session:' + authenticated.hash.slice(0, 16), name: 'Owner · workspace access', authentication: 'workspace_access' };
       return await managementApi({ request, db, now, row, actor, input, path, json, validateDocument, ownerResult });
     }
     if (path === "/api/workspaces" && request.method === "POST") {
@@ -576,7 +588,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       return withCookies(json({ ok: true }), clear);
     }
     if (path === "/api/studio-info" && request.method === "GET")
-      return json({ mainWorkspaceId: publicWorkspaceId, mainStudioPath: publicWorkspaceId ? "/studio?workspace=" + publicWorkspaceId : "", sessionHours: 12, studioManagementEnabled });
+      return json({ mainWorkspaceId: publicWorkspaceId, mainStudioPath: previewGrant ? '/studio' : publicWorkspaceId ? "/studio?workspace=" + publicWorkspaceId : "", sessionHours: 12, studioManagementEnabled, previewDirectAccess: !!previewGrant });
     if (path === "/api/device-start" && request.method === "POST") {
       await rateLimit("device-start", 15);
       const id = typeof input.workspaceId === "string" ? input.workspaceId : "";
@@ -637,7 +649,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         studioManagementEnabled,
         id,
         isPrimary: id === publicWorkspaceId,
-        studioPath: "/studio?workspace=" + id,
+        studioPath: previewGrant ? '/studio' : "/studio?workspace=" + id,
       });
     }
     if (path.startsWith("/api/preview/") && request.method === "GET") {
@@ -675,7 +687,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
     if (path === "/api/studio" && request.method === "GET") {
       const row = await owner();
       const response = json(ownerResult(row));
-      if (cookieValue("rr_studio_" + row.id) !== authenticated.raw)
+      if (!previewGrant && cookieValue("rr_studio_" + row.id) !== authenticated.raw)
         response.headers.append("Set-Cookie", cookie("rr_studio_" + row.id, authenticated.raw, Math.max(1, Math.floor((authenticated.expires - now) / 1000))));
       return response;
     }

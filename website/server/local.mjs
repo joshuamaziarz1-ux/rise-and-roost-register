@@ -5,6 +5,7 @@ import { resolve, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import worker from "./worker.mjs";
 import { sqliteD1 } from "./sqlite-adapter.mjs";
+import { PREVIEW_HOST, PREVIEW_DATABASE } from './preview-access.mjs';
 const root = fileURLToPath(new URL("../", import.meta.url));
 await mkdir(resolve(root, ".data"), { recursive: true });
 const sqlite = new DatabaseSync(
@@ -54,6 +55,15 @@ const env = {
     },
   },
 };
+// Test-only infrastructure simulation, never imported by the deployed Worker.
+// The local server binds 127.0.0.1 and requires an explicitly isolated test DB.
+const networkTest = process.env.RR_PREVIEW_NETWORK_TEST === 'true' && !!process.env.RR_TEST_DB;
+if (networkTest) Object.assign(env, {
+  PREVIEW_ACCESS_MODE: 'trusted-network', PREVIEW_DATABASE_ID: PREVIEW_DATABASE,
+  ORDER_EMAIL_ENABLED: 'false',
+  PREVIEW_ACCESS_UNTIL: new Date(Date.now() + 86400000).toISOString(),
+  PREVIEW_TESTER_IPS: JSON.stringify(['203.0.113.10', '2001:db8::1']),
+});
 const server = createServer(async (req, res) => {
   try {
     const chunks = [];
@@ -67,20 +77,26 @@ const server = createServer(async (req, res) => {
       }
       chunks.push(chunk);
     }
-    const url = "http://" + req.headers.host + req.url;
-    const response = await worker.fetch(
-      new Request(url, {
+    const origin = 'http://' + req.headers.host;
+    const url = (networkTest ? 'https://' + PREVIEW_HOST : origin) + req.url;
+    const headers = new Headers(req.headers);
+    if (networkTest) {
+      if (headers.get('Origin') === origin) headers.set('Origin', 'https://' + PREVIEW_HOST);
+      headers.set('CF-Connecting-IP', headers.get('X-RR-Test-Network') || '203.0.113.10');
+      headers.delete('X-RR-Test-Network');
+    }
+    const request = new Request(url, {
         method: req.method,
-        headers: req.headers,
+        headers,
         body: ["GET", "HEAD"].includes(req.method)
           ? undefined
           : Buffer.concat(chunks),
-      }),
-      env,
-    );
-    const headers = Object.fromEntries(response.headers);
-    if (response.headers.getSetCookie().length) headers["set-cookie"] = response.headers.getSetCookie();
-    res.writeHead(response.status, headers);
+      });
+    if (networkTest) Object.defineProperty(request, 'cf', { value: { colo: 'TEST' } });
+    const response = await worker.fetch(request, env);
+    const responseHeaders = Object.fromEntries(response.headers);
+    if (response.headers.getSetCookie().length) responseHeaders["set-cookie"] = response.headers.getSetCookie();
+    res.writeHead(response.status, responseHeaders);
     res.end(Buffer.from(await response.arrayBuffer()));
   } catch {
     res.writeHead(500);

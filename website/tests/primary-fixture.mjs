@@ -6,10 +6,11 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { randomBytes, createHash } from 'node:crypto';
 import { seed } from '../public/model.mjs';
-export async function primaryFixture({ experience = false, management = false, port = 4182, hostname = '127.0.0.1' } = {}) {
+import { PREVIEW_WORKSPACE } from '../server/preview-access.mjs';
+export async function primaryFixture({ experience = false, management = false, network = false, port = 4182, hostname = '127.0.0.1' } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'rr-sync-'));
   const dbFile = join(directory, 'test.sqlite');
-  const id = randomBytes(24).toString('hex');
+  const id = network ? PREVIEW_WORKSPACE : randomBytes(24).toString('hex');
   const key = randomBytes(24).toString('hex');
   const document = seed();
   const sqlite = new DatabaseSync(dbFile);
@@ -22,7 +23,7 @@ export async function primaryFixture({ experience = false, management = false, p
   sqlite.close();
   const child = spawn(process.execPath, ['server/local.mjs'], {
     cwd: fileURLToPath(new URL('../', import.meta.url)),
-    env: { ...process.env, RR_TEST_DB: dbFile, RR_PUBLIC_WORKSPACE_ID: id, RR_CUSTOMER_EXPERIENCE: String(experience), RR_REVIEW_BUILD: String(experience), RR_STUDIO_MANAGEMENT: String(management), PORT: String(port) },
+    env: { ...process.env, RR_TEST_DB: dbFile, RR_PUBLIC_WORKSPACE_ID: id, RR_CUSTOMER_EXPERIENCE: String(experience), RR_REVIEW_BUILD: String(experience), RR_STUDIO_MANAGEMENT: String(management), RR_PREVIEW_NETWORK_TEST: String(network), PORT: String(port) },
     stdio: 'ignore',
   });
   const close = async () => {

@@ -6,7 +6,7 @@ import { paymentLabels, fulfillmentLabels, notificationLabels, eventLabels } fro
 export async function start(root) {
   const requestedWorkspace = new URLSearchParams(location.search).get("workspace");
   let loginWorkspace = /^[a-f0-9]{48}$/.test(requestedWorkspace || "") ? requestedWorkspace : "";
-  let mainWorkspace = "", pairingTimer, accessKeyWorkspace = "", sessionExpired = false, managementEnabled = false;
+  let mainWorkspace = "", pairingTimer, accessKeyWorkspace = "", sessionExpired = false, managementEnabled = false, previewDirectAccess = false;
   const request = async (path, data) => {
     const target = state?.id || loginWorkspace || undefined;
     try {
@@ -139,6 +139,9 @@ export async function start(root) {
         }),
       { type: "number", min, max },
     );
+  function previewUnavailable() {
+    root.replaceChildren(h('main', { class: 'studio-login' }, h('h1', {}, 'Private testing access required'), h('p', {}, 'Connect to an approved private testing network, then reopen Website Studio. Existing website data has not been changed.'), button('Try again', () => location.reload(), { class: 'primary-link' })));
+  }
   function adopt(result) {
     clearInterval(pairingTimer);
     sessionExpired = false;
@@ -207,6 +210,7 @@ export async function start(root) {
     );
   }
   function login() {
+    if (previewDirectAccess) { previewUnavailable(); return; }
     clearInterval(pairingTimer);
     let id = loginWorkspace || mainWorkspace, key = "";
     const feedback = h("p", { class: "small-note", role: "status", id: "workspace-signin-feedback" });
@@ -1559,9 +1563,12 @@ export async function start(root) {
   try {
     const info = await apiRequest("/api/studio-info");
     managementEnabled = !!info.studioManagementEnabled;
+    previewDirectAccess = !!info.previewDirectAccess;
     mainWorkspace = info.mainWorkspaceId || "";
-    if (!loginWorkspace) loginWorkspace = mainWorkspace;
-  } catch {
+    if (previewDirectAccess) { loginWorkspace = mainWorkspace; history.replaceState({}, '', '/studio'); }
+    else if (!loginWorkspace) loginWorkspace = mainWorkspace;
+  } catch (e) {
+    if (e.status === 403 || e.status === 503) { previewUnavailable(); return; }
     // A generic URL must not silently fall back to whichever demo cookie exists.
     if (!loginWorkspace) {
       login();

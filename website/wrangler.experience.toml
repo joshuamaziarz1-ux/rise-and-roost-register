@@ -22,3 +22,6 @@ CUSTOMER_EXPERIENCE_ENABLED = "true"
 REVIEW_BUILD = "true"
 ORDER_EMAIL_ENABLED = "false"
 STUDIO_MANAGEMENT_ENABLED = "true"
+# Direct testing remains OFF until approved private-network IPs are supplied,
+# stored as the PREVIEW_TESTER_IPS Worker secret, and independently verified.
+# See docs/studio-management/PRIVATE-TESTING.md. Never use a wildcard/range.

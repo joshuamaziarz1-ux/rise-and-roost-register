@@ -97,7 +97,7 @@ export async function start(root, initial, newAccessKey) {
         }
       }
       if (wasReauth || rerender && !editing && !root.querySelector('.ms-main input[type=search]:focus')) render(); else chrome();
-    } catch (e) { connected = false; error = e.message; if (e.status === 401) { reauth = true; render(); } else chrome(); }
+    } catch (e) { connected = false; error = e.message; if (e.status === 401 || initial.previewDirectAccess && [403, 503].includes(e.status)) { reauth = true; render(); } else chrome(); }
     finally { checking = false; }
   }
   function chrome() {
@@ -118,7 +118,8 @@ export async function start(root, initial, newAccessKey) {
       pending = null; sessionStorage.removeItem(pendingKey); if (!keepForm) { if (['product', 'calendar', 'content'].includes(editing?.type)) sessionStorage.removeItem(storageKey); editing = null; }
       connected = true; notify('Saved.');
     } catch (e) {
-      error = e.message; if (e.status && e.status < 500) { pending = null; sessionStorage.removeItem(pendingKey); }
+      error = e.message; if (e.status && e.status < 500 && !(initial.previewDirectAccess && e.status === 403)) { pending = null; sessionStorage.removeItem(pendingKey); }
+      if (initial.previewDirectAccess && [403, 503].includes(e.status)) reauth = true;
       if (!e.status || e.status >= 500) error += ' The result is unconfirmed. Check connection or retry this same action; it will not be applied twice.';
       connected = !!e.status && e.status < 500;
     } finally { busy = false; render(); }
@@ -325,7 +326,7 @@ export async function start(root, initial, newAccessKey) {
     let code = '';
     const preferences = clone(data.management.notifications.preferences);
     return h('div', {}, h('h1', {}, 'Settings'),
-      panel('Owner access', h('p', {}, 'Current sign-in: secure workspace access. Individual Descope owner accounts are not connected yet. The existing authentication has not been replaced.'), h('p', {}, 'Both owner accounts must be tested and approved before activation. Do not share private access keys in chat.'),
+      data.previewDirectAccess ? panel('Testing access', h('p', {}, 'This private preview opens directly on approved testing networks. No Studio sign-in is needed.'), h('p', {}, 'Temporary access ends ' + stamp(data.previewAccessExpiresAt) + '. Individual owner authentication must be enabled before launch.')) : panel('Owner access', h('p', {}, 'Current sign-in: secure workspace access. Individual Descope owner accounts are not connected yet. The existing authentication has not been replaced.'), h('p', {}, 'Both owner accounts must be tested and approved before activation. Do not share private access keys in chat.'),
         h('a', { href: data.studioPath, class: 'ms-secondary' }, 'Studio link for this saved website'),
         field('Connection code from your other device', code, v => code = v, { maxlength: 20, autocomplete: 'off' }), button('Review device connection', async () => {
           try { const r = await request('/api/device-review', { code }); if (confirm('Approve the browser showing this exact code for this saved website? Only approve a request you started.')) { await request('/api/device-approve', { code, requestId: r.requestId, confirmed: true }); notify('Device request approved. Finish connecting on that device.'); } }
@@ -339,7 +340,7 @@ export async function start(root, initial, newAccessKey) {
         button('Save alert preferences', () => send('notifications', { preferences }), { class: 'ms-primary' })),
       panel('Install on iPhone', h('p', {}, 'In Safari, open Share → Add to Home Screen. Private business data is fetched securely while online and is not stored in an offline service-worker cache.')),
       panel('Audit history', data.management.audit.slice(0, 60).map(a => h('div', { class: 'ms-audit' }, h('strong', {}, a.action || a.kind), h('span', {}, stamp(a.at)), h('small', {}, a.actor?.name || 'Owner')))),
-      button('Sign out', async () => { if (editing && !confirm('Sign out and discard the unsaved form?')) return; try { await request('/api/logout', {}); disposed = true; sessionStorage.removeItem(storageKey); location.reload(); } catch (e) { error = e.message; chrome(); } }, { class: 'ms-secondary' }));
+      !data.previewDirectAccess ? button('Sign out', async () => { if (editing && !confirm('Sign out and discard the unsaved form?')) return; try { await request('/api/logout', {}); disposed = true; sessionStorage.removeItem(storageKey); location.reload(); } catch (e) { error = e.message; chrome(); } }, { class: 'ms-secondary' }) : null);
   }
   function editForm() {
     const e = editing, v = e.values;
@@ -394,13 +395,13 @@ export async function start(root, initial, newAccessKey) {
     ], () => send('content', { revision: e.revision, document: doc }), 'Save content draft');
   }
   function credentials() {
-    if (!newAccessKey) return null;
+    if (!newAccessKey || initial.previewDirectAccess) return null;
     return panel('Save this workspace access privately', h('p', {}, 'These details belong only to this private test workspace. Store them in your password manager; they are not recovery for the original beta.'),
       h('input', { value: workspace, readonly: true, 'aria-label': 'Workspace ID' }), h('input', { type: 'password', value: newAccessKey, readonly: true, 'aria-label': 'Private access key', autocomplete: 'off' }),
       button('I saved these details', () => { newAccessKey = ''; render(); }, { class: 'ms-primary' }));
   }
   function render() {
-    if (reauth) { root.replaceChildren(h('main', { class: 'ms-loading' }, h('h1', {}, 'Sign-in required'), h('p', {}, 'Your unsaved form is kept in this tab. Sign in to this exact website in a new tab, then check the connection.'), h('a', { href: initial.studioPath, target: '_blank', rel: 'noopener' }, 'Sign in to this website'), button('Check connection', () => refresh()))); return; }
+    if (reauth) { root.replaceChildren(h('main', { class: 'ms-loading' }, h('h1', {}, initial.previewDirectAccess ? 'Private testing access required' : 'Sign-in required'), h('p', {}, initial.previewDirectAccess ? 'Reconnect to your approved private testing network. Your unsaved form is kept in this tab.' : 'Your unsaved form is kept in this tab. Sign in to this exact website in a new tab, then check the connection.'), !initial.previewDirectAccess ? h('a', { href: initial.studioPath, target: '_blank', rel: 'noopener' }, 'Sign in to this website') : null, button('Check connection', () => refresh()))); return; }
     if (!data.management) { root.replaceChildren(h('main', { class: 'ms-loading' }, 'Opening Rise & Roost Website Studio…')); return; }
     const page = editing ? editForm() : view === 'Home' ? home() : view === 'Orders' ? orders() : view === 'Products' ? products() : view === 'Calendar' ? calendar() : view === 'The Roost' ? members() : view === 'Website Content' ? content() : view === 'Customer Comments' ? comments() : view === 'Sales Reports' ? reports() : view === 'Settings' ? settings() : h('div', {}, h('h1', {}, 'More'), secondary.map(label => menu(label, label)));
     root.replaceChildren(h('div', { class: 'management' },

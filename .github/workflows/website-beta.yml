@@ -47,6 +47,12 @@ jobs:
           name: studio-management-screenshots
           path: website/qa-results/management/*.png
           retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: github.head_ref == 'codex/studio-management'
+        with:
+          name: direct-studio-preview-screenshots
+          path: website/qa-results/network-preview/*.png
+          retention-days: 7
   studio-preview:
     if: github.head_ref == 'codex/studio-management'
     runs-on: ubuntu-24.04
@@ -85,6 +91,28 @@ jobs:
           name: hosted-studio-management-screenshots
           path: website/qa-results/management/*.png
           retention-days: 7
+  private-preview-denial:
+    if: github.head_ref == 'codex/studio-management'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - id: opt-in
+        run: |
+          subject=$(git -c safe.directory="$GITHUB_WORKSPACE" log -1 --format=%s)
+          case "$subject" in
+            *'[verify-network-preview]'*) echo 'enabled=true' >> "$GITHUB_OUTPUT" ;;
+          esac
+      - uses: actions/setup-node@v5
+        if: steps.opt-in.outputs.enabled == 'true'
+        with:
+          node-version: '24'
+      - run: node website/tests/preview-network-hosted.mjs
+        if: steps.opt-in.outputs.enabled == 'true'
+        env:
+          RR_NETWORK_PREVIEW_URL: https://rise-roost-experience-preview.joshua-maziarz1.workers.dev
   experience-preview:
     if: github.head_ref == 'codex/customer-experience-roost'
     runs-on: ubuntu-24.04
