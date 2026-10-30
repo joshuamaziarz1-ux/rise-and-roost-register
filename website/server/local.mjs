@@ -71,7 +71,10 @@ if (accessTest) {
   globalThis.fetch = (url, init) => String(url) === env.CF_ACCESS_TEAM_DOMAIN + '/cdn-cgi/access/certs'
     ? Promise.resolve(new Response(process.env.RR_TEST_ACCESS_JWKS, { headers: { 'Content-Type': 'application/json' } })) : originalFetch(url, init);
 }
-const server = createServer(async (req, res) => {
+// Playwright keeps an API connection idle while the independent browser edits
+// and publishes. Node 24's default six-second close can race the next GET.
+// Keep local development connections alive through a complete UI journey.
+const server = createServer({ keepAliveTimeout: 60000 }, async (req, res) => {
   try {
     const chunks = [];
     let size = 0;

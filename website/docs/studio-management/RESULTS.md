@@ -1,5 +1,19 @@
 # Studio preview verification — October 30, 2026
 
+## Cloudflare Access testing follow-up
+
+The temporary direct-dashboard implementation is committed but **not activated or deployed**. Both approved tester addresses are stored privately outside Git. Cloudflare's account token verifies active, but Access organization operations return HTTP 403/code 10000 and application discovery reports Access not enabled. The exact required permissions and gated rollout are documented in [PRIVATE-TESTING.md](PRIVATE-TESTING.md). No IP restrictions, successful Access resource creation, new hosted workspace, hosted business write or authentication reset occurred.
+
+- [Clean CI for the Access implementation](https://github.com/joshuamaziarz1-ux/rise-and-roost-register/actions/runs/41116839133), source `bc7b0fd`: **93 backend tests and 105 browser cases pass**, including 15 Access cases across all five device profiles. Both Worker dry runs pass. Production dependency audit: zero known vulnerabilities.
+- A separate local full run passed 104 cases and hit one Node HTTP connection reset in a publishing GET, exactly at its six-second idle-close boundary. The local-only server now keeps connections alive for 60 seconds; the publishing journey passes **15/15 repeated cases** (three runs per profile). No assertions were weakened or automatic retries added. CI runs again for that local transport adjustment; see the PR for its current status.
+- Seven offline operator-setup checks pass: default plan has no network calls, only the exact preview app can be created, an existing exact app is read-only, wrong D1/non-review configurations and broad policies are refused, and unrelated application login methods are preserved.
+- Read-only comparison confirms all 125 original beta workspace rows, its settings/deployment and the saved preview baseline remain exactly unchanged. The actual preview D1 binding and deployed management version are unchanged.
+- Actual Cloudflare OTP acceptance, remembered physical-device sessions and hosted denial probes remain pending real Access activation. Local signed-session tests do not establish email delivery or physical-device authentication.
+
+The management baseline below is historical. **Do not rerun its hosted mutation marker for this rollout**: it creates synthetic hosted workspaces. Only the denial-only `[verify-access-preview]` marker is permitted after gate activation. No hosted workspace is to be created, reset, merged or deleted.
+
+## Historical management baseline
+
 ## Local results
 
 - **83/83 backend tests pass:** 17 management checks plus the existing 66 security/customer/order tests.
