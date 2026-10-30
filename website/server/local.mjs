@@ -57,13 +57,20 @@ const env = {
 };
 // Test-only infrastructure simulation, never imported by the deployed Worker.
 // The local server binds 127.0.0.1 and requires an explicitly isolated test DB.
-const networkTest = process.env.RR_PREVIEW_NETWORK_TEST === 'true' && !!process.env.RR_TEST_DB;
-if (networkTest) Object.assign(env, {
-  PREVIEW_ACCESS_MODE: 'trusted-network', PREVIEW_DATABASE_ID: PREVIEW_DATABASE,
+const accessTest = process.env.RR_PREVIEW_ACCESS_TEST === 'true' && !!process.env.RR_TEST_DB;
+if (accessTest) Object.assign(env, {
+  PREVIEW_ACCESS_MODE: 'cloudflare-access', PREVIEW_DATABASE_ID: PREVIEW_DATABASE,
   ORDER_EMAIL_ENABLED: 'false',
   PREVIEW_ACCESS_UNTIL: new Date(Date.now() + 86400000).toISOString(),
-  PREVIEW_TESTER_IPS: JSON.stringify(['203.0.113.10', '2001:db8::1']),
+  PREVIEW_TESTER_EMAILS: JSON.stringify(['owner-a@example.test', 'owner-b@example.test']),
+  CF_ACCESS_TEAM_DOMAIN: process.env.RR_TEST_ACCESS_TEAM,
+  CF_ACCESS_AUD: process.env.RR_TEST_ACCESS_AUD,
 });
+if (accessTest) {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (url, init) => String(url) === env.CF_ACCESS_TEAM_DOMAIN + '/cdn-cgi/access/certs'
+    ? Promise.resolve(new Response(process.env.RR_TEST_ACCESS_JWKS, { headers: { 'Content-Type': 'application/json' } })) : originalFetch(url, init);
+}
 const server = createServer(async (req, res) => {
   try {
     const chunks = [];
@@ -78,12 +85,16 @@ const server = createServer(async (req, res) => {
       chunks.push(chunk);
     }
     const origin = 'http://' + req.headers.host;
-    const url = (networkTest ? 'https://' + PREVIEW_HOST : origin) + req.url;
+    const url = (accessTest ? 'https://' + PREVIEW_HOST : origin) + req.url;
     const headers = new Headers(req.headers);
-    if (networkTest) {
+    if (accessTest) {
       if (headers.get('Origin') === origin) headers.set('Origin', 'https://' + PREVIEW_HOST);
-      headers.set('CF-Connecting-IP', headers.get('X-RR-Test-Network') || '203.0.113.10');
-      headers.delete('X-RR-Test-Network');
+      // Simulate the Access edge passing its signed authorization cookie as a
+      // JWT header. The Worker still performs real signature/claim validation.
+      if (!headers.has('Cf-Access-Jwt-Assertion')) {
+        const jwt = (headers.get('Cookie') || '').split(';').map(s => s.trim()).find(s => s.startsWith('CF_Authorization='))?.slice('CF_Authorization='.length);
+        if (jwt) headers.set('Cf-Access-Jwt-Assertion', jwt);
+      }
     }
     const request = new Request(url, {
         method: req.method,
@@ -92,7 +103,6 @@ const server = createServer(async (req, res) => {
           ? undefined
           : Buffer.concat(chunks),
       });
-    if (networkTest) Object.defineProperty(request, 'cf', { value: { colo: 'TEST' } });
     const response = await worker.fetch(request, env);
     const responseHeaders = Object.fromEntries(response.headers);
     if (response.headers.getSetCookie().length) responseHeaders["set-cookie"] = response.headers.getSetCookie();

@@ -140,7 +140,7 @@ export async function start(root) {
       { type: "number", min, max },
     );
   function previewUnavailable() {
-    root.replaceChildren(h('main', { class: 'studio-login' }, h('h1', {}, 'Private testing access required'), h('p', {}, 'Connect to an approved private testing network, then reopen Website Studio. Existing website data has not been changed.'), button('Try again', () => location.reload(), { class: 'primary-link' })));
+    root.replaceChildren(h('main', { class: 'studio-login' }, h('h1', {}, 'Testing access needs verification'), h('p', {}, 'Reopen Website Studio to verify your Cloudflare Access session. Existing website data has not been changed.'), button('Reopen Website Studio', () => location.reload(), { class: 'primary-link' })));
   }
   function adopt(result) {
     clearInterval(pairingTimer);
@@ -1568,7 +1568,11 @@ export async function start(root) {
     if (previewDirectAccess) { loginWorkspace = mainWorkspace; history.replaceState({}, '', '/studio'); }
     else if (!loginWorkspace) loginWorkspace = mainWorkspace;
   } catch (e) {
-    if (e.status === 403 || e.status === 503) { previewUnavailable(); return; }
+    if (e.previewAccessRequired) { previewUnavailable(); return; }
+    if (!e.status) {
+      root.replaceChildren(h('main', { class: 'studio-login' }, h('h1', {}, 'Website Studio is temporarily unavailable'), h('p', {}, 'Please reopen Studio to check your connection. Existing website data has not been changed.'), button('Reopen Website Studio', () => location.reload(), { class: 'primary-link' })));
+      return;
+    }
     // A generic URL must not silently fall back to whichever demo cookie exists.
     if (!loginWorkspace) {
       login();

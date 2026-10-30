@@ -413,7 +413,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       .run();
   try {
     if (previewGrant && (!isPreviewGrant(previewGrant) || previewGrant.expiresAt <= now || previewGrant.workspaceId !== publicWorkspaceId || !reviewBuild || !studioManagementEnabled)) fail('The private testing restriction could not be verified.', 403);
-    if (previewGrant && (path === '/api/workspaces' || path === '/api/login' || path === '/api/logout' || path.startsWith('/api/device-'))) fail('This private preview uses its existing website and network restriction. Workspace creation and sign-in changes are disabled.', 403);
+    if (previewGrant && (path === '/api/workspaces' || path === '/api/login' || path === '/api/logout' || path.startsWith('/api/device-'))) fail('This private preview uses its existing website and Cloudflare Access. Workspace creation and sign-in changes are disabled.', 403);
     if (
       request.method !== "GET" &&
       request.headers.get("Origin") !== url.origin
@@ -509,6 +509,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       studioManagementEnabled,
       previewDirectAccess: !!previewGrant,
       previewAccessExpiresAt: previewGrant ? new Date(previewGrant.expiresAt).toISOString() : undefined,
+      previewTesterEmail: previewGrant?.actor.name,
       isReview: reviewBuild,
       sessionExpiresAt: authenticated ? new Date(authenticated.expires).toISOString() : undefined,
       isPrimary: row.id === publicWorkspaceId,

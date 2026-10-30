@@ -51,7 +51,7 @@ jobs:
         if: github.head_ref == 'codex/studio-management'
         with:
           name: direct-studio-preview-screenshots
-          path: website/qa-results/network-preview/*.png
+          path: website/qa-results/access-preview/*.png
           retention-days: 7
   studio-preview:
     if: github.head_ref == 'codex/studio-management'
@@ -103,16 +103,16 @@ jobs:
         run: |
           subject=$(git -c safe.directory="$GITHUB_WORKSPACE" log -1 --format=%s)
           case "$subject" in
-            *'[verify-network-preview]'*) echo 'enabled=true' >> "$GITHUB_OUTPUT" ;;
+            *'[verify-access-preview]'*) echo 'enabled=true' >> "$GITHUB_OUTPUT" ;;
           esac
       - uses: actions/setup-node@v5
         if: steps.opt-in.outputs.enabled == 'true'
         with:
           node-version: '24'
-      - run: node website/tests/preview-network-hosted.mjs
+      - run: node website/tests/preview-access-hosted.mjs
         if: steps.opt-in.outputs.enabled == 'true'
         env:
-          RR_NETWORK_PREVIEW_URL: https://rise-roost-experience-preview.joshua-maziarz1.workers.dev
+          RR_ACCESS_PREVIEW_URL: https://rise-roost-experience-preview.joshua-maziarz1.workers.dev
   experience-preview:
     if: github.head_ref == 'codex/customer-experience-roost'
     runs-on: ubuntu-24.04
