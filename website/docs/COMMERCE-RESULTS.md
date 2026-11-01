@@ -18,17 +18,18 @@ This update continues the existing approved website and Studio from draft PR #10
 
 | Check | Result |
 | --- | --- |
-| Backend/security/commerce | 117 passed, zero failures/skips/cancellations |
+| Backend/security/commerce | 120 passed, zero failures/skips/cancellations |
 | Full browser regression sweep | 120 passed: desktop Chromium, desktop WebKit, iPhone WebKit, Android Chromium and tablet Chromium |
-| Final commerce journeys | 2 passed (desktop Chromium and iPhone WebKit); three independent sessions cover intercepted payment destinations, verified sales, sequential fulfillment, lost message confirmation/retry, replies and extensions |
+| Final commerce journeys | 4 passed (desktop Chromium and iPhone WebKit); three independent sessions cover intercepted payment destinations, verified sales, sequential fulfillment, message recovery through reload, blocked session storage, malformed/mismatched success replies, replies and extensions |
+| Follow-up customer regression | 12 passed across desktop Chromium, desktop WebKit and iPhone WebKit: guest checkout, membership, comments and private order tracking |
 | Actual local Cloudflare workerd/D1 | Passed PIN setup/unlock/device isolation, D1 checkout, private messaging, verification, fulfillment and extensions |
 | Worker bundles | Isolated preview and original-beta configurations passed dry-run compilation; neither dry run deploys |
 | Syntax/whitespace | All public/server modules parsed and git diff checks passed |
-| Backup/restore | All 14 preview application tables privately backed up and restored locally with every record matching; commerce business-backup restore retained messages/approvals/payment audit and rotated restored private tracking secrets |
+| Backup/restore | All 14 preview application tables and both explicit indexes privately backed up and restored locally with every record and schema matching; commerce business-backup restore retained messages/approvals/payment audit and rotated restored private tracking secrets |
 | Preservation before deployment | All 70 pre-existing preview workspaces and other existing application rows preserved; one separate synthetic fixture workspace/order added. Original beta's six application tables, settings and deployment matched the baseline |
 | Hosted HTTP/browser acceptance | Blocked: the environment proxy returns CONNECT 403 for the isolated preview hostname, absent from its network allowlist |
 
-The full sweep covered the coordinated development build; final affected commerce journeys, backend and workerd checks were repeated after follow-up safeguards. Pending CI is not counted as passed. Earlier failing/interrupted development runs are excluded from passing totals.
+The full sweep covered the coordinated development build; final affected commerce journeys, backend and workerd checks were repeated after follow-up safeguards. The full 120-case local sweep was repeated during the unattended follow-up and passed again. Pending CI is not counted as passed. Earlier failing/interrupted development runs are excluded from passing totals.
 
 Provider pages were intercepted with fictional pages. No money was sent and no real provider account, recipient, commercial approval, native app handoff or automatic return was certified. Physical iPhone/MacBook Safari, weak cellular networks, photo-library/HEIC selection, passkey hardware/recovery and production restoration remain separate acceptance.
 
@@ -62,16 +63,24 @@ No merge to main, production deployment, original beta deployment/data change, R
 
 ## Deployment record
 
-- Deployment confirmed by Cloudflare at **November 01, 2026 at 02:09 PM EST**; CLI exited successfully.
-- Worker: `rise-roost-experience-preview`; source commit: `493a30f55f6cf366f948c222c509804c8c9202e6`.
-- Deployment: `b0b4f584-6a0e-4c09-8d0f-52b8f2101762`; version: `de33b1fd-816c-40fa-b75e-4a4d3d5dd9b4` at **100% traffic**.
+- Deployment confirmed by Cloudflare at **November 01, 2026 at 02:44 PM EST**; CLI exited successfully.
+- Worker: `rise-roost-experience-preview`; source commit: `f6771fdd3bb9dbcb2bca184b5349a0b749ad844e`.
+- Deployment: `836a2977-3254-437a-bd76-ab2d42c609f5`; version: `cb19c0f3-651c-48d8-a8d2-f9f729ed1399` at **100% traffic**.
 - D1: `21352b95-d7f6-406f-8527-4b8dbcebf1bf` (`rise-roost-experience-preview-db`). Every original binding is preserved, including the private PIN pepper; only the commerce flag and base URL were added. workers.dev remains enabled; alternate version preview URLs remain disabled.
 - Post-deployment comparison confirms all existing rows in all 14 preview application tables are unchanged. Only one synthetic workspace row was added. All 70 pre-existing workspace documents, products, photos, orders, membership and authentication rows match their baseline. All six original-beta application tables and its Worker settings/deployment are unchanged.
 - No SQL migration, schema write, production deployment, domain change or hosted owner-session creation occurred.
 - Hosted pages and the fictional tracking link remain **unverified over HTTPS from this environment**, because its proxy blocks the preview hostname. Deployment metadata and D1 preservation checks do not substitute for hosted browser acceptance.
-- Final date-only requests show “time not specified”; approved appointments display a single 12-hour time. The final desktop/iPhone journeys and 117 backend tests were repeated after this correction.
+- Final date-only requests show “time not specified”; approved appointments display a single 12-hour time. The final desktop/iPhone journeys and 120 backend tests were repeated after this correction.
 - A preview-only rollback can select the previously deployed version `0fcb8816-7fba-420c-a859-fed441482d20` on this exact Worker. Export a fresh private backup first. No database downgrade is needed for these additive fields; do not overwrite the current database with an older snapshot. Rollback was not performed.
 
 ## Review evidence
 
 [Verification metadata](commerce-update/verification.json) · [iPhone dashboard](commerce-update/dashboard-iphone.png) · [iPhone order actions](commerce-update/studio-iphone.png) · [iPhone private tracking](commerce-update/tracking-iphone.png). Screenshots use fictional local data, never the owner PIN or live customer records.
+
+## Unattended follow-up
+
+Pickup-help requests without an alternative date now raise the extension-request indicator; order questions remain separate. Unfinished and unconfirmed contact drafts survive reload in the same browser tab, using a capability-bound recovery key and the original request identifier. An explicit acknowledgment of the exact persisted message is required before clearing the draft. A generic HTTP 200 page, wrong-order response or response without the message acknowledgment cannot count as a successful send. If browser storage is denied, the form explains that the tab must remain open for recovery. Neither request type changes pickup times or approves an extension.
+
+Both normal deployment commands now explicitly select the isolated experience configuration; the default can no longer accidentally select the original beta. `test:all` includes the new commerce journeys. The new read-only operator backup tool supports a no-network plan, refuses database overrides and existing output paths, restores all application tables/indexes locally, and verifies every record and schema while detecting changed remote data. Actual backup/restoration and three scope/overwrite guard checks passed with zero remote writes. Background scheduled backups are still not configured.
+
+Time-only pickup suggestions are supported without inventing a date; backend and browser checks confirm that the original pickup and deadline remain unchanged until explicit owner approval. The final local suite passed **120 backend checks, 120 browser regression cases, four expanded commerce journeys and 12 targeted customer regression cases**. The latter targeted cases overlap the broad regression coverage and are not claimed as additional unique features.

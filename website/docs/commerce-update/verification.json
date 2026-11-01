@@ -1,15 +1,15 @@
 {
-  "verifiedAt": "2026-11-01T19:11:55.490223+00:00",
-  "sourceCommit": "493a30f55f6cf366f948c222c509804c8c9202e6",
+  "verifiedAt": "2026-11-01T19:49:44.809501+00:00",
+  "sourceCommit": "f6771fdd3bb9dbcb2bca184b5349a0b749ad844e",
   "worker": "rise-roost-experience-preview",
-  "deploymentId": "b0b4f584-6a0e-4c09-8d0f-52b8f2101762",
-  "versionId": "de33b1fd-816c-40fa-b75e-4a4d3d5dd9b4",
+  "deploymentId": "836a2977-3254-437a-bd76-ab2d42c609f5",
+  "versionId": "cb19c0f3-651c-48d8-a8d2-f9f729ed1399",
   "trafficPercentage": 100,
   "databaseId": "21352b95-d7f6-406f-8527-4b8dbcebf1bf",
   "bindingsPreserved": true,
   "alternatePreviewUrlsEnabled": false,
   "backend": {
-    "passed": 117,
+    "passed": 120,
     "failed": 0,
     "skipped": 0
   },
@@ -22,16 +22,28 @@
       "iPhone WebKit",
       "Android Chromium",
       "tablet Chromium"
-    ]
+    ],
+    "repeatedDuringUnattendedFollowup": true
   },
   "finalAffectedCommerceJourneys": {
-    "passed": 2,
+    "passed": 4,
     "failed": 0,
     "profiles": [
       "desktop Chromium",
       "iPhone WebKit"
     ],
-    "providerPages": "intercepted fictional destinations; no money sent"
+    "providerPages": "intercepted fictional destinations; no money sent",
+    "coverage": [
+      "private independent sessions",
+      "lost confirmation and reload",
+      "blocked draft storage",
+      "malformed success response",
+      "wrong-order response",
+      "missing mutation acknowledgment",
+      "pickup request without date",
+      "time-only request",
+      "owner-only approval"
+    ]
   },
   "actualLocalWorkerdD1CommerceSmoke": "passed",
   "previewWorkerBundle": "passed",
@@ -68,5 +80,34 @@
   "hostedHttpAcceptance": "blocked by environment proxy CONNECT 403; not claimed passed",
   "ci": "pending at report preparation; not counted as passed",
   "productionWrites": 0,
-  "dnsChanges": 0
+  "dnsChanges": 0,
+  "previousDeployment": {
+    "sourceCommit": "c31f94588cec65966b4223b5b33dac17ad2b58c9",
+    "deploymentId": "60a9dcc1-bc31-43ea-a145-cdf2481a2852",
+    "versionId": "5bf4f885-a044-41d3-b87a-fd68fb6cc230"
+  },
+  "followupCustomerRegression": {
+    "passed": 12,
+    "failed": 0,
+    "profiles": [
+      "desktop Chromium",
+      "desktop WebKit",
+      "iPhone WebKit"
+    ]
+  },
+  "operatorBackup": {
+    "database": "rise-roost-experience-preview-db",
+    "databaseId": "21352b95-d7f6-406f-8527-4b8dbcebf1bf",
+    "applicationTables": 14,
+    "explicitIndexes": 2,
+    "everyRestoredRecordMatches": true,
+    "restoredSchemaMatches": true,
+    "remoteRowsStableDuringRead": true,
+    "snapshotSha256": "50aa29e29bc1728e6cfd24288f27f1184a4d739a0e336428b1343b0d698ccac0",
+    "remoteWrites": 0
+  },
+  "backupGuardChecks": {
+    "passed": 3,
+    "remoteWrites": 0
+  }
 }
