@@ -1,4 +1,5 @@
-import { h, button, guard } from "./dom.mjs";
+import { providers, POLICY_TITLE, POLICY } from './commerce.mjs';
+import { h, button, guard, field } from "./dom.mjs";
 import { money, pickupLabel, orderByLabel, customerTime, customerTimestamp, seed } from "./model.mjs";
 import { paymentLabels, fulfillmentLabels, stages, notificationLabels, eventLabels } from "./orders.mjs";
 import { pickupLocation } from "./pickup-location.mjs";
@@ -9,36 +10,37 @@ export async function start(root) {
   const endpoint = match && `/api/order-tracking/${match[1]}/${match[2]}`;
   let order, busy = false, error = "", refreshed = "", refreshSequence = 0, appliedSequence = 0;
   let doc = seed();
+  let messaging = false, draft = { body: '', requestedDate: '', requestedTime: '', website: '' }, messageId = crypto.randomUUID();
   let experience = false;
   const robots = h("meta", { name: "robots", content: "noindex,nofollow,noarchive" });
   document.head.append(robots);
   document.head.append(h("link", { rel: "stylesheet", href: "/tracking.css" }));
-  async function call(report = false) {
-    if (!endpoint || !/^[a-f0-9]{48}$/.test(key || ""))
-      throw new Error("Open the complete private tracking link from your order confirmation, including the part after #. Contact the farm if you have lost it.");
-    const response = await fetch(endpoint + (report ? "/report" : ""), {
-      method: report ? "POST" : "GET",
-      cache: "no-store",
-      headers: { Authorization: "Bearer " + key, ...(report ? { "Content-Type": "application/json" } : {}) },
-      ...(report ? { body: "{}" } : {}),
-    });
-    const result = await response.json().catch(() => ({ error: "Your order status is temporarily unavailable. Please retry." }));
-    if (!response.ok) throw new Error(result.error || "Unable to refresh your order status.");
-    return result;
+  async function call(action = '', body) {
+    if (!endpoint || !/^[a-f0-9]{48}$/.test(key || '')) throw new Error('Open the complete private tracking link from your order confirmation, including the part after #.');
+    const response = await fetch(endpoint + action, { method: body ? 'POST' : 'GET', cache: 'no-store',
+      headers: { Authorization: 'Bearer ' + key, ...(body ? { 'Content-Type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
+    const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Unable to save. Please retry.'); return result;
   }
-  async function refresh(report = false) {
+  async function save(action, payload) {
+    if (busy) return false;
+    busy = true; error = ''; render();
+    try { order = await call(action,payload); return true; }
+    catch (e) { error = e.message + ' Your changes are not confirmed. Retry the same request.'; return false; }
+    finally { busy = false; render(); }
+  }
+  async function refresh() {
     const sequence = ++refreshSequence;
     const before = JSON.stringify(order), previousError = error;
     try {
-      const result = await call(report);
+      const result = await call();
       if (!order || result.version > order.version || (result.version === order.version && sequence >= appliedSequence)) {
         order = result;
         appliedSequence = sequence;
         error = "";
         refreshed = customerTime(Date.now(), true);
       }
-    } catch (e) { if (report || sequence >= appliedSequence) error = e.message; }
-    if (report || before !== JSON.stringify(order) || previousError !== error || !order) render();
+    } catch (e) { if (sequence >= appliedSequence) error = e.message; }
+    if (before !== JSON.stringify(order) || previousError !== error || !order) render();
     else {
       const checked = root.querySelector("#order-last-checked");
       if (checked) checked.textContent = "Last checked: " + refreshed + ". This page checks for changes every five seconds.";
@@ -47,11 +49,13 @@ export async function start(root) {
   const stamp = (at) => at ? customerTimestamp(at) : "Not yet recorded";
   const stageNote = (label, at) => {
     if (at) return stamp(at);
-    if (label === "Payment Reported" && order.paymentStatus === "verified") return "Not reported separately; payment was independently verified";
     if (label === "Preparing Your Order" && ["ready", "picked-up"].includes(order.status)) return "Preparation was not recorded";
     return order.status === "canceled" ? "Not recorded before cancellation" : "Not yet recorded";
   };
   function render() {
+    const focused = document.activeElement?.id;
+    const cursor = document.activeElement?.selectionStart;
+
     document.title = (order?.orderNumber || "Order tracking") + " · " + doc.business.name;
     const t = doc.theme;
     const site = h("div", { class: "site-root", style: {
@@ -71,30 +75,50 @@ export async function start(root) {
     const main = h("main", { id: "main-content", tabindex: "-1", class: "section-inner cart-page tracking-page" + (order?.paidReceipt ? " has-paid-receipt" : "") },
       h("span", { class: "eyebrow" }, "YOUR PRIVATE ORDER STATUS"),
       h("h1", { style: { fontSize: "clamp(1.25rem, 5vw, 2rem)" } }, order?.orderNumber || "Order tracking"),
-      h("p", { class: "small-note" }, "Keep this link private. It lets you view this order and report a payment; it cannot verify payment or change preparation status."),
+      h("p", { class: "small-note" }, "Keep this link private. It lets you view this order and contact Danielle. Payment is verified only by an owner."),
       error ? h("p", { role: "alert", class: "deadline" }, error) : null);
     if (!order) main.append(button("Retry loading order", () => refresh(), { class: "secondary-button" }));
     else {
       main.append(h("div", { class: "order-summary", "aria-live": "polite", "aria-label": "Current order status" },
-        h("h2", {}, fulfillmentLabels[order.status] || "Order Received"),
-        h("p", {}, paymentLabels[order.paymentStatus] || "Awaiting payment report"),
+        h("h2", {}, (order.status === "picked-up" ? "Historical order" : fulfillmentLabels[order.status]) || "Order Received"),
+        h("p", {}, paymentLabels[order.paymentStatus] || "Awaiting Payment Verification"),
         order.paymentCorrectedAt ? h('p', {}, 'An owner corrected a mistaken payment-verification record. Payment is awaiting independent verification; the previous receipt is no longer valid.') : null,
-        order.paymentStatus === "reported" ? h("p", {}, "Thank you — your payment has been reported. Danielle still needs to verify it independently. It has not been accepted or processed by this website.") : null,
-        order.paymentStatus === "verified" ? h("p", {}, "Danielle recorded independent payment verification. Your beta paid receipt is below. Payment verification does not mean preparation has started.") : null,
-        order.status === "canceled" ? h("p", {}, "This order was canceled. Contact the farm about any payment or refund; this website does not issue refunds.") : null,
-        order.paymentStatus === "not_collected" && order.status !== "canceled" ? button(busy ? "Reporting your payment…" : "I've Sent Payment", guard(async () => {
-          busy = true; render();
-          try { await refresh(true); }
-          finally { busy = false; render(); }
-        }), { class: "primary-link", disabled: busy }) : null,
-        h("p", { class: "small-note" }, (doc.business.paymentInstructions || "Use the payment arrangements agreed with the farm.") + " This button reports payment only; it does not charge a card or transfer money.")));
+        !order.paymentVerifiedAt ? h('p', {}, 'Danielle will check her payment account and confirm receipt. You do not need to report that you paid.') : h('p', {}, 'Danielle independently verified your payment.'),
+        order.status === 'canceled' ? h('p', {}, 'This order was canceled. Contact Danielle about any payment or refund.') : null));
+      if (!order.paymentVerifiedAt && order.status !== 'canceled' && !order.resolution) {
+        const destinations = order.paymentDestinations || {}, selected = order.selectedPaymentMethod;
+        main.append(h('section', { class: 'sub-card', 'aria-label': 'Payment options' }, h('h2', {}, 'Choose how to pay'), h('strong', {}, 'Amount due: ' + money(order.total)),
+          h('p', {}, 'Order reference: ' + order.orderNumber),
+          Object.entries(providers).map(([method,label]) => button(label, () => save('/payment-method', { method }), { class: 'secondary-button', disabled: busy || !destinations[method], 'aria-pressed': selected === method })),
+          selected && destinations[selected] ? h('a', { href: destinations[selected].url, target: '_blank', rel: 'noopener noreferrer', class: 'primary-link' }, 'Open ' + providers[selected]) : null,
+          h('p', {}, 'Your order is saved. Pay the exact amount shown. Include the order reference if your payment app offers a note. No amount or reference is filled automatically. Return to this tab after paying or canceling; opening a payment app never verifies payment.'),
+          !Object.keys(destinations).length ? h('p', {}, 'Business payment destinations are not configured yet. Contact Danielle below before paying. Do not send real money during preview testing.') : null));
+      }
+      main.append(button('Contact Danielle', () => { messaging = !messaging; render(); root.querySelector('#contact-message')?.focus(); }, { class: 'primary-link' }),
+        order.attention?.customerContacted ? h('p', { role: 'status' }, 'Customer Contacted — awaiting owner review. Your current pickup time stays unchanged until Danielle approves an arrangement.') : null,
+        order.attention?.extensionApproved ? h('p', { role: 'status' }, 'Extension Approved — new arrangement confirmed') : null,
+        order.attention?.overdue ? h('p', {}, 'Pickup Overdue — please contact Danielle for owner review.') : null,
+        order.attention?.resolved ? h('p', {}, 'Resolved — your request has been handled.') : null,
+        order.resolution ? h('p', {}, order.resolution.kind === 'forfeited' ? 'An owner reviewed and recorded this order as forfeited. Contact Danielle about any questions.' : 'Danielle reviewed and resolved this pickup.') : null);
+      if (messaging) main.append(h('form', { class: 'sub-card', onsubmit: async e => {
+        e.preventDefault(); const ok = await save('/message', { ...draft, requestId: messageId });
+        if (ok) { draft = { body: '', requestedDate: '', requestedTime: '', website: '' }; messageId = crypto.randomUUID(); messaging = false; render(); }
+      } }, h('h2', {}, 'Message Danielle'), field('Your message', draft.body, v => draft.body = v, { id: 'contact-message', type: 'textarea', required: true, minlength: 3, maxlength: 2000, disabled: busy }),
+        field('Requested alternative pickup date (optional)', draft.requestedDate, v => draft.requestedDate = v, { id: 'requested-date', type: 'date', disabled: busy }),
+        field('Requested alternative pickup time (optional)', draft.requestedTime, v => draft.requestedTime = v, { id: 'requested-time', type: 'time', disabled: busy }),
+        h('input', { name: 'website', tabindex: '-1', autocomplete: 'off', hidden: true, oninput: e => draft.website = e.target.value }),
+        h('p', {}, 'A request does not approve an extension. Danielle will review it and reply here.'),
+        h('button', { type: 'submit', class: 'primary-link', disabled: busy }, busy ? 'Sending…' : 'Send message')));
+      if (order.messages?.length) main.append(h('section', { class: 'sub-card', 'aria-label': 'Conversation with Danielle' }, h('h2', {}, 'Conversation with Danielle'), order.messages.map(m => h('article', {}, h('strong', {}, m.sender === 'owner' ? 'Danielle' : 'You'), h('p', {}, m.body), h('small', {}, stamp(m.at)), m.requestedDate ? h('p', {}, 'Requested: ' + pickupLabel({ date: m.requestedDate, start: m.requestedTime || '12:00', end: m.requestedTime || '12:00' })) : null))));
       main.append(h("h2", {}, "Order progress"),
         h("p", {}, "Payment and preparation are tracked separately. A stage is complete only when its own event is recorded."),
         h("ol", { "aria-label": "Order stages" }, stages(order).map(([label, at]) =>
           h("li", { class: "sub-card" }, h("strong", {}, label), h("p", {}, stageNote(label, at))))),
         h("h2", {}, "Pickup details"), h("p", {}, pickupLabel(order.pickup)),
         experience ? pickupLocation({ pickupAddress: order.pickupAddress }) : null,
-        h("p", {}, "Order deadline: " + orderByLabel(order.pickup)),
+        order.pickupDeadline ? h('p', {}, h('strong', {}, 'Pickup deadline: ' + stamp(order.pickupDeadline))) : null,
+        order.originalPickup && order.extension ? h('p', {}, 'Original pickup: ' + pickupLabel(order.originalPickup)) : null,
+        h('details', {}, h('summary', {}, POLICY_TITLE), POLICY.map((paragraph,i) => h('p', {}, i === 2 ? h('strong', {}, paragraph) : paragraph))),
         h("h2", {}, "Your order"),
         h("div", { role: "group", "aria-label": "Order items" }, order.lines.map((line) => h("p", {}, `${line.qty} × ${line.name} (${line.variant}) · ${money(line.qty * line.unitPrice)}`))),
         h("p", {}, h("strong", {}, "Total: " + money(order.total))));
@@ -123,6 +147,7 @@ export async function start(root) {
     }
     site.append(main);
     root.replaceChildren(notice, site);
+    if (focused) { const node = document.getElementById(focused); if (node) { node.focus(); try { node.setSelectionRange(cursor,cursor); } catch {} } }
   }
   render();
   if (match) {

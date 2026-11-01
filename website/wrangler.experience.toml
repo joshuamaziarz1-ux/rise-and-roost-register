@@ -29,3 +29,7 @@ STUDIO_MANAGEMENT_ENABLED = "true"
 PREVIEW_ACCESS_MODE = "pin"
 PREVIEW_DATABASE_ID = "21352b95-d7f6-406f-8527-4b8dbcebf1bf"
 PREVIEW_ACCESS_UNTIL = "2026-12-01T13:50:00Z"
+
+# Final commerce behavior is enabled only on this isolated Worker/D1.
+COMMERCE_UPDATE_ENABLED = "true"
+WEBSITE_BASE_URL = "https://rise-roost-experience-preview.joshua-maziarz1.workers.dev"

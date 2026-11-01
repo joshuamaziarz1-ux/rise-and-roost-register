@@ -34,21 +34,13 @@ test('customer order tracking separates payment verification and fulfillment acr
     const current = customer.getByLabel('Current order status', { exact: true });
     await expect(customer.getByLabel('Order items', { exact: true })).toContainText('1 × Slow Sunday sourdough (Classic loaf) · $9.00');
     await expect(customer.locator('main')).not.toContainText('[object ');
-    await expect(current).toContainText('Awaiting payment report');
-    const reportRoute = '**/api/order-tracking/*/*/report';
-    await customer.route(reportRoute, route => route.fulfill({ status: 503, contentType: 'text/html', body: '<h1>Temporary outage</h1>' }));
-    await customer.getByRole('button', { name: "I've Sent Payment", exact: true }).click();
-    await expect(customer.getByRole('alert')).toContainText('temporarily unavailable');
-    await expect(current).toContainText('Awaiting payment report');
-    await customer.unroute(reportRoute);
-    await customer.getByRole('button', { name: "I've Sent Payment", exact: true }).click();
-    await expect(current).toContainText('Payment Reported');
-    await expect(current).toContainText('has not been accepted or processed');
+    await expect(current).toContainText('Awaiting Payment Verification');
+    await expect(customer.getByRole('button', { name: "I've Sent Payment", exact: true })).toHaveCount(0);
     await expect(current.getByRole('heading')).toHaveText('Order Received');
     await expect(customer.getByLabel('Paid receipt', { exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Refresh orders', exact: true }).click();
     const card = page.locator('article.sub-card');
-    await expect(card).toContainText('Payment Reported');
+    await expect(card).toContainText('Awaiting Payment Verification');
     await card.getByText('Verify payment against independent records', { exact: true }).click();
     await card.getByLabel('Private verification reference', { exact: true }).fill('SYNTHETIC QA ONLY - external reference');
     await card.getByLabel('I checked an independent payment record for the full order total', { exact: true }).check();
@@ -90,9 +82,9 @@ test('customer order tracking separates payment verification and fulfillment acr
     await customer.screenshot({ path: `qa-results/order-tracking-${info.project.name}.png`, fullPage: true });
     if (info.project.name === 'desktop-chromium') await page.screenshot({ path: 'qa-results/studio-orders-desktop.png', fullPage: true });
     await card.getByLabel('Fulfillment status', { exact: true }).selectOption('picked-up');
-    await expect(current.getByRole('heading')).toHaveText('Picked Up', { timeout: 20000 });
+    await expect(current.getByRole('heading')).toHaveText('Historical order', { timeout: 20000 });
     await customer.reload();
-    await expect(customer.getByLabel('Current order status', { exact: true })).toContainText('Picked Up');
+    await expect(customer.getByLabel('Current order status', { exact: true })).toContainText('Historical order');
     expect(errors).toEqual([]);
   } finally { await customerContext.close(); }
 });

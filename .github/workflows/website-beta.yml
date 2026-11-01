@@ -28,43 +28,44 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run test:browser
+      - run: npm run test:commerce-browser
       - run: npm run check
         env:
           WRANGLER_SEND_METRICS: 'false'
       - run: npm run check:experience -- --outdir /tmp/rise-roost-preview-worker
-        if: github.head_ref == 'codex/customer-experience-roost' || github.head_ref == 'codex/studio-management'
+        if: github.head_ref == 'codex/customer-experience-roost' || (github.head_ref == 'codex/studio-management' || github.head_ref == 'codex/complete-preview')
         env:
           WRANGLER_SEND_METRICS: 'false'
       - run: node tests/pin-worker-smoke.mjs
-        if: github.head_ref == 'codex/studio-management'
+        if: (github.head_ref == 'codex/studio-management' || github.head_ref == 'codex/complete-preview')
         env:
           RR_PIN_WORKER_BUNDLE: /tmp/rise-roost-preview-worker/worker.js
       - uses: actions/upload-artifact@v4
-        if: github.head_ref == 'codex/customer-experience-roost' || github.head_ref == 'codex/studio-management'
+        if: github.head_ref == 'codex/customer-experience-roost' || (github.head_ref == 'codex/studio-management' || github.head_ref == 'codex/complete-preview')
         with:
           name: customer-experience-screenshots
           path: website/qa-results/customer/*.png
           retention-days: 7
       - uses: actions/upload-artifact@v4
-        if: github.head_ref == 'codex/studio-management'
+        if: (github.head_ref == 'codex/studio-management' || github.head_ref == 'codex/complete-preview')
         with:
           name: studio-management-screenshots
           path: website/qa-results/management/*.png
           retention-days: 7
       - uses: actions/upload-artifact@v4
-        if: github.head_ref == 'codex/studio-management'
+        if: (github.head_ref == 'codex/studio-management' || github.head_ref == 'codex/complete-preview')
         with:
           name: direct-studio-preview-screenshots
           path: website/qa-results/access-preview/*.png
           retention-days: 7
       - uses: actions/upload-artifact@v4
-        if: github.head_ref == 'codex/studio-management'
+        if: (github.head_ref == 'codex/studio-management' || github.head_ref == 'codex/complete-preview')
         with:
           name: pin-studio-preview-screenshots
           path: website/qa-results/pin-preview/*.png
           retention-days: 7
   pin-preview:
-    if: github.head_ref == 'codex/studio-management'
+    if: (github.head_ref == 'codex/studio-management' || github.head_ref == 'codex/complete-preview')
     runs-on: ubuntu-24.04
     container:
       image: mcr.microsoft.com/playwright:v1.56.1-noble
@@ -140,7 +141,7 @@ jobs:
           path: website/qa-results/management/*.png
           retention-days: 7
   private-preview-denial:
-    if: github.head_ref == 'codex/studio-management'
+    if: (github.head_ref == 'codex/studio-management' || github.head_ref == 'codex/complete-preview')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

@@ -1,6 +1,6 @@
 export const paymentLabels = {
-  not_collected: "Awaiting payment report",
-  reported: "Payment Reported · awaiting verification",
+  not_collected: "Awaiting Payment Verification",
+  reported: "Awaiting Payment Verification",
   verified: "Payment Verified",
   refunded: 'Refunded · independently recorded',
   partially_refunded: 'Partially refunded · independently recorded',
@@ -34,10 +34,8 @@ export function trackingPath(workspaceId, order) {
 export function stages(order) {
   return [
     ["Order Received", order.at],
-    ["Payment Reported", order.paymentReportedAt],
     ["Payment Verified", order.paymentVerifiedAt],
     ["Preparing Your Order", order.preparingAt],
     ["Ready for Pickup", order.readyAt],
-    ["Picked Up", order.pickedUpAt],
   ];
 }

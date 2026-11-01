@@ -93,17 +93,17 @@ test.describe('isolated customer experience', () => {
     expect((await (await page.request.get(fixture.origin+'/api/roost/me?workspace='+fixture.id)).json()).member).toBeNull();
     expect((await page.request.get(fixture.origin+'/api/studio')).status()).toBe(401);
     await page.getByRole('link', { name: 'Track your order', exact: true }).click();
-    await page.getByRole('button', { name: "I've Sent Payment", exact: true }).click();
-    await expect(page.getByLabel('Current order status', { exact: true })).toContainText('Payment Reported');
+    await expect(page.getByRole('button', { name: "I've Sent Payment", exact: true })).toHaveCount(0);
+    await expect(page.getByLabel('Current order status', { exact: true })).toContainText('Awaiting Payment Verification');
     await expect(page.locator('main')).toContainText(pickupText);
     await customerClocks(page);
     await pickupAddress(page);
     await page.getByRole('region', { name: 'Pickup Location', exact: true }).screenshot({ path: `qa-results/customer/pickup-location-${info.project.name}.png` });
-    await expect(page.getByLabel('Current order status', { exact: true })).toContainText('has not been accepted or processed');
+    await expect(page.getByLabel('Current order status', { exact: true })).toContainText('Danielle will check her payment account');
     const second = await browser.newContext({ ...info.project.use, baseURL: fixture.origin });
     try {
       const other = await second.newPage(); await other.goto(fixture.origin+tracking);
-      await expect(other.getByLabel('Current order status', { exact: true })).toContainText('Payment Reported');
+      await expect(other.getByLabel('Current order status', { exact: true })).toContainText('Awaiting Payment Verification');
       await expect(other.getByLabel('Paid receipt', { exact: true })).toHaveCount(0);
     } finally { await second.close(); }
     await page.goto(fixture.origin+'/cart');
@@ -179,7 +179,7 @@ test.describe('isolated customer experience', () => {
     await expect(page.locator('.member-order')).toContainText(pickupText);
     await customerClocks(page);
     await expect(page.locator('.member-order')).toContainText('A dozen little sunrises');
-    await expect(page.locator('.member-order')).toContainText('Awaiting payment report');
+    await expect(page.locator('.member-order')).toContainText('Awaiting Payment Verification');
     await page.locator('#notice').evaluate(el => el.className = '');
     await page.screenshot({ path: `qa-results/customer/member-roost-${info.project.name}.png`, fullPage: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth+1)).toBe(true);

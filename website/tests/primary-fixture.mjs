@@ -8,7 +8,7 @@ import { randomBytes, createHash } from 'node:crypto';
 import { seed } from '../public/model.mjs';
 import { PREVIEW_WORKSPACE } from '../server/preview-access.mjs';
 import { accessAuthority } from './access-jwt-fixture.mjs';
-export async function primaryFixture({ experience = false, management = false, access = false, pin = false, port = 4182, hostname = '127.0.0.1' } = {}) {
+export async function primaryFixture({ experience = false, management = false, commerce = false, access = false, pin = false, port = 4182, hostname = '127.0.0.1' } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'rr-sync-'));
   const dbFile = join(directory, 'test.sqlite');
   const id = access || pin ? PREVIEW_WORKSPACE : randomBytes(24).toString('hex');
@@ -30,7 +30,7 @@ export async function primaryFixture({ experience = false, management = false, a
   const authority = access ? await accessAuthority() : null;
   const child = spawn(process.execPath, ['server/local.mjs'], {
     cwd: fileURLToPath(new URL('../', import.meta.url)),
-    env: { ...process.env, RR_TEST_DB: dbFile, RR_PUBLIC_WORKSPACE_ID: id, RR_CUSTOMER_EXPERIENCE: String(experience), RR_REVIEW_BUILD: String(experience), RR_STUDIO_MANAGEMENT: String(management), RR_PREVIEW_ACCESS_TEST: String(access), RR_PREVIEW_PIN_TEST: String(pin), RR_TEST_PIN_PEPPER: pepper, ...(authority ? { RR_TEST_ACCESS_TEAM: authority.team, RR_TEST_ACCESS_AUD: authority.aud, RR_TEST_ACCESS_JWKS: JSON.stringify({ keys: [authority.jwk] }) } : {}), PORT: String(port) },
+    env: { ...process.env, RR_TEST_DB: dbFile, RR_PUBLIC_WORKSPACE_ID: id, RR_CUSTOMER_EXPERIENCE: String(experience), RR_REVIEW_BUILD: String(experience), RR_STUDIO_MANAGEMENT: String(management), RR_COMMERCE_UPDATE: String(commerce), RR_PREVIEW_ACCESS_TEST: String(access), RR_PREVIEW_PIN_TEST: String(pin), RR_TEST_PIN_PEPPER: pepper, ...(authority ? { RR_TEST_ACCESS_TEAM: authority.team, RR_TEST_ACCESS_AUD: authority.aud, RR_TEST_ACCESS_JWKS: JSON.stringify({ keys: [authority.jwk] }) } : {}), PORT: String(port) },
     stdio: 'ignore',
   });
   const close = async () => {

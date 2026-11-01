@@ -1,3 +1,4 @@
+import { POLICY_VERSION, POLICY_TITLE, POLICY } from './commerce.mjs';
 import { h, button, notify, request, guard } from "./dom.mjs";
 import { money, localInstant, pickupLabel, orderByLabel } from "./model.mjs";
 import { createCustomerExperience } from "./customer.mjs";
@@ -26,6 +27,7 @@ if (
     notificationsEnabled = false,
     checkoutEmail = "",
     emailOptIn = false;
+  let commerceEnabled = false, policyAccepted = false;
   let experience = false, customer, customerWorkspace = "", checkoutMode = "guest";
   let checkoutProfile = { name: "", email: "", phone: "" };
   const editing = new URLSearchParams(location.search).has("studio-preview");
@@ -464,7 +466,7 @@ if (
           {},
           experience ? "Follow your payment and pickup status using your private order link. Payment is confirmed only after independent verification." : "Your beta request was received. Open Track your order for its current payment, preparation, and pickup status. This website has not processed a payment.",
         ),
-        receipt.trackingPath ? h("p", {}, h("a", { href: receipt.trackingPath, class: "primary-link" }, "Track your order")) : null,
+        receipt.trackingPath ? h("p", {}, h("a", { href: receipt.trackingPath, class: "primary-link" }, commerceEnabled ? "Pay & track your order" : "Track your order")) : null,
         h("p", { class: "small-note" }, experience ? "Save your private tracking link. This test preorder does not process a payment." : "Save your private tracking link to view this order on another device. Email is optional and is sent only when configured and requested."),
         experience ? link("/roost", customer?.member ? "View my Roost orders" : "Explore The Roost", "secondary-button") : null,
         link("/shop", doc.ui.continue, "secondary-button"),
@@ -528,6 +530,7 @@ if (
     const action = button(
       experience ? "Place preorder" : doc.ui.checkout,
       guard(async () => {
+        if (commerceEnabled && !policyAccepted) throw new Error("Please read and acknowledge the pickup policy.");
         if (emailOptIn && !emailInput.reportValidity()) return;
         if (experience) {
           const fields = [...customerFields.querySelectorAll("input")];
@@ -554,6 +557,7 @@ if (
             emailOptIn: notificationsEnabled && emailOptIn,
             email: checkoutEmail,
             total,
+            ...(commerceEnabled ? { policyAccepted, policyVersion: POLICY_VERSION } : {}),
             ...(experience ? { checkoutMode, customerDetails: checkoutProfile } : {}),
             lines: lines.map((l) => ({
               productId: l.productId,
@@ -691,6 +695,8 @@ if (
               h("p", { class: "small-note" }, notificationsEnabled
                 ? "Transactional updates only. Provider acceptance is shown on your private tracking page; inbox delivery is not guaranteed."
                 : experience ? "Your confirmation includes a private order tracking link." : "Email is not connected for this beta site. You will receive a private order tracking link instead."),
+              commerceEnabled ? h('div', {}, h('p', {}, POLICY[0]), h('details', {}, h('summary', {}, POLICY_TITLE), POLICY.map((paragraph, i) => h('p', {}, i === 2 ? h('strong', {}, paragraph) : paragraph))),
+                h('label', { class: 'field' }, h('input', { type: 'checkbox', checked: policyAccepted, required: true, onchange: e => { policyAccepted = e.target.checked; }, 'aria-label': 'I have read and acknowledge the Rise & Roost Pickup Policy' }), 'I have read and acknowledge the Rise & Roost Pickup Policy')) : null,
               action,
               h(
                 "p",
@@ -879,6 +885,7 @@ if (
     }
     doc = result.document;
     experience = !!result.customerExperienceEnabled;
+    commerceEnabled = !!result.commerceEnabled;
     notificationsEnabled = !!result.notificationsEnabled;
     revision = result.revision || 1;
     availabilityRevision = result.availabilityRevision || 0;
