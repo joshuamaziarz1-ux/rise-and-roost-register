@@ -1,3 +1,5 @@
+> Current development scope: deploy only `rise-roost-experience-preview` and its existing separate D1 database. `npm run deploy` and `npm run deploy:experience` both explicitly use `wrangler.experience.toml`. Use [the current release report](docs/COMMERCE-RESULTS.md) and [testing guide](docs/COMMERCE-UPDATE.md). Do not execute the historical original-beta creation, migration or deployment commands below during isolated preview development. No production, Register/Admin, Supabase, Square, DNS or domain change is authorized by these instructions.
+
 # Deploy the isolated HTTPS beta
 
 The beta deployment targets only **rise-roost-beta**, with the dedicated **rise-roost-beta-db** D1 binding. Authenticate a Cloudflare account with rights to edit that isolated Worker and its demo database. Use a dedicated beta project, not the production Register, and do not attach the future custom domain. Cloudflare Workers Static Assets is used instead of static-only Pages so that owner sessions, drafts, publishing, uploads, and simulated orders have a backend. GitHub Pages is not the commercial hosting target.

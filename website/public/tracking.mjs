@@ -11,7 +11,7 @@ export async function start(root) {
   let order, busy = false, error = "", refreshed = "", refreshSequence = 0, appliedSequence = 0;
   let doc = seed();
   const emptyDraft = () => ({ body: '', topic: 'pickup', requestedDate: '', requestedTime: '', website: '' });
-  let messaging = false, draft = emptyDraft(), messageId = crypto.randomUUID(), pendingMessage = null;
+  let messaging = false, draft = emptyDraft(), messageId = crypto.randomUUID(), pendingMessage = null, recoveryUnavailable = false;
   // Bind ephemeral recovery to this exact order capability; never store the key.
   const capabilityHash = key ? [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key)))].map(v => v.toString(16).padStart(2,'0')).join('') : '';
   const draftKey = endpoint && capabilityHash ? 'rr-order-message:' + endpoint + ':' + capabilityHash : '';
@@ -23,13 +23,15 @@ export async function start(root) {
       if (validDraft(saved.pending) && saved.pending.requestId === messageId) pendingMessage = { ...draft, ...saved.pending, website: '' };
       messaging = !!saved.open || !!pendingMessage;
     }
-  } catch { /* Storage is optional; server persistence is the source of truth. */ }
+  } catch { recoveryUnavailable = true; }
   const rememberMessage = () => {
     if (!draftKey) return;
     try {
       if (draft.body || draft.requestedDate || draft.requestedTime || pendingMessage) sessionStorage.setItem(draftKey, JSON.stringify({ draft, messageId, pending: pendingMessage, open: messaging }));
       else sessionStorage.removeItem(draftKey);
-    } catch { /* The current form and request identifier remain in memory. */ }
+      recoveryUnavailable = false;
+    } catch { recoveryUnavailable = true; }
+    const note = root.querySelector('#contact-recovery-note'); if (note) note.hidden = !recoveryUnavailable;
   };
   const changeDraft = (name, value) => { draft[name] = value; rememberMessage(); };
   let experience = false;
@@ -139,7 +141,8 @@ export async function start(root) {
         const ok = await save('/message', pendingMessage);
         if (ok) { draft = emptyDraft(); messageId = crypto.randomUUID(); pendingMessage = null; messaging = false; rememberMessage(); render(); }
       } }, h('h2', {}, 'Message Danielle'),
-        pendingMessage ? h('p', { role: 'status' }, 'Your last message is awaiting confirmation. Retry it here; it will not be sent twice. Your original message is kept through refresh.') : null,
+        pendingMessage ? h('p', { role: 'status' }, 'Your last message is awaiting confirmation. Retry it here; it will not be sent twice. ' + (recoveryUnavailable ? 'Leave this tab open for a safe retry.' : 'Your original message is kept through refresh.')) : null,
+        h('p', { id: 'contact-recovery-note', hidden: !recoveryUnavailable }, 'This browser could not keep your draft through refresh. Leave this tab open until your message is confirmed.'),
         field('What can Danielle help with?', draft.topic, v => changeDraft('topic',v), { id: 'contact-topic', choices: [{ value: 'pickup', label: 'Pickup delay or more time' }, { value: 'order', label: 'Order question' }], disabled: busy || !!pendingMessage }),
         field('Your message', draft.body, v => changeDraft('body',v), { id: 'contact-message', type: 'textarea', required: true, minlength: 3, maxlength: 2000, disabled: busy || !!pendingMessage }),
         field('Requested alternative pickup date (optional)', draft.requestedDate, v => changeDraft('requestedDate',v), { id: 'requested-date', type: 'date', disabled: busy || !!pendingMessage }),
