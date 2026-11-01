@@ -197,3 +197,11 @@ test('order questions stay distinct from pickup requests and do not resurrect a 
   assert.equal((await send('order','One final ingredient question.')).status,200);
   s=await h.snapshot();assert.equal(s.management.attention.contacted,1);assert.equal(s.management.attention.extensions,0);assert.deepEqual(s.orders[0].pickup,o.pickup);assert.equal(s.orders[0].pickupDeadline,o.pickupDeadline);
 });
+test('an optional requested pickup time can be supplied without inventing or requiring a date',async()=>{
+  const h=await fixture(),o=(await h.order()).data;
+  const request={requestId:crypto.randomUUID(),topic:'order',body:'Could I collect around five? Please review the date with me.',requestedTime:'17:00'};
+  assert.equal((await h.track(o,'/message',{...request,requestedTime:'25:00'})).status,400);
+  const sent=await h.track(o,'/message',request);assert.equal(sent.status,200);assert.equal(sent.data.messages[0].requestedTime,'17:00');assert.equal(sent.data.messages[0].requestedDate,'');assert.equal(requestedPickupLabel(sent.data.messages[0]),'5:00 PM · date not specified');
+  assert.equal(sent.data.attention.customerContacted,true);assert.equal(sent.data.attention.extensionRequested,true);assert.equal(sent.data.attention.extensionApproved,false);assert.deepEqual(sent.data.pickup,o.pickup);assert.equal(sent.data.pickupDeadline,o.pickupDeadline);
+  const duplicate=await h.track(o,'/message',request);assert.equal(duplicate.status,200);assert.equal(duplicate.data.messages.length,1);assert.deepEqual(duplicate.data.messageConfirmation,sent.data.messageConfirmation);
+});

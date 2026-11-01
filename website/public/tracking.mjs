@@ -150,7 +150,7 @@ export async function start(root) {
         h('input', { name: 'website', tabindex: '-1', autocomplete: 'off', hidden: true, oninput: e => draft.website = e.target.value }),
         h('p', {}, 'A request does not approve an extension. Danielle will review it and reply here.'),
         h('button', { type: 'submit', class: 'primary-link', disabled: busy }, busy ? 'Sending…' : pendingMessage ? 'Retry message' : 'Send message')));
-      if (order.messages?.length) main.append(h('section', { class: 'sub-card', 'aria-label': 'Conversation with Danielle' }, h('h2', {}, 'Conversation with Danielle'), order.messages.map(m => h('article', {}, h('strong', {}, m.sender === 'owner' ? 'Danielle' : 'You'), h('p', {}, m.body), h('small', {}, stamp(m.at)), m.requestedDate ? h('p', {}, 'Requested: ' + requestedPickupLabel(m)) : m.topic === 'pickup' ? h('p', {}, 'Pickup delay or more time requested; alternative date/time not specified.') : null))));
+      if (order.messages?.length) main.append(h('section', { class: 'sub-card', 'aria-label': 'Conversation with Danielle' }, h('h2', {}, 'Conversation with Danielle'), order.messages.map(m => h('article', {}, h('strong', {}, m.sender === 'owner' ? 'Danielle' : 'You'), h('p', {}, m.body), h('small', {}, stamp(m.at)), (m.requestedDate || m.requestedTime) ? h('p', {}, 'Requested: ' + requestedPickupLabel(m)) : m.topic === 'pickup' ? h('p', {}, 'Pickup delay or more time requested; alternative date/time not specified.') : null))));
       main.append(h("h2", {}, "Order progress"),
         h("p", {}, "Payment and preparation are tracked separately. A stage is complete only when its own event is recorded."),
         h("ol", { "aria-label": "Order stages" }, stages(order).map(([label, at]) =>

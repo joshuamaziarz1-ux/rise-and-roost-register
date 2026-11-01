@@ -55,7 +55,7 @@ export function orderAttention(order, now = Date.now()) {
 }
 
 export function requestedPickupLabel(message) {
-  if (!message.requestedDate) return '';
+  if (!message.requestedDate) return message.requestedTime ? customerTime(localInstant('2000-01-01', message.requestedTime)) + ' · date not specified' : '';
   const date = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(message.requestedDate + 'T12:00:00Z'));
   return date + (message.requestedTime ? ' at ' + customerTime(localInstant(message.requestedDate, message.requestedTime)) : ' · time not specified');
 }

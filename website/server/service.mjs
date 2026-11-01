@@ -936,14 +936,17 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           }
           if ((order.messages || []).length >= 100) fail('This conversation has reached its message limit. Please contact the farm directly.', 409);
           const requestedDate = input.requestedDate || '', requestedTime = input.requestedTime || '';
-          if (requestedTime && !requestedDate) fail('Choose a date for the requested time.');
-          if (requestedDate) { try { if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedDate) || (requestedTime && !/^\d{2}:\d{2}$/.test(requestedTime))) throw new Error(); localInstant(requestedDate, requestedTime || '12:00'); } catch { fail('Choose a valid requested pickup date and time.'); } }
+          if (requestedDate || requestedTime) { try {
+            if ((requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) || (requestedTime && !/^\d{2}:\d{2}$/.test(requestedTime))) throw new Error();
+            // A time alone is a request for owner review, not an approved dated appointment.
+            localInstant(requestedDate || '2000-01-01', requestedTime || '12:00');
+          } catch { fail('Choose a valid requested pickup date or time.'); } }
           if (attempt === 0) { await rateLimit('order-message', 30); await rateLimit('message-order:' + order.id, 30); }
           const at = new Date(now).toISOString();
           order.messages ||= []; order.messages.push({ id: token(), requestId: input.requestId, sender: 'customer', name: order.customer?.name || 'Guest customer', body: input.body.trim(), topic, at, requestedDate, requestedTime });
           // One persistent attention item per conversation, rather than one alert per retry/message.
           const alreadyOpen = order.contact?.unresolved;
-          order.contact = { ...order.contact, unresolved: true, extensionRequested: topic === 'pickup' || !!requestedDate || !!order.contact?.extensionRequested, lastMessageAt: at, alertedAt: alreadyOpen ? order.contact.alertedAt : at };
+          order.contact = { ...order.contact, unresolved: true, extensionRequested: topic === 'pickup' || !!requestedDate || !!requestedTime || !!order.contact?.extensionRequested, lastMessageAt: at, alertedAt: alreadyOpen ? order.contact.alertedAt : at };
           order.audit.push({ action: 'Customer Contacted — awaiting owner review', at });
         } else fail('This action was not found.', 404);
         order.version = (order.version || 1) + 1;
