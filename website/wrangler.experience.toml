@@ -22,6 +22,10 @@ CUSTOMER_EXPERIENCE_ENABLED = "true"
 REVIEW_BUILD = "true"
 ORDER_EMAIL_ENABLED = "false"
 STUDIO_MANAGEMENT_ENABLED = "true"
-# Direct testing remains OFF until the exact preview hostname is protected by
-# Cloudflare Access for the two approved testers and its policy is verified.
-# See docs/studio-management/PRIVATE-TESTING.md. No IP restrictions are used.
+# Temporary PIN mode requires the additive auth tables and private Worker
+# pepper. The one-time setup capability and PIN never belong in this file.
+# See docs/studio-management/PRIVATE-TESTING.md. No IP or email gate is used.
+
+PREVIEW_ACCESS_MODE = "pin"
+PREVIEW_DATABASE_ID = "21352b95-d7f6-406f-8527-4b8dbcebf1bf"
+PREVIEW_ACCESS_UNTIL = "2026-12-01T13:50:00Z"

@@ -398,7 +398,7 @@ export function inspectImage(bytes, mime) {
     );
   return true;
 }
-export async function api(request, db, now = Date.now(), { publicWorkspaceId = "", emailEnabled = false, customerExperienceEnabled = false, reviewBuild = false, studioManagementEnabled = false, previewGrant } = {}) {
+export async function api(request, db, now = Date.now(), { publicWorkspaceId = "", emailEnabled = false, customerExperienceEnabled = false, reviewBuild = false, studioManagementEnabled = false, previewGrant, previewPinMode = false } = {}) {
   const url = new URL(request.url),
     path = url.pathname;
   const first = (sql, ...args) =>
@@ -413,7 +413,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       .run();
   try {
     if (previewGrant && (!isPreviewGrant(previewGrant) || previewGrant.expiresAt <= now || previewGrant.workspaceId !== publicWorkspaceId || !reviewBuild || !studioManagementEnabled)) fail('The private testing restriction could not be verified.', 403);
-    if (previewGrant && (path === '/api/workspaces' || path === '/api/login' || path === '/api/logout' || path.startsWith('/api/device-'))) fail('This private preview uses its existing website and Cloudflare Access. Workspace creation and sign-in changes are disabled.', 403);
+    if (previewGrant && (path === '/api/workspaces' || path === '/api/login' || path === '/api/logout' || path.startsWith('/api/device-'))) fail('This testing session uses the existing preview website. Workspace creation and legacy sign-in changes are disabled.', 403);
     if (
       request.method !== "GET" &&
       request.headers.get("Origin") !== url.origin
@@ -508,6 +508,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       customerExperienceEnabled,
       studioManagementEnabled,
       previewDirectAccess: !!previewGrant,
+      previewPinAccess: previewGrant?.actor.authentication === 'preview_pin',
       previewAccessExpiresAt: previewGrant ? new Date(previewGrant.expiresAt).toISOString() : undefined,
       previewTesterEmail: previewGrant?.actor.name,
       isReview: reviewBuild,
@@ -650,7 +651,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         studioManagementEnabled,
         id,
         isPrimary: id === publicWorkspaceId,
-        studioPath: previewGrant ? '/studio' : "/studio?workspace=" + id,
+        studioPath: previewGrant || previewPinMode ? '/studio' : "/studio?workspace=" + id,
       });
     }
     if (path.startsWith("/api/preview/") && request.method === "GET") {

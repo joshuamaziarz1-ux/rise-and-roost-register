@@ -1,4 +1,16 @@
-# Studio preview verification — October 30, 2026
+# Studio preview verification
+
+## November 1: remembered testing PIN
+
+The user replaced the pending email/Access plan with a shared four-digit testing PIN on the isolated experience preview. The implementation protects every administrative API, stores salted/peppered verifiers and hashed server-side sessions, remembers devices, supports immediate current-device locking, and preserves the existing main workspace. A private one-time setup capability lets the owner choose the PIN without posting it in chat or Git.
+
+- **103 backend tests pass**, including ten PIN security/integration cases. All **15 new PIN browser cases pass** across the five device profiles; public customer Home/Shop pixels match exactly.
+- The actual local **workerd/D1** smoke test passes setup/unlock WebCrypto, atomic single-use setup, independent server sessions, current-device lock and anonymous denial.
+- The browser tests exposed an initial-load issue when restoring an unfinished form: its data loaded but the loading screen remained visible. The corrected refresh renders the restored form; recovery now passes on all five profiles.
+- A fresh read-only baseline covers **125 original beta workspaces and 70 existing preview workspaces**. All **11 existing preview tables** were privately backed up and locally restored. Preparing the three additive auth tables and Worker pepper left every pre-existing business table exactly unchanged; no workspace was created or reset.
+- Full regression/hosted deployment status is recorded in the PR. Owner PIN selection and physical-device acceptance remain necessary after deployment. Hosted checks contain no PIN/setup capability, perform no owner login and make no business writes.
+
+## October 30: historical Access follow-up
 
 ## Cloudflare Access testing follow-up
 

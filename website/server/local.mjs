@@ -58,6 +58,8 @@ const env = {
 // Test-only infrastructure simulation, never imported by the deployed Worker.
 // The local server binds 127.0.0.1 and requires an explicitly isolated test DB.
 const accessTest = process.env.RR_PREVIEW_ACCESS_TEST === 'true' && !!process.env.RR_TEST_DB;
+const pinTest = process.env.RR_PREVIEW_PIN_TEST === 'true' && !!process.env.RR_TEST_DB;
+if (pinTest) Object.assign(env, { PREVIEW_ACCESS_MODE: 'pin', PREVIEW_DATABASE_ID: PREVIEW_DATABASE, ORDER_EMAIL_ENABLED: 'false', PREVIEW_ACCESS_UNTIL: new Date(Date.now()+30*86400000).toISOString(), STUDIO_PIN_PEPPER: process.env.RR_TEST_PIN_PEPPER });
 if (accessTest) Object.assign(env, {
   PREVIEW_ACCESS_MODE: 'cloudflare-access', PREVIEW_DATABASE_ID: PREVIEW_DATABASE,
   ORDER_EMAIL_ENABLED: 'false',
@@ -88,10 +90,13 @@ const server = createServer({ keepAliveTimeout: 60000 }, async (req, res) => {
       chunks.push(chunk);
     }
     const origin = 'http://' + req.headers.host;
-    const url = (accessTest ? 'https://' + PREVIEW_HOST : origin) + req.url;
+    const url = (accessTest || pinTest ? 'https://' + PREVIEW_HOST : origin) + req.url;
     const headers = new Headers(req.headers);
-    if (accessTest) {
+    if (accessTest || pinTest) {
       if (headers.get('Origin') === origin) headers.set('Origin', 'https://' + PREVIEW_HOST);
+    }
+    if (pinTest) headers.set('Cookie', (headers.get('Cookie') || '').replace(/\brr_pin_loopback=/g, '__Host-rr_studio_pin='));
+    if (accessTest) {
       // Simulate the Access edge passing its signed authorization cookie as a
       // JWT header. The Worker still performs real signature/claim validation.
       if (!headers.has('Cf-Access-Jwt-Assertion')) {
@@ -108,7 +113,7 @@ const server = createServer({ keepAliveTimeout: 60000 }, async (req, res) => {
       });
     const response = await worker.fetch(request, env);
     const responseHeaders = Object.fromEntries(response.headers);
-    if (response.headers.getSetCookie().length) responseHeaders["set-cookie"] = response.headers.getSetCookie();
+    if (response.headers.getSetCookie().length) responseHeaders["set-cookie"] = response.headers.getSetCookie().map(value => pinTest ? value.replace('__Host-rr_studio_pin=', 'rr_pin_loopback=').replace('; Secure', '') : value);
     res.writeHead(response.status, responseHeaders);
     res.end(Buffer.from(await response.arrayBuffer()));
   } catch {

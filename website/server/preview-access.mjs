@@ -7,6 +7,11 @@ export const PREVIEW_DATABASE = '21352b95-d7f6-406f-8527-4b8dbcebf1bf';
 export const PREVIEW_WORKSPACE = '2a7ca191c1639aaf023b02d96bcd9519fe099333302d9204';
 const grants = new WeakSet(), resolvers = new Map();
 export const isPreviewGrant = value => !!value && grants.has(value);
+export function previewOwnerGrant(actor, expiresAt) {
+  const grant = Object.freeze({ workspaceId: PREVIEW_WORKSPACE, expiresAt, actor: Object.freeze(actor) });
+  grants.add(grant);
+  return grant;
+}
 const validEmail = value => typeof value === 'string' && value.length <= 254 && /^[^\s@*]+@[^\s@*.]+(?:\.[^\s@*.]+)+$/.test(value);
 const normalizeEmail = value => value.trim().toLowerCase();
 

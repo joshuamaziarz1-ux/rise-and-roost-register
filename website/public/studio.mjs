@@ -1562,6 +1562,7 @@ export async function start(root) {
   );
   try {
     const info = await apiRequest("/api/studio-info");
+    if (info.previewPinAccess) { await (await import('./studio-pin.mjs')).start(root); return; }
     managementEnabled = !!info.studioManagementEnabled;
     previewDirectAccess = !!info.previewDirectAccess;
     mainWorkspace = info.mainWorkspaceId || "";
