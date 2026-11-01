@@ -165,12 +165,12 @@ export async function start(root, initial, newAccessKey) {
     const metric = (label, value, dest, filter) => button([h('span', {}, label), h('strong', {}, value)], () => go(dest, '', filter), { class: 'ms-metric' });
     return h('div', {}, h('div', { class: 'ms-welcome' }, h('h1', {}, 'Hi, Danielle!'), h('p', {}, 'Here’s what’s happening at Rise & Roost.')),
       button([h('span', {}, 'Today’s Verified Sales'), h('strong', {}, money(t.verifiedSales)), h('small', {}, 'Payments independently verified today')], () => { period = 'today'; go('Sales Reports'); void refresh(); }, { class: 'ms-sales' }),
-      h('div', { class: 'ms-metrics' }, metric('Today’s order value', money(t.orderValue), 'Orders', 'today'), metric('Awaiting verification', a.payments, 'Orders', 'unverified'), metric('New orders', a.newOrders, 'Orders', 'pending'), metric('Preparing', a.preparing, 'Orders', 'preparing'), metric('Ready for Pickup', a.ready, 'Orders', 'ready'), metric('Customer Contacted', a.contacted, 'Orders', 'contacted'), metric('Pickup Extension Requests', a.extensions, 'Orders', 'extensions'), metric('Pickup Overdue', a.overdue, 'Orders', 'overdue'), metric('Other Attention Items', a.other, 'Orders', 'attention'), metric('Upcoming pickups', a.upcoming, 'Orders', 'upcoming'), metric('Low-stock products', a.lowStock, 'Products', 'low'), metric('New comments', a.comments, 'Customer Comments', 'pending')),
+      h('div', { class: 'ms-metrics' }, metric('Today’s order value', money(t.orderValue), 'Orders', 'today'), metric('Awaiting verification', a.payments, 'Orders', 'unverified'), metric('New orders', a.newOrders, 'Orders', 'pending'), metric('Preparing', a.preparing, 'Orders', 'preparing'), metric('Ready for Pickup', a.ready, 'Orders', 'ready'), metric('Customer Contacted', a.contacted, 'Orders', 'contacted'), metric('Pickup Extension Requests', a.extensions, 'Orders', 'extensions'), metric('Pickup Overdue', a.overdue, 'Orders', 'overdue'), metric('Other Attention Items', a.other, 'Orders', 'disputes'), metric('Upcoming pickups', a.upcoming, 'Orders', 'upcoming'), metric('Low-stock products', a.lowStock, 'Products', 'low'), metric('New comments', a.comments, 'Customer Comments', 'pending')),
       panel('Needs Your Attention',
         a.contacted ? menu('Customer Contacted — review messages', 'Orders', a.contacted, 'contacted') : null,
         a.extensions ? menu('Review pickup extension requests', 'Orders', a.extensions, 'extensions') : null,
         a.overdue ? menu('Review overdue pickups', 'Orders', a.overdue, 'overdue') : null,
-        a.other ? menu('Review disputes', 'Orders', a.other, 'attention') : null,
+        a.other ? menu('Review disputes', 'Orders', a.other, 'disputes') : null,
         pref.payments && a.payments ? menu('Verify payments', 'Orders', a.payments, 'reported') : null,
         pref.orders && a.newOrders ? menu('Review new orders', 'Orders', a.newOrders, 'pending') : null,
         pref.stock && a.lowStock ? menu('Check low inventory', 'Products', a.lowStock, 'low') : null,
@@ -185,15 +185,16 @@ export async function start(root, initial, newAccessKey) {
     const matches = o => {
       if (filter === 'all' && o.attention?.history) return false;
       if (filter === 'history' && !o.attention?.history) return false;
-      if (['pending','preparing','ready'].includes(filter) && o.attention?.history) return false;
+      if (['pending','preparing','ready'].includes(filter) && (o.attention?.history || o.resolution)) return false;
       if (filter === 'unverified' && (o.paymentVerifiedAt || o.status === 'canceled' || o.resolution)) return false;
+      if (filter === 'disputes' && !o.dispute?.open) return false;
       if (filter === 'attention' && !o.attention?.needsAttention) return false;
       if (filter === 'contacted' && !o.attention?.customerContacted) return false;
       if (filter === 'extensions' && !o.attention?.extensionRequested) return false;
       if (filter === 'overdue' && !o.attention?.overdue) return false;
       if (filter === 'today' && o.businessDate !== day) return false;
-      if (filter === 'upcoming' && (['canceled', 'picked-up'].includes(o.status) || localInstant(o.pickup.date, o.pickup.end) <= Date.parse(data.now) || localInstant(o.pickup.date, o.pickup.start) >= Date.parse(data.now) + 2 * 86400000)) return false;
-      if (!['all', 'today', 'upcoming', 'history', 'unverified', 'attention', 'contacted', 'extensions', 'overdue'].includes(filter) && o.status !== filter && o.paymentStatus !== filter) return false;
+      if (filter === 'upcoming' && (o.resolution || ['canceled', 'picked-up'].includes(o.status) || localInstant(o.pickup.date, o.pickup.end) <= Date.parse(data.now) || localInstant(o.pickup.date, o.pickup.start) >= Date.parse(data.now) + 2 * 86400000)) return false;
+      if (!['all', 'today', 'upcoming', 'history', 'unverified', 'attention', 'contacted', 'extensions', 'overdue', 'disputes'].includes(filter) && o.status !== filter && o.paymentStatus !== filter) return false;
       return !search || [o.orderNumber, o.customer?.name, o.customer?.email, o.customer?.phone, ...o.lines.map(l => l.name)].join(' ').toLowerCase().includes(search.toLowerCase());
     };
     const selected = data.orders.filter(matches);
@@ -235,7 +236,7 @@ export async function start(root, initial, newAccessKey) {
       panel('Preparation & pickup',
         !o.resolution && ['pending','preparing'].includes(o.status) ? button(o.status === 'pending' ? 'Start Preparing' : 'Mark Ready for Pickup', () => send('fulfillment', { id: o.id, orderVersion: o.version, status: o.status === 'pending' ? 'preparing' : 'ready' }), { class: 'ms-primary', disabled: busy }) : null,
         o.status === 'ready' ? h('p', {}, 'Ready for Pickup. No further normal action is required.') : null,
-        !o.resolution ? h('details', {}, h('summary', {}, 'Corrections & cancellation'),
+        !o.resolution && o.status !== 'picked-up' ? h('details', {}, h('summary', {}, 'Corrections & cancellation'),
           button('Cancel order', () => edit('status', { orderId: o.id, orderVersion: o.version, status: 'canceled', reason: '', confirmCorrection: false, releaseInventory: false }), { class: 'ms-secondary' }),
           button('Correct a status mistake', () => edit('status', { orderId: o.id, orderVersion: o.version, status: 'pending', reason: '', confirmCorrection: true, releaseInventory: false }), { class: 'ms-text' })) : null,
         o.status === 'canceled' && o.keepInventory ? button('Release canceled reservation', () => edit('status', { orderId: o.id, orderVersion: o.version, status: 'canceled', reason: '', confirmCorrection: false, releaseInventory: true }), { class: 'ms-secondary' }) : null),
@@ -289,7 +290,7 @@ export async function start(root, initial, newAccessKey) {
   }
   function calendar() {
     const date = selection || data.management.today.range.start, list = data.published.pickups.slice().sort((a, b) => a.date.localeCompare(b.date));
-    const orders = data.orders.filter(o => o.pickup.date === date && !['canceled', 'picked-up'].includes(o.status));
+    const orders = data.orders.filter(o => o.pickup.date === date && !o.resolution && !['canceled', 'picked-up'].includes(o.status));
     const totals = new Map(); for (const o of orders) for (const l of o.lines) { const k = l.productId + ':' + l.variantId; const v = totals.get(k) || { name: l.name, variant: l.variant, qty: 0 }; v.qty += l.qty; totals.set(k, v); }
     return h('div', {}, h('div', { class: 'ms-heading' }, h('h1', {}, 'Calendar'), button('Add pickup', () => editPickup(), { class: 'ms-primary' })),
       h('div', { class: 'ms-actions' }, button('Set recurring days', () => edit('recurrence', { start: date, end: date, weekdays: [], startTime: '15:00', endTime: '18:00', cutoffTime: '18:00', deadlineDays: 1, capacity: 24 }), { class: 'ms-secondary' }),

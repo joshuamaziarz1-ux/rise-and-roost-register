@@ -160,3 +160,10 @@ test('preview commerce refuses a production or mismatched database configuration
     const response=await worker.fetch(new Request('https://rise-and-roost.com/studio'),env,{});assert.equal(response.status,503);
   }
 });
+test('historical collected records cannot be rewritten through status corrections',async()=>{
+  const h=await fixture(),o=(await h.order()).data,row=h.sql.prepare('SELECT ledger_json FROM workspaces WHERE id=?').get(h.site.id),ledger=JSON.parse(row.ledger_json);
+  ledger.orders[0].status='picked-up';ledger.orders[0].pickedUpAt='2026-10-31T16:00:00Z';h.sql.prepare('UPDATE workspaces SET ledger_json=? WHERE id=?').run(JSON.stringify(ledger),h.site.id);
+  const before=structuredClone(ledger.orders[0]);
+  assert.equal((await h.change('fulfillment',{id:o.id,orderVersion:1,status:'ready',confirmCorrection:true,reason:'Fictional historical correction attempt'})).status,409);
+  const after=JSON.parse(h.sql.prepare('SELECT ledger_json FROM workspaces WHERE id=?').get(h.site.id).ledger_json).orders[0];assert.deepEqual(after,before);
+});

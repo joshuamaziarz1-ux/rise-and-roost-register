@@ -76,7 +76,7 @@ const opaque = () => crypto.randomUUID().replace(/-/g, '');
 const canonical = value => JSON.stringify(value, (_, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v);
 async function digest(value) { return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))].map(v => v.toString(16).padStart(2, '0')).join(''); }
 export function productionList(orders, date) {
-  const selected = orders.filter(o => o.pickup.date === date && !['canceled', 'picked-up'].includes(o.status));
+  const selected = orders.filter(o => o.pickup.date === date && !o.resolution && !['canceled', 'picked-up'].includes(o.status));
   const combined = new Map();
   for (const o of selected) for (const l of o.lines) {
     const key = l.productId + ':' + l.variantId;
@@ -330,6 +330,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     result = { orderId: o.id };
   } else if (path === '/api/manage/fulfillment') {
     const o = order(), target = input.status;
+    if (o.status === 'picked-up') bad('Historical pickup records are preserved. Add an owner reply or review communications without changing the original fulfillment record.', 409);
     if (!['pending', 'preparing', 'ready', 'canceled'].includes(target)) bad('Choose a fulfillment status.');
     if (target === 'canceled' && input.confirmCancellation !== true) bad('Confirm this order cancellation. Payment and refunds remain separate.');
     const ordinary = { pending: ['preparing', 'canceled'], preparing: ['ready', 'canceled'], ready: ['canceled'], 'picked-up': [], canceled: [] };
