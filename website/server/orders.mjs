@@ -18,8 +18,10 @@ export function customerOrder(order, workspaceId) {
   // provider credentials, or another customer's order in a tracking response.
   const fields = ["id", "orderNumber", "at", "lines", "total", "pickup", "status",
     "paymentStatus", "simulated", "paymentReportedAt", "paymentVerifiedAt",
-    "preparingAt", "readyAt", "pickedUpAt", "canceledAt", "paidReceipt"];
+    "preparingAt", "readyAt", "pickedUpAt", "canceledAt", "paidReceipt", 'paymentCorrectedAt'];
   const result = Object.fromEntries(fields.filter((k) => order[k] !== undefined).map((k) => [k, order[k]]));
+  if (order.refunds?.length) result.refunds = order.refunds.map(({ amount, at }) => ({ amount, at }));
+  if (order.merchant?.pickupAddress) result.pickupAddress = order.merchant.pickupAddress;
   result.orderNumber ||= "RR-" + order.id.slice(0, 16).toUpperCase();
   result.trackingPath = trackingPath(workspaceId, order);
   result.notifications = (order.notifications || []).map(({ event, status, acceptedAt }) => ({ event, status, acceptedAt }));

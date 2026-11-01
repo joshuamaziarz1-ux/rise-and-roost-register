@@ -8,6 +8,7 @@ export function sqliteD1(sqlite) {
           return {
             sql, args,
             async first() { return sqlite.prepare(sql).get(...args) || null; },
+            async all() { return { results: sqlite.prepare(sql).all(...args), success: true }; },
             async run() { return { meta: { changes: sqlite.prepare(sql).run(...args).changes } }; },
           };
         },

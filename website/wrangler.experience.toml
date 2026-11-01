@@ -21,3 +21,11 @@ PUBLIC_WORKSPACE_ID = "2a7ca191c1639aaf023b02d96bcd9519fe099333302d9204"
 CUSTOMER_EXPERIENCE_ENABLED = "true"
 REVIEW_BUILD = "true"
 ORDER_EMAIL_ENABLED = "false"
+STUDIO_MANAGEMENT_ENABLED = "true"
+# Temporary PIN mode requires the additive auth tables and private Worker
+# pepper. The one-time setup capability and PIN never belong in this file.
+# See docs/studio-management/PRIVATE-TESTING.md. No IP or email gate is used.
+
+PREVIEW_ACCESS_MODE = "pin"
+PREVIEW_DATABASE_ID = "21352b95-d7f6-406f-8527-4b8dbcebf1bf"
+PREVIEW_ACCESS_UNTIL = "2026-12-01T13:50:00Z"

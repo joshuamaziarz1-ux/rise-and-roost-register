@@ -1,6 +1,8 @@
 import { api } from "./service.mjs";
 import { emailConfigured } from "./orders.mjs";
 import { drainNotifications } from "./notifications.mjs";
+import { previewAccess, restrictedResponse } from './preview-access.mjs';
+import { studioPinAccess } from './studio-pin.mjs';
 export const security = {
   "Content-Security-Policy":
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'",
@@ -11,14 +13,20 @@ export const security = {
 };
 export default {
   async fetch(request, env, ctx) {
-    let response = new URL(request.url).pathname.startsWith("/api/")
-      ? await api(request, env.DB, Date.now(), { publicWorkspaceId: env.PUBLIC_WORKSPACE_ID, emailEnabled: emailConfigured(env), customerExperienceEnabled: env.CUSTOMER_EXPERIENCE_ENABLED === "true", reviewBuild: env.REVIEW_BUILD === "true" })
-      : await env.ASSETS.fetch(request);
+    const pin = await studioPinAccess(request, env);
+    const access = pin.active ? pin : await previewAccess(request, env);
+    let response = pin.response || (!pin.active && access.active && !access.grant ? restrictedResponse(request, access) : new URL(request.url).pathname.startsWith("/api/")
+      ? await api(request, env.DB, Date.now(), { publicWorkspaceId: env.PUBLIC_WORKSPACE_ID, emailEnabled: emailConfigured(env), customerExperienceEnabled: env.CUSTOMER_EXPERIENCE_ENABLED === "true", reviewBuild: env.REVIEW_BUILD === "true", studioManagementEnabled: env.STUDIO_MANAGEMENT_ENABLED === "true", previewGrant: access.grant, previewPinMode: pin.active })
+      : await env.ASSETS.fetch(request));
     if (request.method === "POST" && response.ok && emailConfigured(env))
       ctx?.waitUntil(drainNotifications(env.DB, env));
     response = new Response(response.body, response);
     for (const [key, value] of Object.entries(security))
       response.headers.set(key, value);
+    if (access.active) {
+      response.headers.set('Cache-Control', 'no-store, private');
+      response.headers.set('CDN-Cache-Control', 'no-store');
+    }
     if (response.headers.get("Content-Type")?.includes("text/html"))
       response.headers.set("Cache-Control", "no-store");
     if (env.REVIEW_BUILD === "true" || /\/(orders|roost|studio)(\/|$)/.test(new URL(request.url).pathname))

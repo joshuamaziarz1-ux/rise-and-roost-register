@@ -51,6 +51,7 @@ export async function request(path, data, { workspaceId } = {}) {
   if (!response.ok)
     throw Object.assign(new Error(result.error || "Please try again."), {
       status: response.status,
+      previewAccessRequired: result.previewAccessRequired === true,
     });
   return result;
 }

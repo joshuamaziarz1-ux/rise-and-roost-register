@@ -128,14 +128,14 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     if (busy) result.append(h('p', { role: 'status', class: 'small-note' }, 'Please finish the sign-in prompt.'));
     return result;
   }
-  let comments = null, commentError = '', commentSent = false, commentsLoading;
+  let comments = null, commentError = '', commentSent = false, commentsLoading, commentsNeedRender = false;
   const commentDraft = { name: '', body: '', consent: false };
   async function loadComments(rerender = true) {
     if (commentsLoading || readOnly) return;
     commentsLoading = true;
-    try { comments = (await api('/api/comments')).comments; commentError = ''; }
+    try { const next = (await api('/api/comments')).comments; commentsNeedRender ||= comments === null || JSON.stringify(next) !== JSON.stringify(comments); comments = next; commentError = ''; }
     catch (e) { comments = []; commentError = e.message; }
-    finally { commentsLoading = false; if (rerender) render(); }
+    finally { commentsLoading = false; if (rerender && commentsNeedRender && !document.activeElement?.closest('.comment-form')) { commentsNeedRender = false; render(); } }
   }
   function commentPage() {
     if (comments === null && !commentsLoading && !readOnly) void loadComments();
@@ -159,5 +159,5 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
         h('section', { class: 'neighbor-notes', 'aria-label': 'Comments from our neighbors' }, h('h2', {}, 'Around the farmhouse table'),
           comments?.length ? comments.map(c => h('blockquote', {}, h('p', {}, c.body), h('cite', {}, c.name))) : h('p', {}, 'There’s always room for a good conversation.'))));
   }
-  return { refresh, roost, commentPage, get member() { return member; } };
+  return { refresh, roost, commentPage, refreshComments: loadComments, get member() { return member; } };
 }

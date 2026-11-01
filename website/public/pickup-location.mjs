@@ -1,8 +1,8 @@
 import { h } from './dom.mjs';
 
-const destination = '3431 County Rd. 60, Auburn, IN 46706';
-
-export function pickupLocation() {
+export function pickupLocation(business = {}) {
+  const location = business.pickupAddress || { name: 'Rise & Roost', street: '3431 County Rd. 60', city: 'Auburn, IN 46706' };
+  const destination = location.street + ', ' + location.city;
   const address = encodeURIComponent(destination);
   const android = /Android/i.test(navigator.userAgent);
   const apple = /iPhone|iPad|iPod|Macintosh/i.test(navigator.userAgent);
@@ -12,7 +12,7 @@ export function pickupLocation() {
   return h('section', { class: 'pickup-location', 'aria-label': 'Pickup Location' },
     h('strong', {}, 'Pickup Location'),
     h('address', {}, h('a', {
-      href, 'aria-label': 'Get directions to Rise & Roost, ' + destination,
+      href, 'aria-label': 'Get directions to ' + location.name + ', ' + destination,
       ...(android ? {} : { target: '_blank', rel: 'noopener noreferrer' }),
-    }, 'Rise & Roost', h('br'), '3431 County Rd. 60', h('br'), 'Auburn, IN 46706')));
+    }, location.name, h('br'), location.street, h('br'), location.city)));
 }

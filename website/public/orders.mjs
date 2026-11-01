@@ -2,6 +2,8 @@ export const paymentLabels = {
   not_collected: "Awaiting payment report",
   reported: "Payment Reported · awaiting verification",
   verified: "Payment Verified",
+  refunded: 'Refunded · independently recorded',
+  partially_refunded: 'Partially refunded · independently recorded',
 };
 export const fulfillmentLabels = {
   pending: "Order Received",
