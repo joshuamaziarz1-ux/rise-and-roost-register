@@ -171,3 +171,29 @@ test('historical collected records cannot be rewritten through status correction
   assert.equal((await h.change('fulfillment',{id:o.id,orderVersion:1,status:'ready',confirmCorrection:true,reason:'Fictional historical correction attempt'})).status,409);
   const after=JSON.parse(h.sql.prepare('SELECT ledger_json FROM workspaces WHERE id=?').get(h.site.id).ledger_json).orders[0];assert.deepEqual(after,before);
 });
+test('pickup-help requests need no alternative date and keep the confirmed schedule until owner approval',async()=>{
+  const h=await fixture(),o=(await h.order()).data,request={requestId:crypto.randomUUID(),topic:'pickup',body:'I am running late and need more time.'};
+  assert.equal((await h.track(o,'/message',{...request,topic:'automatic-approval'})).status,400);
+  const sent=await h.track(o,'/message',request);assert.equal(sent.status,200);assert.equal(sent.data.messages[0].topic,'pickup');
+  assert.deepEqual(sent.data.messageConfirmation,{requestId:request.requestId,messageId:sent.data.messages[0].id});
+  assert.equal((await h.track(o)).data.messageConfirmation,undefined);
+  assert.deepEqual((await h.track(o,'/message',request)).data.messageConfirmation,sent.data.messageConfirmation);
+  assert.equal(sent.data.attention.customerContacted,true);assert.equal(sent.data.attention.extensionRequested,true);assert.equal(sent.data.attention.extensionApproved,false);
+  assert.deepEqual(sent.data.pickup,o.pickup);assert.equal(sent.data.pickupDeadline,o.pickupDeadline);
+  let s=await h.snapshot();assert.equal(s.management.attention.extensions,1);assert.equal(s.orders[0].messages.length,1);
+  assert.equal((await h.track(o,'/message',request)).status,200);
+  assert.equal((await h.track(o,'/message',{...request,topic:'order'})).status,409);
+  s=await h.snapshot();assert.equal(s.orders[0].messages.length,1);assert.equal(s.management.attention.contacted,1);
+});
+test('order questions stay distinct from pickup requests and do not resurrect a resolved extension request',async()=>{
+  const h=await fixture(),o=(await h.order()).data;
+  const send=(topic,body)=>h.track(o,'/message',{requestId:crypto.randomUUID(),topic,body});
+  assert.equal((await send('order','Can I ask about the ingredients?')).status,200);
+  let s=await h.snapshot();assert.equal(s.management.attention.contacted,1);assert.equal(s.management.attention.extensions,0);
+  assert.equal((await send('pickup','I need extra pickup time.')).status,200);
+  assert.equal((await send('order','And a question about ingredients.')).status,200);
+  s=await h.snapshot();assert.equal(s.management.attention.extensions,1);
+  assert.equal((await h.change('resolve-contact',{id:o.id,orderVersion:s.orders[0].version,confirmed:true,reason:'Owner reviewed the pickup question without changing the confirmed schedule'})).status,200);
+  assert.equal((await send('order','One final ingredient question.')).status,200);
+  s=await h.snapshot();assert.equal(s.management.attention.contacted,1);assert.equal(s.management.attention.extensions,0);assert.deepEqual(s.orders[0].pickup,o.pickup);assert.equal(s.orders[0].pickupDeadline,o.pickupDeadline);
+});

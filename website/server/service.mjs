@@ -927,10 +927,12 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           order.audit.push({ action: 'Customer selected ' + providers[input.method] + '; payment remains unverified', at: new Date(now).toISOString() });
         } else if (tracking[3] === '/message') {
           if (input.website || typeof input.body !== 'string' || input.body.trim().length < 3 || input.body.length > 2000 || !/^[a-f0-9-]{32,48}$/.test(input.requestId || '')) fail('Write a message of 3–2,000 characters.');
+          const topic = input.topic ?? '';
+          if (!['', 'pickup', 'order'].includes(topic)) fail('Choose pickup help or an order question.');
           const existing = (order.messages || []).find(m => m.requestId === input.requestId);
           if (existing) {
-            if (existing.body !== input.body.trim() || (existing.requestedDate || '') !== (input.requestedDate || '') || (existing.requestedTime || '') !== (input.requestedTime || '')) fail('Use a new request for a different message.', 409);
-            return json(customerOrder(order, row.id, ledger.management?.settings, now));
+            if ((existing.topic || '') !== topic || existing.body !== input.body.trim() || (existing.requestedDate || '') !== (input.requestedDate || '') || (existing.requestedTime || '') !== (input.requestedTime || '')) fail('Use a new request for a different message.', 409);
+            return json({ ...customerOrder(order, row.id, ledger.management?.settings, now), messageConfirmation: { requestId: input.requestId, messageId: existing.id } });
           }
           if ((order.messages || []).length >= 100) fail('This conversation has reached its message limit. Please contact the farm directly.', 409);
           const requestedDate = input.requestedDate || '', requestedTime = input.requestedTime || '';
@@ -938,17 +940,21 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           if (requestedDate) { try { if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedDate) || (requestedTime && !/^\d{2}:\d{2}$/.test(requestedTime))) throw new Error(); localInstant(requestedDate, requestedTime || '12:00'); } catch { fail('Choose a valid requested pickup date and time.'); } }
           if (attempt === 0) { await rateLimit('order-message', 30); await rateLimit('message-order:' + order.id, 30); }
           const at = new Date(now).toISOString();
-          order.messages ||= []; order.messages.push({ id: token(), requestId: input.requestId, sender: 'customer', name: order.customer?.name || 'Guest customer', body: input.body.trim(), at, requestedDate, requestedTime });
+          order.messages ||= []; order.messages.push({ id: token(), requestId: input.requestId, sender: 'customer', name: order.customer?.name || 'Guest customer', body: input.body.trim(), topic, at, requestedDate, requestedTime });
           // One persistent attention item per conversation, rather than one alert per retry/message.
           const alreadyOpen = order.contact?.unresolved;
-          order.contact = { ...order.contact, unresolved: true, extensionRequested: !!requestedDate || !!order.contact?.extensionRequested, lastMessageAt: at, alertedAt: alreadyOpen ? order.contact.alertedAt : at };
+          order.contact = { ...order.contact, unresolved: true, extensionRequested: topic === 'pickup' || !!requestedDate || !!order.contact?.extensionRequested, lastMessageAt: at, alertedAt: alreadyOpen ? order.contact.alertedAt : at };
           order.audit.push({ action: 'Customer Contacted — awaiting owner review', at });
         } else fail('This action was not found.', 404);
         order.version = (order.version || 1) + 1;
         if (new TextEncoder().encode(JSON.stringify(ledger)).length > 1200000) fail('The conversation could not be saved. Contact the farm directly.', 409);
         const result = await run("UPDATE workspaces SET ledger_json=?,ledger_version=ledger_version+1 WHERE id=? AND ledger_version=?",
           JSON.stringify(ledger), row.id, row.ledger_version);
-        if (result.meta.changes === 1) return json(customerOrder(order, row.id, ledger.management?.settings, now));
+        if (result.meta.changes === 1) {
+          const response = customerOrder(order, row.id, ledger.management?.settings, now);
+          if (tracking[3] === '/message') response.messageConfirmation = { requestId: input.requestId, messageId: order.messages.find(m => m.requestId === input.requestId).id };
+          return json(response);
+        }
       }
       fail("Another update arrived first. Refresh your order status and try again.", 409);
     }

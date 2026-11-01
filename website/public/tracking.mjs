@@ -10,7 +10,28 @@ export async function start(root) {
   const endpoint = match && `/api/order-tracking/${match[1]}/${match[2]}`;
   let order, busy = false, error = "", refreshed = "", refreshSequence = 0, appliedSequence = 0;
   let doc = seed();
-  let messaging = false, draft = { body: '', requestedDate: '', requestedTime: '', website: '' }, messageId = crypto.randomUUID();
+  const emptyDraft = () => ({ body: '', topic: 'pickup', requestedDate: '', requestedTime: '', website: '' });
+  let messaging = false, draft = emptyDraft(), messageId = crypto.randomUUID(), pendingMessage = null;
+  // Bind ephemeral recovery to this exact order capability; never store the key.
+  const capabilityHash = key ? [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key)))].map(v => v.toString(16).padStart(2,'0')).join('') : '';
+  const draftKey = endpoint && capabilityHash ? 'rr-order-message:' + endpoint + ':' + capabilityHash : '';
+  const validDraft = value => value && typeof value.body === 'string' && value.body.length <= 2000 && ['pickup','order'].includes(value.topic) && typeof value.requestedDate === 'string' && value.requestedDate.length <= 10 && typeof value.requestedTime === 'string' && value.requestedTime.length <= 5;
+  try {
+    const raw = draftKey && sessionStorage.getItem(draftKey), saved = raw && raw.length <= 8000 && JSON.parse(raw);
+    if (validDraft(saved?.draft) && /^[a-f0-9-]{32,48}$/.test(saved.messageId || '')) {
+      draft = { ...emptyDraft(), ...saved.draft, website: '' }; messageId = saved.messageId;
+      if (validDraft(saved.pending) && saved.pending.requestId === messageId) pendingMessage = { ...draft, ...saved.pending, website: '' };
+      messaging = !!saved.open || !!pendingMessage;
+    }
+  } catch { /* Storage is optional; server persistence is the source of truth. */ }
+  const rememberMessage = () => {
+    if (!draftKey) return;
+    try {
+      if (draft.body || draft.requestedDate || draft.requestedTime || pendingMessage) sessionStorage.setItem(draftKey, JSON.stringify({ draft, messageId, pending: pendingMessage, open: messaging }));
+      else sessionStorage.removeItem(draftKey);
+    } catch { /* The current form and request identifier remain in memory. */ }
+  };
+  const changeDraft = (name, value) => { draft[name] = value; rememberMessage(); };
   let experience = false;
   const robots = h("meta", { name: "robots", content: "noindex,nofollow,noarchive" });
   document.head.append(robots);
@@ -19,13 +40,26 @@ export async function start(root) {
     if (!endpoint || !/^[a-f0-9]{48}$/.test(key || '')) throw new Error('Open the complete private tracking link from your order confirmation, including the part after #.');
     const response = await fetch(endpoint + action, { method: body ? 'POST' : 'GET', cache: 'no-store',
       headers: { Authorization: 'Bearer ' + key, ...(body ? { 'Content-Type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
-    const result = await response.json().catch(() => ({ error: 'Your order status is temporarily unavailable. Please retry.' })); if (!response.ok) throw new Error(result.error || 'Unable to save. Please retry.'); return result;
+    const result = await response.json().catch(() => ({ error: 'Your order status is temporarily unavailable. Please retry.' }));
+    if (!response.ok || result?.error) throw Object.assign(new Error(result?.error || 'Unable to save. Please retry.'), { status: response.ok ? 0 : response.status });
+    if (result?.id !== match[2] || !Number.isSafeInteger(result.version) || result.version < 1) throw new Error('The server did not confirm this order. Please retry.');
+    if (action === '/message') {
+      const confirmation = result.messageConfirmation;
+      if (confirmation?.requestId !== body.requestId || !Array.isArray(result.messages) || !result.messages.some(m => m.id === confirmation.messageId && m.sender === 'customer' && m.body === body.body.trim() && (m.topic || '') === (body.topic || '') && (m.requestedDate || '') === (body.requestedDate || '') && (m.requestedTime || '') === (body.requestedTime || ''))) throw new Error('The server did not confirm this message. Your draft is kept; please retry.');
+      delete result.messageConfirmation;
+    }
+    return result;
   }
   async function save(action, payload) {
     if (busy) return false;
     busy = true; error = ''; render();
     try { const result = await call(action,payload); if (!order || result.version >= order.version) order = result; return true; }
-    catch (e) { error = e.message + ' Your changes are not confirmed. Retry the same request.'; return false; }
+    catch (e) {
+      if (action === '/message' && e.status >= 400 && e.status < 500) {
+        pendingMessage = null; messageId = crypto.randomUUID(); rememberMessage();
+      }
+      error = e.message + ' Your changes are not confirmed. Retry the same request.'; return false;
+    }
     finally { busy = false; render(); }
   }
   async function refresh() {
@@ -94,22 +128,26 @@ export async function start(root) {
           h('p', {}, 'Your order is saved. Pay the exact amount shown. Include the order reference if your payment app offers a note. No amount or reference is filled automatically. Return to this tab after paying or canceling; opening a payment app never verifies payment.'),
           !Object.keys(destinations).length ? h('p', {}, 'Business payment destinations are not configured yet. Contact Danielle below before paying. Do not send real money during preview testing.') : null));
       }
-      main.append(button('Contact Danielle', () => { messaging = !messaging; render(); root.querySelector('#contact-message')?.focus(); }, { class: 'primary-link' }),
+      main.append(button('Contact Danielle', () => { messaging = !messaging; rememberMessage(); render(); root.querySelector('#contact-message')?.focus(); }, { class: 'primary-link' }),
         order.attention?.customerContacted ? h('p', { role: 'status' }, 'Customer Contacted — awaiting owner review. Your current pickup time stays unchanged until Danielle approves an arrangement.') : null,
         order.attention?.extensionApproved ? h('p', { role: 'status' }, 'Extension Approved — new arrangement confirmed') : null,
         order.attention?.overdue ? h('p', {}, 'Pickup Overdue — please contact Danielle for owner review.') : null,
         order.attention?.resolved ? h('p', {}, 'Resolved — your request has been handled.') : null,
         order.resolution ? h('p', {}, order.resolution.kind === 'forfeited' ? 'An owner reviewed and recorded this order as forfeited. Contact Danielle about any questions.' : 'Danielle reviewed and resolved this pickup.') : null);
-      if (messaging) main.append(h('form', { class: 'sub-card', onsubmit: async e => {
-        e.preventDefault(); const ok = await save('/message', { ...draft, requestId: messageId });
-        if (ok) { draft = { body: '', requestedDate: '', requestedTime: '', website: '' }; messageId = crypto.randomUUID(); messaging = false; render(); }
-      } }, h('h2', {}, 'Message Danielle'), field('Your message', draft.body, v => draft.body = v, { id: 'contact-message', type: 'textarea', required: true, minlength: 3, maxlength: 2000, disabled: busy }),
-        field('Requested alternative pickup date (optional)', draft.requestedDate, v => draft.requestedDate = v, { id: 'requested-date', type: 'date', disabled: busy }),
-        field('Requested alternative pickup time (optional)', draft.requestedTime, v => draft.requestedTime = v, { id: 'requested-time', type: 'time', disabled: busy }),
+      if (messaging) main.append(h('form', { class: 'sub-card', 'aria-label': 'Message Danielle', onsubmit: async e => {
+        e.preventDefault(); pendingMessage ||= { ...draft, requestId: messageId }; rememberMessage();
+        const ok = await save('/message', pendingMessage);
+        if (ok) { draft = emptyDraft(); messageId = crypto.randomUUID(); pendingMessage = null; messaging = false; rememberMessage(); render(); }
+      } }, h('h2', {}, 'Message Danielle'),
+        pendingMessage ? h('p', { role: 'status' }, 'Your last message is awaiting confirmation. Retry it here; it will not be sent twice. Your original message is kept through refresh.') : null,
+        field('What can Danielle help with?', draft.topic, v => changeDraft('topic',v), { id: 'contact-topic', choices: [{ value: 'pickup', label: 'Pickup delay or more time' }, { value: 'order', label: 'Order question' }], disabled: busy || !!pendingMessage }),
+        field('Your message', draft.body, v => changeDraft('body',v), { id: 'contact-message', type: 'textarea', required: true, minlength: 3, maxlength: 2000, disabled: busy || !!pendingMessage }),
+        field('Requested alternative pickup date (optional)', draft.requestedDate, v => changeDraft('requestedDate',v), { id: 'requested-date', type: 'date', disabled: busy || !!pendingMessage }),
+        field('Requested alternative pickup time (optional)', draft.requestedTime, v => changeDraft('requestedTime',v), { id: 'requested-time', type: 'time', disabled: busy || !!pendingMessage }),
         h('input', { name: 'website', tabindex: '-1', autocomplete: 'off', hidden: true, oninput: e => draft.website = e.target.value }),
         h('p', {}, 'A request does not approve an extension. Danielle will review it and reply here.'),
-        h('button', { type: 'submit', class: 'primary-link', disabled: busy }, busy ? 'Sending…' : 'Send message')));
-      if (order.messages?.length) main.append(h('section', { class: 'sub-card', 'aria-label': 'Conversation with Danielle' }, h('h2', {}, 'Conversation with Danielle'), order.messages.map(m => h('article', {}, h('strong', {}, m.sender === 'owner' ? 'Danielle' : 'You'), h('p', {}, m.body), h('small', {}, stamp(m.at)), m.requestedDate ? h('p', {}, 'Requested: ' + requestedPickupLabel(m)) : null))));
+        h('button', { type: 'submit', class: 'primary-link', disabled: busy }, busy ? 'Sending…' : pendingMessage ? 'Retry message' : 'Send message')));
+      if (order.messages?.length) main.append(h('section', { class: 'sub-card', 'aria-label': 'Conversation with Danielle' }, h('h2', {}, 'Conversation with Danielle'), order.messages.map(m => h('article', {}, h('strong', {}, m.sender === 'owner' ? 'Danielle' : 'You'), h('p', {}, m.body), h('small', {}, stamp(m.at)), m.requestedDate ? h('p', {}, 'Requested: ' + requestedPickupLabel(m)) : m.topic === 'pickup' ? h('p', {}, 'Pickup delay or more time requested; alternative date/time not specified.') : null))));
       main.append(h("h2", {}, "Order progress"),
         h("p", {}, "Payment and preparation are tracked separately. A stage is complete only when its own event is recorded."),
         h("ol", { "aria-label": "Order stages" }, stages(order).map(([label, at]) =>
