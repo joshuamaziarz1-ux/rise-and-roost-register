@@ -134,3 +134,29 @@ test('multiple pickup windows share daily production and optional combined order
   assert.equal((await h.change('calendar',{pickups:[{...first,dailyCapacity:1},second],paused:false,confirmExistingOrders:true})).status,200);
   assert.equal((await h.order({pickupId:second.id})).status,409);
 });
+test('full business backup restores conversations, approvals and payment audit while rotating private tracking access',async()=>{
+  const h=await fixture(),o=(await h.order()).data;
+  await h.track(o,'/message',{requestId:crypto.randomUUID(),body:'Please discuss a new pickup.',requestedDate:'2026-11-12'});
+  let s=await h.snapshot();assert.equal((await h.change('approve-extension',{id:o.id,orderVersion:s.orders[0].version,date:'2026-11-12',time:'16:00',confirmed:true})).status,200);
+  s=await h.snapshot();assert.equal((await h.change('verify-payment',{id:o.id,orderVersion:s.orders[0].version,method:'paypal',evidence:'Fictional backup receipt',independentlyVerified:true})).status,200);
+  const backup=(await h.call('/api/manage/export')).data,original=(await h.snapshot()).orders[0];
+  const target=(await h.call('/api/workspaces',{})).data;
+  const restored=await h.call('/api/manage/import',{operationId:crypto.randomUUID(),backup,confirmPrivateCopy:true,revision:target.revision,ledgerVersion:1});
+  assert.equal(restored.status,200,restored.data.error);const saved=restored.data.orders[0];
+  for(const field of ['messages','extensionHistory','originalPickup','policyAcceptance','pickupDeadline','verifications','paidReceipt'])assert.deepEqual(saved[field],original[field]);
+  assert.notEqual(saved.trackingPath,original.trackingPath);assert.equal(saved.notifications.length,0);assert.equal(restored.data.id,target.id);assert.equal(restored.data.management.today.verifiedSales,o.total);
+  assert.equal((await h.track(o)).status,200); // Source order and its original private link are intact.
+});
+test('dispute records prevent pickup resolution and remain independently auditable',async()=>{
+  const h=await fixture(),o=(await h.order()).data,late=Date.parse(o.pickupDeadline)+60000;h.sql.prepare('UPDATE sessions SET expires=?').run(late+3600000);
+  let s=await h.snapshot();assert.equal((await h.change('dispute',{id:o.id,orderVersion:s.orders[0].version,open:true,confirmed:true,reason:'Fictional customer payment dispute'})).status,200);
+  s=await h.snapshot();assert.equal(s.management.attention.other,1);assert.equal((await h.change('resolve-pickup',{id:o.id,orderVersion:s.orders[0].version,resolution:'forfeited',confirmed:true,reason:'Fictional owner review'},{at:late})).status,409);
+  assert.equal((await h.change('dispute',{id:o.id,orderVersion:s.orders[0].version,open:false,confirmed:true,reason:'Fictional dispute resolved with provider'})).status,200);
+  s=await h.snapshot();assert.equal(s.management.attention.other,0);assert.equal(s.orders[0].paymentStatus,'not_collected');assert.equal(s.orders[0].audit.filter(e=>e.action.includes('dispute')).length,2);
+});
+test('preview commerce refuses a production or mismatched database configuration before any storage access',async()=>{
+  const {default:worker}=await import('../server/worker.mjs');
+  for(const env of [{STUDIO_MANAGEMENT_ENABLED:'true',REVIEW_BUILD:'false'},{COMMERCE_UPDATE_ENABLED:'true',REVIEW_BUILD:'true',PREVIEW_DATABASE_ID:'production-db'}]){
+    const response=await worker.fetch(new Request('https://rise-and-roost.com/studio'),env,{});assert.equal(response.status,503);
+  }
+});
