@@ -12,7 +12,7 @@ const db=sqliteD1(sql),origin='https://rise-roost-experience-preview.joshua-mazi
 const config={customerExperienceEnabled:true,studioManagementEnabled:true,commerceEnabled:true,reviewBuild:true};
 const call=(path,body)=>api(new Request(origin+path,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(body)}),db,Date.now(),config);
 const made=await call('/api/workspaces',{});if(made.status!==201)throw Error('Local fixture generation failed.');const site=await made.json();config.publicWorkspaceId=site.id;
-const doc=site.published;doc.products[0].name='Fictional test loaf — do not fulfill';
+const doc=site.published;doc.products[0].name='Fictional test loaf — do not fulfill';doc.products[0].price=0;
 sql.prepare('UPDATE workspaces SET published_json=?,draft_json=? WHERE id=?').run(JSON.stringify(doc),JSON.stringify(doc),site.id);
 const p=doc.products[0];
 const ordered=await call('/api/orders',{workspaceId:site.id,storefront:'main',revision:site.publishedRevision,requestId:crypto.randomUUID(),pickupId:doc.pickups[0].id,checkoutMode:'guest',customerDetails:{name:'Fictional Preview Test — Do Not Fulfill'},policyAccepted:true,policyVersion:POLICY_VERSION,lines:[{productId:p.id,variantId:p.variants[0].id,qty:1,unitPrice:p.price}],total:p.price});

@@ -1,4 +1,4 @@
-import { requestedPickupLabel, providers, defaultCalendar } from './commerce.mjs';
+import { requestedPickupLabel, providers, defaultCalendar, paymentDestination, configuredPayments } from './commerce.mjs';
 import { h, button, field, request as apiRequest, notify } from './dom.mjs';
 import { clone, money, pickupLabel, orderByLabel, customerTimestamp, customerTime, localInstant } from './model.mjs';
 import { paymentLabels, fulfillmentLabels } from './orders.mjs';
@@ -26,9 +26,13 @@ export async function start(root, initial, newAccessKey) {
   const bindings = new WeakMap();
   const workspace = initial.id, storageKey = 'rr-studio-draft:' + workspace;
   const pendingKey = 'rr-studio-pending:' + workspace;
+  const testChecks = new Map();
+  const paymentsVersion = () => data.management.settings?.paymentsVersion || 0;
+  const paymentFields = provider => { const p = data.management.settings?.payments?.[provider] || {}; return { provider, url: p.url || '', enabled: p.enabled === true, businessConfirmed: p.businessConfirmed === true }; };
+  const formChanged = () => editing && (editing.type === 'payment-settings' ? editing.paymentsVersion !== paymentsVersion() : editing.revision !== data.revision || editing.ledgerVersion !== data.ledgerVersion);
   const request = (path, body) => apiRequest(path, body, { workspaceId: workspace });
   const stamp = at => at ? customerTimestamp(at) : 'Not recorded';
-  const marked = () => { if (editing && ['product', 'calendar', 'content'].includes(editing.type)) try { sessionStorage.setItem(storageKey, JSON.stringify(editing)); } catch {} };
+  const marked = () => { if (editing && ['product', 'calendar', 'content', 'payment-settings'].includes(editing.type)) try { sessionStorage.setItem(storageKey, JSON.stringify(editing)); } catch {} };
   const f = (label, object, key, options = {}) => {
     const set = v => { object[key] = options.type === 'number' ? Number(v) : v; marked(); };
     const node = field(label, object[key] ?? '', set, options), input = node.querySelector('input,textarea,select');
@@ -36,11 +40,11 @@ export async function start(root, initial, newAccessKey) {
   };
   const check = (label, object, key) => f(label, object, key, { type: 'checkbox' });
   function go(next, selected = '', nextFilter = 'all') {
-    if (editing && !confirm('Leave this form? The latest unfinished product, calendar, or content form is kept in this tab until you save, cancel, or replace it with another form.')) return;
+    if (editing && !confirm('Leave this form? The latest unfinished product, calendar, content or payment link form is kept in this tab until you save, cancel, or replace it with another form.')) return;
     editing = null; error = ''; selection = selected; filter = nextFilter; search = ''; view = next;
     history.replaceState({}, '', initial.studioPath + '#' + encodeURIComponent(next)); render(); window.scrollTo(0, 0);
   }
-  function edit(type, values) { editing = { type, values: clone(values), original: clone(values), revision: data.revision, ledgerVersion: data.ledgerVersion }; error = ''; marked(); render(); }
+  function edit(type, values) { editing = { type, values: clone(values), original: clone(values), revision: data.revision, ledgerVersion: data.ledgerVersion }; editing.paymentsVersion = paymentsVersion(); error = ''; marked(); render(); }
   const merge = (base, local, remote) => {
     if (JSON.stringify(base) === JSON.stringify(local)) return remote === undefined ? undefined : clone(remote);
     if (local && base && remote && !Array.isArray(local) && typeof local === 'object' && typeof base === 'object' && typeof remote === 'object') {
@@ -61,12 +65,12 @@ export async function start(root, initial, newAccessKey) {
     else if (e.type === 'calendar') {
       const current = data.published.pickups.find(p => p.id === v.pickup.id);
       if (current) { const remote = { ...v, pickup: current }; e.values = merge(e.original || v, v, remote); e.original = clone(remote); }
-    } else if (v.orderId) { const current = data.orders.find(o => o.id === v.orderId); if (current) v.orderVersion = current.version; }
+    } else if (e.type === 'payment-settings') { const remote = paymentFields(v.provider); e.values = merge(e.original || v, v, remote); e.original = clone(remote); e.paymentsVersion = paymentsVersion(); } else if (v.orderId) { const current = data.orders.find(o => o.id === v.orderId); if (current) v.orderVersion = current.version; }
     e.revision = data.revision; e.ledgerVersion = data.ledgerVersion; error = ''; marked(); render();
   }
   async function cancel() {
     if (busy) return;
-    const discardDraft = ['product', 'calendar', 'content'].includes(editing?.type) || ['product', 'calendar', 'content'].includes(pending?.form?.type);
+    const discardDraft = ['product', 'calendar', 'content', 'payment-settings'].includes(editing?.type) || ['product', 'calendar', 'content', 'payment-settings'].includes(pending?.form?.type);
     if (pending) {
       busy = true; error = ''; render();
       try {
@@ -85,6 +89,7 @@ export async function start(root, initial, newAccessKey) {
       const q = new URLSearchParams({ period }); if (period === 'custom') { q.set('start', from); q.set('end', through); }
       const next = await request('/api/manage/snapshot?' + q);
       if (next.id !== workspace) throw new Error('This response belongs to another workspace. Sign in to the correct saved website.');
+      if (next.revision < data.revision || next.ledgerVersion < data.ledgerVersion) return;
       data = next; connected = true; reauth = false;
       if (pending && !busy) {
         const resolving = pending;
@@ -92,7 +97,7 @@ export async function start(root, initial, newAccessKey) {
         if (status.found && pending === resolving && !busy) {
           data = await request('/api/manage/snapshot?' + q);
           if (pending === resolving && !busy) {
-            pending = null; if (editing === resolving.form) { if (['product', 'calendar', 'content'].includes(editing?.type)) sessionStorage.removeItem(storageKey); editing = null; }
+            pending = null; if (editing === resolving.form) { if (['product', 'calendar', 'content', 'payment-settings'].includes(editing?.type)) sessionStorage.removeItem(storageKey); editing = null; }
             error = ''; sessionStorage.removeItem(pendingKey); notify(status.result?.abandoned ? 'The previous request was canceled.' : 'The server confirms your previous save.');
           }
         }
@@ -106,9 +111,9 @@ export async function start(root, initial, newAccessKey) {
     if (status) { status.textContent = connected ? 'Connected' : 'Offline / reconnecting'; status.classList.toggle('offline', !connected); }
     const notice = root.querySelector('#management-error'); if (notice) { notice.textContent = error; notice.hidden = !error; }
     const reopen = root.querySelector('#management-reopen'); if (reopen) reopen.hidden = connected;
-    const conflict = root.querySelector('#management-conflict'); if (conflict) conflict.hidden = !editing || editing.revision === data.revision && editing.ledgerVersion === data.ledgerVersion;
+    const conflict = root.querySelector('#management-conflict'); if (conflict) conflict.hidden = !formChanged();
   }
-  async function send(path, payload, { keepForm = false } = {}) {
+  async function send(path, payload, { keepForm = false, successMessage = 'Saved.' } = {}) {
     if (busy) return;
     if (!navigator.onLine) { connected = false; error = 'You’re offline. Your fields are unsaved. Reconnect, then retry.'; chrome(); return; }
     const logical = JSON.stringify({ path, payload });
@@ -116,9 +121,10 @@ export async function start(root, initial, newAccessKey) {
     pending ||= { id: id(), logical, form: editing }; try { sessionStorage.setItem(pendingKey, JSON.stringify({ id: pending.id })); } catch {} busy = true; error = ''; render();
     try {
       const result = await request('/api/manage/' + path, { ...payload, operationId: pending.id });
-      if (result.management) data = result; else await refresh(false);
-      pending = null; sessionStorage.removeItem(pendingKey); if (!keepForm) { if (['product', 'calendar', 'content'].includes(editing?.type)) sessionStorage.removeItem(storageKey); editing = null; }
-      connected = true; notify('Saved.');
+      if (!result.management || result.id !== workspace || result.result === undefined && result.duplicate !== true) throw new Error('The server did not confirm this save. Your fields are kept; check the connection before retrying.');
+      data = result;
+      pending = null; sessionStorage.removeItem(pendingKey); if (!keepForm) { if (['product', 'calendar', 'content', 'payment-settings'].includes(editing?.type)) sessionStorage.removeItem(storageKey); editing = null; }
+      connected = true; notify(successMessage); return result;
     } catch (e) {
       error = e.message; if (e.status && e.status < 500 && !(initial.previewDirectAccess && e.status === 403)) { pending = null; sessionStorage.removeItem(pendingKey); }
       if (initial.previewDirectAccess && [403, 503].includes(e.status)) reauth = true;
@@ -145,7 +151,7 @@ export async function start(root, initial, newAccessKey) {
     return h('div', { class: 'ms-form-actions' }, h('button', { type: 'submit', class: 'ms-primary', disabled: busy }, busy ? 'Saving…' : label), button('Cancel', cancel, { class: 'ms-secondary', disabled: busy }));
   }
   function form(title, children, save, label) {
-    const changedElsewhere = editing && (editing.revision !== data.revision || editing.ledgerVersion !== data.ledgerVersion);
+    const changedElsewhere = formChanged();
     return h('form', { class: 'ms-panel ms-edit', onsubmit: async e => { e.preventDefault(); for (const input of e.currentTarget.elements) bindings.get(input)?.(); await save(); } }, h('h2', {}, title), h('div', { id: 'management-conflict', class: 'ms-warning', hidden: !changedElsewhere }, h('p', {}, 'New changes were saved while this form was open. Your unsaved fields are still here.'), button('Review latest and keep my edits', rebase, { class: 'ms-secondary', disabled: !!pending })), children, actions(save, label));
   }
   const panel = (title, ...children) => h('section', { class: 'ms-panel' }, h('h2', {}, title), children);
@@ -228,7 +234,7 @@ export async function start(root, initial, newAccessKey) {
       h('div', { class: 'ms-heading' }, h('h1', {}, o.orderNumber), pill(fulfillmentLabels[o.status])),
       attentionPills(o),
       panel('Payment', h('h3', {}, o.customer?.name || 'Guest customer'), h('strong', {}, 'Order total: ' + money(o.total)), pill(paymentLabels[o.paymentStatus] || 'Awaiting Payment'), h('p', {}, 'Selected method: ' + (providers[o.selectedPaymentMethod] || providers[o.verification?.method] || o.verification?.method || 'Not chosen yet')),
-        !o.paymentVerifiedAt && o.status !== 'canceled' && !o.resolution ? button('Verify payment', () => edit('payment', { orderId: o.id, orderVersion: o.version, method: o.selectedPaymentMethod || 'paypal', evidence: '', independentlyVerified: false }), { class: 'ms-primary' }) : null,
+        o.total > 0 && !o.paymentVerifiedAt && o.status !== 'canceled' && !o.resolution ? button('Verify payment', () => edit('payment', { orderId: o.id, orderVersion: o.version, method: o.selectedPaymentMethod || 'paypal', evidence: '', independentlyVerified: false }), { class: 'ms-primary' }) : null,
         o.paymentVerifiedAt ? h('p', {}, 'Verified ' + stamp(o.paymentVerifiedAt)) : null,
         o.paymentVerifiedAt ? button('Correct a mistaken verification', () => edit('payment-correction', { orderId: o.id, orderVersion: o.version, reason: '', independentlyChecked: false }), { class: 'ms-text' }) : null,
         (o.refunds || []).map(r => h('p', {}, 'Recorded refund: ' + money(r.amount) + ' · ' + stamp(r.at))),
@@ -359,14 +365,14 @@ export async function start(root, initial, newAccessKey) {
     let code = '';
     const business = data.management.settings || { calendar: defaultCalendar(), payments: {} };
     const preferences = clone(data.management.notifications.preferences);
-    return h('div', {}, h('h1', {}, 'Settings'),
+    return h('div', {}, h('h1', {}, 'Settings'), menu('Payments', 'Settings/Payments'),
       data.previewPinAccess ? panel('Studio access', h('p', {}, 'This device is remembered for up to 30 days. Use Lock Studio whenever you want the PIN required again on this device.'), h('p', {}, 'This shared testing PIN is temporary. Individual owner accounts can replace it before launch.')) : data.previewDirectAccess ? panel('Testing access', h('p', {}, 'Cloudflare Access remembers this browser. No separate Studio sign-in is needed.'), h('p', {}, 'Approved tester: ' + data.previewTesterEmail), h('p', {}, 'Testing session ends ' + stamp(data.previewAccessExpiresAt) + '. Re-verification is needed after expiry, logout, or clearing cookies.'), h('a', { href: '/cdn-cgi/access/logout', class: 'ms-secondary' }, 'Sign out of testing access')) : panel('Owner access', h('p', {}, 'Current sign-in: secure workspace access. Individual Descope owner accounts are not connected yet. The existing authentication has not been replaced.'), h('p', {}, 'Both owner accounts must be tested and approved before activation. Do not share private access keys in chat.'),
         h('a', { href: data.studioPath, class: 'ms-secondary' }, 'Studio link for this saved website'),
         field('Connection code from your other device', code, v => code = v, { maxlength: 20, autocomplete: 'off' }), button('Review device connection', async () => {
           try { const r = await request('/api/device-review', { code }); if (confirm('Approve the browser showing this exact code for this saved website? Only approve a request you started.')) { await request('/api/device-approve', { code, requestId: r.requestId, confirmed: true }); notify('Device request approved. Finish connecting on that device.'); } }
           catch (e) { error = e.message; chrome(); }
         }, { class: 'ms-primary' })),
-      panel('Payments & business days', h('p', {}, 'Configure PayPal, Venmo and Cash App business destinations, business days and closures. Existing order deadlines are preserved.'), button('Edit payments & business days', () => edit('business-settings', { calendar: clone(business.calendar || defaultCalendar()), payments: Object.fromEntries(Object.keys(providers).map(key => [key, { url: business.payments?.[key]?.url || '', businessConfirmed: business.payments?.[key]?.businessConfirmed || false }])), closuresText: (business.calendar?.closures || []).join('\n') }), { class: 'ms-primary' })),
+      panel('Business days', h('p', {}, 'Set business weekdays and closures for pickup deadlines. Existing orders keep their recorded deadlines.'), button('Edit business days', () => edit('business-settings', { calendar: clone(business.calendar || defaultCalendar()), closuresText: (business.calendar?.closures || []).join('\n') }), { class: 'ms-primary' })),
       panel('Backup & data protection', h('p', {}, 'Download an owner-only business backup containing website revisions, orders, members, comments, and photos. It excludes sign-in credentials and recovery secrets. Keep downloads private.'),
         button('Download business backup', async () => { try { const backup = await request('/api/manage/export'); download('rise-roost-business-backup.json', JSON.stringify(backup)); notify('Business backup downloaded.'); } catch (e) { error = e.message; chrome(); } }, { class: 'ms-primary' }),
         h('p', { class: 'ms-note' }, 'Saved records are never removed automatically. Cloudflare D1 recovery remains available through the hosting account.')), 
@@ -376,6 +382,32 @@ export async function start(root, initial, newAccessKey) {
       panel('Install on iPhone', h('p', {}, 'In Safari, open Share → Add to Home Screen. Private business data is fetched securely while online and is not stored in an offline service-worker cache.')),
       panel('Audit history', data.management.audit.slice(0, 60).map(a => h('div', { class: 'ms-audit' }, h('strong', {}, a.action || a.kind), h('span', {}, stamp(a.at)), h('small', {}, a.actor?.name || 'Owner')))),
       !data.previewDirectAccess ? button('Sign out', async () => { if (editing && !confirm('Sign out and discard the unsaved form?')) return; try { await request('/api/logout', {}); disposed = true; sessionStorage.removeItem(storageKey); location.reload(); } catch (e) { error = e.message; chrome(); } }, { class: 'ms-secondary' }) : null);
+  }
+  async function testPaymentLink(provider) {
+    const popup = window.open('about:blank', '_blank'); if (popup) popup.opener = null;
+    const response = await send('payment-test-start', { provider, paymentsVersion: paymentsVersion() }, { successMessage: 'Link test started. Check the recipient, then confirm here. Do not send money.' });
+    if (!response) { popup?.close(); return; }
+    const url = paymentDestination(provider, response.result.url);
+    if (popup) { try { popup.location.replace(url); } catch { popup.close(); } }
+  }
+  function payments() {
+    const saved = data.management.settings?.payments || {}, active = configuredPayments(data.management.settings);
+    return h('div', {}, button('← Settings', () => go('Settings'), { class: 'ms-text' }), h('h1', {}, 'Payments'),
+      panel('Customer ordering', h('p', { role: 'status' }, Object.keys(active).length ? 'Ready — an enabled payment link has an owner-confirmed test.' : 'Ordering paused — save, enable and test at least one payment link.'), h('p', {}, 'Studio stays available while payment links are being set up. Payments are always verified manually by Danielle.')),
+      Object.entries(providers).map(([provider,label]) => {
+        const p = saved[provider] || {}, ready = !!active[provider], test = p.pendingTest;
+        return panel(label, pill(!p.url ? 'Not configured' : !p.enabled ? 'Disabled' : ready ? 'Ready' : 'Test required'),
+          p.url ? h('p', { style: { overflowWrap: 'anywhere' } }, p.url) : h('p', {}, 'No payment link saved.'),
+          button(p.url ? 'Edit ' + label + ' link' : 'Add ' + label + ' link', () => edit('payment-settings', paymentFields(provider)), { class: 'ms-primary' }),
+          p.url ? button((p.enabled ? 'Disable ' : 'Enable ') + label, () => send('payment-destination', { ...paymentFields(provider), enabled: !p.enabled, paymentsVersion: paymentsVersion() }), { class: 'ms-secondary', disabled: busy }) : null,
+          button('Test ' + label + ' Link', () => testPaymentLink(provider), { class: 'ms-secondary', disabled: busy || !p.url }),
+          p.tested?.at ? h('p', { class: 'ms-note' }, 'Last owner-confirmed test: ' + stamp(p.tested.at)) : null,
+          test && test.url === p.url ? h('form', { onsubmit: e => { e.preventDefault(); return send('payment-test-confirm', { provider, testId: test.id, confirmed: testChecks.get(test.id) === true, paymentsVersion: paymentsVersion() }, { successMessage: 'Link test confirmed. No payment was sent or verified.' }); } },
+            h('p', {}, 'Check the saved destination and correct business recipient. Do not send money for this test.'),
+            h('a', { href: p.url, target: '_blank', rel: 'noopener noreferrer', class: 'ms-text' }, 'Open saved ' + label + ' test link'),
+            field('I opened the ' + label + ' link and confirmed the correct business recipient', testChecks.get(test.id) || false, value => testChecks.set(test.id,value), { type: 'checkbox', required: true }),
+            h('button', { type: 'submit', class: 'ms-primary', disabled: busy }, 'Confirm ' + label + ' Link Test')) : null);
+      }), h('p', { class: 'ms-note' }, 'Use payment destinations approved for business sales. Link tests are owner confirmations of the destination, not proof of payment. Editing a link requires a new test.'));
   }
   function editForm() {
     const e = editing, v = e.values;
@@ -418,12 +450,15 @@ export async function start(root, initial, newAccessKey) {
     if (e.type === 'reply') return form('Reply to customer', [f('Your reply', v, 'body', { type: 'textarea', required: true, maxlength: 2000 })], () => send('reply', { id: v.orderId, orderVersion: v.orderVersion, body: v.body }), 'Send reply');
     if (e.type === 'extension') return form('Approve New Pickup Time', [h('p', {}, 'Only an owner can approve this arrangement. The original schedule and customer request are retained.'), f('Approved pickup date', v, 'date', { type: 'date', required: true }), clockField('Approved pickup time', v, 'time'), check('I confirm this new pickup arrangement', v, 'confirmed')], () => send('approve-extension', { id: v.orderId, orderVersion: v.orderVersion, date: v.date, time: v.time, confirmed: v.confirmed }), 'Approve New Pickup Time');
     if (['contact-resolution','pickup-resolution','dispute'].includes(e.type)) return form(e.type === 'contact-resolution' ? 'Resolve conversation' : e.type === 'dispute' ? 'Payment dispute review' : 'Review pickup resolution', [h('p', {}, 'No money is transferred or refunded by this action. Forfeiture requires a passed deadline with no unresolved communication or dispute.'), e.type === 'pickup-resolution' ? f('Resolution', v, 'resolution', { choices: [{ value: 'reviewed', label: 'Owner reviewed and resolved' }, { value: 'forfeited', label: 'Owner reviewed forfeiture' }] }) : null, f('Owner review and reason', v, 'reason', { type: 'textarea', required: true, maxlength: 500 }), check('I confirm this owner-reviewed decision', v, 'confirmed')], () => send(e.type === 'contact-resolution' ? 'resolve-contact' : e.type === 'dispute' ? 'dispute' : 'resolve-pickup', { id: v.orderId, orderVersion: v.orderVersion, reason: v.reason, confirmed: v.confirmed, resolution: v.resolution, open: v.open }), 'Confirm decision');
-    if (e.type === 'business-settings') return form('Payments & business days', [
-      h('p', {}, 'Use destinations supplied by accounts approved for business sales. Provider terms must be checked by the owner. Payment links do not verify receipt. Until configured, every weekday is a business day; choose your actual business days below.'),
-      Object.entries(providers).map(([provider,label]) => panel(label, f(label + ' business payment link', v.payments[provider], 'url', { type: 'url', maxlength: 500 }), check('This ' + label + ' destination is approved for my business sales', v.payments[provider], 'businessConfirmed'), data.management.settings?.payments?.[provider]?.url ? h('a', { href: data.management.settings?.payments?.[provider]?.url || '#', target: '_blank', rel: 'noopener noreferrer', class: 'ms-secondary' }, 'Test saved ' + label + ' destination (do not send money)') : null)),
+    if (e.type === 'payment-settings') return form(providers[v.provider] + ' payment link', [
+      f(providers[v.provider] + ' payment URL', v, 'url', { type: 'url', maxlength: 500, placeholder: 'Paste your business payment link' }),
+      check('Enabled for customer payments', v, 'enabled'), check('This destination is approved for my business sales', v, 'businessConfirmed'),
+      h('p', {}, 'Save the link, then use Test Link and confirm the correct recipient. An edited link needs a new test before checkout can use it.'),
+    ], () => send('payment-destination', { ...v, paymentsVersion: e.paymentsVersion }), 'Save payment link');
+    if (e.type === 'business-settings') return form('Business days', [
       h('h3', {}, 'Business days for pickup deadlines'), ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((name,day) => field(name, v.calendar.days.includes(day), checked => { v.calendar.days = checked ? [...v.calendar.days,day] : v.calendar.days.filter(d => d !== day); }, { type: 'checkbox' })),
       f('Closures (one YYYY-MM-DD date per line)', v, 'closuresText', { type: 'textarea', maxlength: 5000 }),
-    ], () => send('settings', { ledgerVersion: e.ledgerVersion, calendar: { ...v.calendar, closures: v.closuresText.split(/\s+/).filter(Boolean) }, payments: v.payments }), 'Save business settings');
+    ], () => send('settings', { ledgerVersion: e.ledgerVersion, calendar: { ...v.calendar, closures: v.closuresText.split(/\s+/).filter(Boolean) } }), 'Save business days');
     if (e.type === 'benefit') return form('Record return / credit', [f('Adjustment type', v, 'kind', { choices: [{ value: 'bottle_return', label: 'Bottles returned' }, { value: 'credit', label: 'Credit added (dollars)' }, { value: 'debit', label: 'Credit reduced (dollars)' }] }), f('Bottle quantity or credit dollars', v, 'amount', { type: 'number', min: '.01', step: '.01', required: true }), f('Reason / reference', v, 'reason', { required: true, maxlength: 500 })], () => send('benefit', { memberId: v.memberId, kind: v.kind, amount: v.kind === 'bottle_return' ? Number(v.amount) : price(v.amount), reason: v.reason }), 'Save member adjustment');
     if (e.type === 'content') return contentForm(e);
     return empty('Choose an existing form.');
@@ -453,15 +488,15 @@ export async function start(root, initial, newAccessKey) {
   function render() {
     if (reauth) { root.replaceChildren(h('main', { class: 'ms-loading' }, h('h1', {}, initial.previewPinAccess ? 'Studio is locked' : initial.previewDirectAccess ? 'Testing access needs verification' : 'Sign-in required'), h('p', {}, initial.previewPinAccess ? 'Enter your owner PIN in another tab, then check the connection here. Your unsaved form is kept here.' : initial.previewDirectAccess ? 'Reopen Studio in another tab to verify your Cloudflare Access session. Your unsaved form is kept here.' : 'Your unsaved form is kept in this tab. Sign in to this exact website in a new tab, then check the connection.'), h('a', { href: initial.studioPath, target: '_blank', rel: 'noopener' }, initial.previewPinAccess ? 'Unlock Studio' : initial.previewDirectAccess ? 'Reopen Website Studio' : 'Sign in to this website'), button('Check connection', () => refresh()))); return; }
     if (!data.management) { root.replaceChildren(h('main', { class: 'ms-loading' }, 'Opening Rise & Roost Website Studio…')); return; }
-    const page = editing ? editForm() : view === 'Home' ? home() : view === 'Orders' ? orders() : view === 'Products' ? products() : view === 'Calendar' ? calendar() : view === 'The Roost' ? members() : view === 'Website Content' ? content() : view === 'Customer Comments' ? comments() : view === 'Sales Reports' ? reports() : view === 'Settings' ? settings() : h('div', {}, h('h1', {}, 'More'), secondary.map(label => menu(label, label)));
+    const page = editing ? editForm() : view === 'Home' ? home() : view === 'Orders' ? orders() : view === 'Products' ? products() : view === 'Calendar' ? calendar() : view === 'The Roost' ? members() : view === 'Website Content' ? content() : view === 'Customer Comments' ? comments() : view === 'Sales Reports' ? reports() : view === 'Settings/Payments' ? payments() : view === 'Settings' ? settings() : h('div', {}, h('h1', {}, 'More'), secondary.map(label => menu(label, label)));
     root.replaceChildren(h('div', { class: 'management' },
       h('aside', { class: 'ms-sidebar' }, h('a', { href: initial.studioPath, class: 'ms-brand' }, h('img', { src: '/assets/logo.webp', alt: 'Rise & Roost' }), h('span', {}, 'Rise & Roost', h('small', {}, 'Website Studio'))),
-        h('nav', { 'aria-label': 'Studio navigation' }, primary.filter(v => v !== 'More').map(label => button(label, () => go(label), { 'aria-current': view === label ? 'page' : undefined })), h('details', { open: true }, h('summary', {}, 'More'), secondary.map(label => button(label, () => go(label), { 'aria-current': view === label ? 'page' : undefined })))), h('a', { href: initial.publishedPath, target: '_blank', rel: 'noopener', class: 'ms-secondary' }, 'View website')),
+        h('nav', { 'aria-label': 'Studio navigation' }, primary.filter(v => v !== 'More').map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view === 'Settings/Payments' ? 'page' : undefined })), h('details', { open: true }, h('summary', {}, 'More'), secondary.map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view === 'Settings/Payments' ? 'page' : undefined })))), h('a', { href: initial.publishedPath, target: '_blank', rel: 'noopener', class: 'ms-secondary' }, 'View website')),
       h('div', { class: 'ms-workspace' }, h('header', { class: 'ms-top' }, h('div', { class: 'ms-mobile-brand' }, h('img', { src: '/assets/logo.webp', alt: '' }), h('strong', {}, 'Rise & Roost', h('small', {}, 'Website Studio'))),
         h('span', { id: 'management-connection', role: 'status', class: connected ? '' : 'offline' }, connected ? 'Connected' : 'Offline / reconnecting'), button('Check connection', () => refresh(), { class: 'ms-text' }), initial.previewPinAccess ? button('Lock Studio', lockStudio, { class: 'ms-text' }) : null, initial.previewDirectAccess ? h('a', { id: 'management-reopen', href: initial.studioPath, target: '_blank', rel: 'noopener', class: 'ms-text', hidden: connected }, 'Reopen Studio') : null, pending && !busy ? button('Resolve previous save', cancel, { class: 'ms-text' }) : null),
         h('div', { id: 'management-error', role: 'alert', class: 'ms-error', hidden: !error }, error),
         h('main', { id: 'main-content', class: 'ms-main' }, credentials(), page)),
-      h('nav', { class: 'ms-bottom', 'aria-label': 'Primary Studio navigation' }, primary.map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'More' && secondary.includes(view) ? 'page' : undefined })))));
+      h('nav', { class: 'ms-bottom', 'aria-label': 'Primary Studio navigation' }, primary.map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'More' && (secondary.includes(view) || view === 'Settings/Payments') ? 'page' : undefined })))));
     if (busy) for (const control of root.querySelectorAll('button,input,select,textarea')) control.disabled = true;
   }
   window.addEventListener('beforeunload', event => { if (editing || pending) { event.preventDefault(); event.returnValue = ''; } });
@@ -469,8 +504,8 @@ export async function start(root, initial, newAccessKey) {
   window.addEventListener('online', () => refresh());
   window.addEventListener('focus', () => refresh());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) void refresh(); });
-  try { const target = decodeURIComponent(location.hash.slice(1)); if ([...primary, ...secondary].includes(target)) view = target; } catch {}
-  try { const saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null'); if (saved?.type && ['product', 'calendar', 'content'].includes(saved.type)) { editing = saved; view = { product: 'Products', calendar: 'Calendar', content: 'Website Content' }[saved.type]; } } catch {}
+  try { const target = decodeURIComponent(location.hash.slice(1)); if ([...primary, ...secondary, 'Settings/Payments'].includes(target)) view = target; } catch {}
+  try { const saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null'); if (saved?.type && ['product', 'calendar', 'content', 'payment-settings'].includes(saved.type)) { editing = saved; view = { product: 'Products', calendar: 'Calendar', content: 'Website Content', 'payment-settings': 'Settings/Payments' }[saved.type]; } } catch {}
   try { const saved = JSON.parse(sessionStorage.getItem(pendingKey) || 'null'); if (/^[a-f0-9-]{32,48}$/.test(saved?.id || '')) pending = { id: saved.id, form: editing }; } catch {}
   render(); await refresh();
   setInterval(() => { if (!document.hidden && !busy && !disposed) void refresh(); }, 5000);

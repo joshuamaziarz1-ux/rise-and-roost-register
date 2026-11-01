@@ -27,21 +27,29 @@ export function pickupDeadline(pickup, calendar = defaultCalendar()) {
 }
 export function paymentDestination(provider, value) {
   if (!Object.hasOwn(providers, provider) || typeof value !== 'string' || value.length > 500) bad('Choose a supported payment destination.');
+  value = value.trim();
+  if (/[\s\\]/u.test(value)) bad('Use a complete payment link without spaces or backslashes.');
   let u; try { u = new URL(value); } catch { bad('Use the complete HTTPS payment link supplied by your business payment provider.'); }
   if (u.protocol !== 'https:' || u.username || u.password || u.port || u.hash || u.search) bad('Use a provider payment link without added query parameters or fragments.');
   const paths = {
-    paypal: /^(?:\/(?:ncp\/payment|invoice\/p)\/[A-Za-z0-9_-]+)\/?$/,
+    paypal: /^(?:\/(?:ncp\/payment|invoice\/p|paypalme)\/[A-Za-z0-9_-]+)\/?$/,
     venmo: /^\/(?:u\/)?[A-Za-z0-9_-]{2,80}\/?$/,
     cashapp: /^\/\$[A-Za-z0-9_-]{1,80}\/?$/,
   };
   const hosts = { paypal: ['www.paypal.com','paypal.com'], venmo: ['venmo.com','www.venmo.com'], cashapp: ['cash.app'] };
-  if (!hosts[provider].includes(u.hostname) || !paths[provider].test(u.pathname)) bad('Use an approved PayPal payment/invoice link, Venmo business profile, or Cash App Business cashtag destination.');
+  const paypalMe = provider === 'paypal' && u.hostname === 'paypal.me' && /^\/[A-Za-z0-9_-]{1,80}\/?$/.test(u.pathname);
+  const reserved = /^(?:login|logout|signup|settings|account|about|legal|privacy|terms|business|download|support|contact)$/i;
+  if ((!paypalMe && (!hosts[provider].includes(u.hostname) || !paths[provider].test(u.pathname))) || reserved.test(u.pathname.replace(/^\/(?:u\/)?|\/$/g,''))) bad('Use a PayPal business payment/profile link, Venmo business profile, or Cash App Business cashtag destination.');
   return u.href;
 }
 export function configuredPayments(settings = {}) {
   return Object.fromEntries(Object.entries(settings.payments || {}).filter(([key,v]) => {
-    try { return v.businessConfirmed === true && paymentDestination(key,v.url); } catch { return false; }
-  }).map(([key,v]) => [key, { url: v.url }]));
+    try { return v.enabled === true && v.businessConfirmed === true && Number.isFinite(Date.parse(v.tested?.at)) && !!v.tested?.actor?.id && v.tested.url === paymentDestination(key,v.url); } catch { return false; }
+  }).map(([key,v]) => [key, { url: paymentDestination(key,v.url) }]));
+}
+export function paymentReadiness(settings = {}) {
+  const active = Object.keys(configuredPayments(settings));
+  return { ready: active.length > 0, activeMethods: active };
 }
 export function orderAttention(order, now = Date.now()) {
   const unresolved = !!order.contact?.unresolved;

@@ -1,4 +1,5 @@
 export const paymentLabels = {
+  not_required: 'No payment required',
   not_collected: "Awaiting Payment Verification",
   reported: "Awaiting Payment Verification",
   verified: "Payment Verified",

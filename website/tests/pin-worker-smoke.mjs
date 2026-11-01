@@ -20,7 +20,13 @@ try{
  assert.equal((await call('/api/manage/snapshot',undefined,first)).status,200);assert.equal((await call('/api/studio-pin/setup',{setupToken,pin,confirmPin:pin})).status,403);
  const unlock=await call('/api/studio-pin/unlock',{pin});assert.equal(unlock.status,200);const second=unlock.headers.get('Set-Cookie').split(';')[0];assert.notEqual(first,second);
  assert.equal((await call('/api/studio-pin/lock',{},first)).status,200);assert.equal((await call('/api/studio',undefined,first)).status,401);assert.equal((await call('/api/studio',undefined,second)).status,200);
- const site=await (await call('/api/site')).json(),product=site.document.products[0];
+ const settings=async()=> (await (await call('/api/manage/snapshot',undefined,second)).json()).management.settings;
+ const mutation=async(action,fields)=>{const s=await settings();const r=await call('/api/manage/'+action,{operationId:crypto.randomUUID(),paymentsVersion:s.paymentsVersion||0,...fields},second);assert.equal(r.status,200,await r.clone().text());return r.json();};
+ await mutation('payment-destination',{provider:'paypal',url:'https://www.paypal.com/ncp/payment/FICTIONAL_PREVIEW',enabled:true,businessConfirmed:true});
+ assert.equal((await (await call('/api/site')).json()).paymentReadiness.ready,false);
+ const testing=await mutation('payment-test-start',{provider:'paypal'});
+ await mutation('payment-test-confirm',{provider:'paypal',testId:testing.result.testId,confirmed:true});
+ const site=await (await call('/api/site')).json(),product=site.document.products[0];assert.equal(site.paymentReadiness.ready,true);assert.equal(Object.keys(site.paymentDestinations).join(','),'paypal');
  const ordered=await call('/api/orders',{workspaceId:PREVIEW_WORKSPACE,storefront:'main',revision:site.revision,requestId:crypto.randomUUID(),pickupId:site.document.pickups[0].id,checkoutMode:'guest',customerDetails:{name:'Fictional Workerd Customer'},policyAccepted:true,policyVersion:'2026-11-01',lines:[{productId:product.id,variantId:product.variants[0].id,qty:1,unitPrice:product.price}],total:product.price});
  assert.equal(ordered.status,201,await ordered.clone().text());const order=await ordered.json(),track='/api/order-tracking/'+PREVIEW_WORKSPACE+'/'+order.id,bearer={Authorization:'Bearer '+order.trackingPath.split('=')[1]};
  assert.equal((await call(track)).status,401);
@@ -32,5 +38,5 @@ try{
  const extension=await call('/api/manage/approve-extension',{operationId:crypto.randomUUID(),id:order.id,orderVersion:snapshot.orders[0].version,date,time:'16:00',confirmed:true},second);assert.equal(extension.status,200,await extension.clone().text());
  const tracked=await (await call(track,undefined,undefined,bearer)).json();assert.equal(tracked.status,'ready');assert.equal(tracked.paymentStatus,'verified');assert.equal(tracked.attention.extensionApproved,true);assert.equal(tracked.pickup.date,date);assert.equal(tracked.extension.actor,undefined);
  assert.equal((await db.prepare('SELECT count(*) n FROM workspaces').first()).n,1);
- console.log(JSON.stringify({actualWorkerdD1:true,pbkdf2SetupAndUnlockPassed:true,oneTimeSetupPassed:true,rememberedServerSessionsPassed:true,lockAndAnonymousDenialPassed:true,commerceCheckoutMessagesVerificationFulfillmentAndExtensionsPassed:true,hostedWrites:0}));
+ console.log(JSON.stringify({actualWorkerdD1:true,pbkdf2SetupAndUnlockPassed:true,oneTimeSetupPassed:true,rememberedServerSessionsPassed:true,lockAndAnonymousDenialPassed:true,paymentSettingsSavedAndTestedInD1:true,commerceCheckoutMessagesVerificationFulfillmentAndExtensionsPassed:true,hostedWrites:0}));
 }finally{await mf.dispose();}

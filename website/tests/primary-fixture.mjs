@@ -8,7 +8,7 @@ import { randomBytes, createHash } from 'node:crypto';
 import { seed } from '../public/model.mjs';
 import { PREVIEW_WORKSPACE } from '../server/preview-access.mjs';
 import { accessAuthority } from './access-jwt-fixture.mjs';
-export async function primaryFixture({ experience = false, management = false, commerce = false, access = false, pin = false, port = 4182, hostname = '127.0.0.1' } = {}) {
+export async function primaryFixture({ experience = false, management = false, commerce = false, readyPayments = false, access = false, pin = false, port = 4182, hostname = '127.0.0.1' } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'rr-sync-'));
   const dbFile = join(directory, 'test.sqlite');
   const id = access || pin ? PREVIEW_WORKSPACE : randomBytes(24).toString('hex');
@@ -25,6 +25,10 @@ export async function primaryFixture({ experience = false, management = false, c
   if (pin) {
     sqlite.exec(await readFile(new URL('../pin-schema.sql', import.meta.url), 'utf8'));
     sqlite.prepare("INSERT INTO studio_pin_settings(id,bootstrap_hash,bootstrap_expires) VALUES('main',?,?)").run(createHash('sha256').update(setupToken).digest('hex'),Date.now()+3600000);
+  }
+  if (readyPayments) {
+    const url = 'https://www.paypal.com/ncp/payment/FICTIONAL_PREVIEW';
+    sqlite.prepare('UPDATE workspaces SET ledger_json=? WHERE id=?').run(JSON.stringify({orders:[],management:{settings:{paymentsVersion:1,payments:{paypal:{url,enabled:true,businessConfirmed:true,tested:{url,at:now,actor:{id:'local-fixture-owner'}}}}}}}),id);
   }
   sqlite.close();
   const authority = access ? await accessAuthority() : null;

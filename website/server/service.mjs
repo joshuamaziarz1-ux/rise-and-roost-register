@@ -1,4 +1,4 @@
-import { POLICY_VERSION, pickupDeadline, defaultCalendar, providers, configuredPayments } from '../public/commerce.mjs';
+import { POLICY_VERSION, pickupDeadline, defaultCalendar, providers, configuredPayments, paymentReadiness } from '../public/commerce.mjs';
 import * as css from "css-tree";
 import { customerOrder, emailAddress, enqueue } from "./orders.mjs";
 import { roostApi, commentsApi, memberFor, customerProfile } from "./roost.mjs";
@@ -653,6 +653,8 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       return json({
         customerExperienceEnabled,
       commerceEnabled,
+        paymentDestinations: commerceEnabled ? configuredPayments(JSON.parse(row.ledger_json).management?.settings) : {},
+        paymentReadiness: commerceEnabled ? paymentReadiness(JSON.parse(row.ledger_json).management?.settings) : undefined,
         notificationsEnabled: emailEnabled && id === publicWorkspaceId,
         document: availableDocument(JSON.parse(row.published_json), JSON.parse(row.ledger_json), { managed: studioManagementEnabled, now }),
         revision: row.published_revision,
@@ -859,8 +861,17 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           customer.emailOptIn = true;
           customer.consentedAt = new Date(now).toISOString();
         }
+        const quoted = quote(JSON.parse(row.published_json), ledger, input, now);
+        let selectedPaymentMethod;
+        if (commerceEnabled && quoted.total > 0) {
+          const active = configuredPayments(ledger.management?.settings);
+          if (!Object.keys(active).length) fail('Ordering is paused while Danielle finishes payment setup. Please check back soon.',409);
+          selectedPaymentMethod = input.paymentMethod ?? Object.keys(active)[0];
+          if (!Object.hasOwn(active,selectedPaymentMethod)) fail('That payment method is no longer available. Review the current payment options.',409);
+        }
         const order = {
-          ...quote(JSON.parse(row.published_json), ledger, input, now),
+          ...quoted,
+          ...(selectedPaymentMethod ? { selectedPaymentMethod } : {}),
           id: token(),
           requestId: input.requestId,
           trackingKey: token(),
@@ -877,6 +888,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         if (commerceEnabled) {
           const settings = ledger.management?.settings || {};
           order.commerceEnabled = true;
+          if (order.total === 0) order.paymentStatus = 'not_required';
           order.policyAcceptance = { version: POLICY_VERSION, at: order.at, calendar: settings.calendar || defaultCalendar() };
           order.pickupDeadline = pickupDeadline(order.pickup, order.policyAcceptance.calendar);
           order.originalPickup = copy(order.pickup);
@@ -921,7 +933,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         } else
         if (tracking[3] === '/payment-method') {
           if (!Object.hasOwn(providers, input.method) || !configuredPayments(ledger.management?.settings)[input.method]) fail('This business payment destination is not configured. Contact Danielle.');
-          if (order.paymentVerifiedAt || order.status === 'canceled' || order.resolution) fail('This order no longer needs payment.', 409);
+          if (order.total === 0 || order.paymentVerifiedAt || order.status === 'canceled' || order.resolution) fail('This order no longer needs payment.', 409);
           if (order.selectedPaymentMethod === input.method) return json(customerOrder(order, row.id, ledger.management?.settings, now));
           order.selectedPaymentMethod = input.method;
           order.audit.push({ action: 'Customer selected ' + providers[input.method] + '; payment remains unverified', at: new Date(now).toISOString() });

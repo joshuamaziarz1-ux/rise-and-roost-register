@@ -14,12 +14,16 @@ test('guest checkout, payments, owner verification, messages and extensions sync
     await page.getByLabel('Choose a 4-digit PIN',{exact:true}).fill(pin);await page.getByLabel('Confirm PIN',{exact:true}).fill(pin);await page.getByRole('button',{name:'Save PIN and open Studio',exact:true}).click();
     await expect(page.getByRole('heading',{name:'Hi, Danielle!',exact:true})).toBeVisible();
     if(page.viewportSize().width<900){await nav(page,'More').click();await page.getByRole('button',{name:'Settings',exact:true}).click();}else await nav(page,'Settings').click();
-    await page.getByRole('button',{name:'Edit payments & business days',exact:true}).click();
+    await page.getByRole('button',{name:'Payments',exact:true}).click();
+    await page.context().route(/https:\/\/(www.paypal.com|venmo.com|cash.app)\//,route=>route.fulfill({status:200,contentType:'text/html',body:'<h1>Fictional link test — no money sent</h1>'}));
     for(const [label,url] of [['PayPal','https://www.paypal.com/ncp/payment/FICTIONAL_PREVIEW'],['Venmo','https://venmo.com/u/FictionalPreviewBusiness'],['Cash App','https://cash.app/$FictionalPreviewBusiness']]){
-      await page.getByLabel(label+' business payment link',{exact:true}).fill(url);await page.getByLabel('This '+label+' destination is approved for my business sales',{exact:true}).check();
+      await page.getByRole('button',{name:'Add '+label+' link',exact:true}).click();
+      await page.getByLabel(label+' payment URL',{exact:true}).fill(url);await page.getByLabel('Enabled for customer payments',{exact:true}).check();await page.getByLabel('This destination is approved for my business sales',{exact:true}).check();
+      await page.getByRole('button',{name:'Save payment link',exact:true}).click();
+      const popup=page.waitForEvent('popup');await page.getByRole('button',{name:'Test '+label+' Link',exact:true}).click();const external=await popup;await expect(external.getByRole('heading')).toContainText('Fictional link test');await external.close();
+      await page.getByLabel('I opened the '+label+' link and confirmed the correct business recipient',{exact:true}).check();await page.getByRole('button',{name:'Confirm '+label+' Link Test',exact:true}).click();
     }
-    await page.getByRole('button',{name:'Save business settings',exact:true}).click();
-    await expect(page.getByRole('heading',{name:'Settings',exact:true})).toBeVisible();
+    await expect(page.getByRole('heading',{name:'Payments',exact:true})).toBeVisible();
     const owner2=await browser.newContext({...info.project.use});contexts.push(owner2);const second=await owner2.newPage();await unlock(second);
     const customer=await browser.newContext({...info.project.use});contexts.push(customer);const visitor=await customer.newPage();visitor.on('pageerror',e=>errors.push(e.message));
     await customer.route(/https:\/\/(www.paypal.com|venmo.com|cash.app)\//,route=>route.fulfill({status:200,contentType:'text/html',body:'<h1>Fictional payment destination — no money sent</h1>'}));
@@ -73,7 +77,7 @@ test('guest checkout, payments, owner verification, messages and extensions sync
 });
 
 test('blocked browser draft storage is reported without losing safe retries or inventing pickup approval',async({page})=>{
-  const fixture=await primaryFixture({experience:true,management:true,commerce:true,port:4197}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  const fixture=await primaryFixture({experience:true,management:true,commerce:true,readyPayments:true,port:4197}),errors=[];page.on('pageerror',e=>errors.push(e.message));
   try {
     const site=await (await page.request.get(fixture.origin+'/api/site')).json(),product=site.document.products[0];
     const made=await page.request.post(fixture.origin+'/api/orders',{headers:{Origin:fixture.origin},data:{workspaceId:fixture.id,storefront:'main',revision:site.revision,requestId:crypto.randomUUID(),pickupId:site.document.pickups[0].id,checkoutMode:'guest',customerDetails:{name:'Fictional Storage Test'},policyAccepted:true,policyVersion:'2026-11-01',lines:[{productId:product.id,variantId:product.variants[0].id,qty:1,unitPrice:product.price}],total:product.price}});expect(made.status()).toBe(201);const order=await made.json();

@@ -119,9 +119,9 @@ export async function start(root) {
         h("h2", {}, (order.status === "picked-up" ? "Historical order" : fulfillmentLabels[order.status]) || "Order Received"),
         h("p", {}, paymentLabels[order.paymentStatus] || "Awaiting Payment Verification"),
         order.paymentCorrectedAt ? h('p', {}, 'An owner corrected a mistaken payment-verification record. Payment is awaiting independent verification; the previous receipt is no longer valid.') : null,
-        !order.paymentVerifiedAt ? h('p', {}, 'Danielle will check her payment account and confirm receipt. You do not need to report that you paid.') : h('p', {}, 'Danielle independently verified your payment.'),
+        order.total === 0 ? h('p', {}, 'No payment is required for this order.') : !order.paymentVerifiedAt ? h('p', {}, 'Danielle will check her payment account and confirm receipt. You do not need to report that you paid.') : h('p', {}, 'Danielle independently verified your payment.'),
         order.status === 'canceled' ? h('p', {}, 'This order was canceled. Contact Danielle about any payment or refund.') : null));
-      if (!order.paymentVerifiedAt && order.status !== 'canceled' && !order.resolution) {
+      if (order.total > 0 && !order.paymentVerifiedAt && order.status !== 'canceled' && !order.resolution) {
         const destinations = order.paymentDestinations || {}, selected = order.selectedPaymentMethod;
         main.append(h('section', { class: 'sub-card', 'aria-label': 'Payment options' }, h('h2', {}, 'Choose how to pay'), h('strong', {}, 'Amount due: ' + money(order.total)),
           h('p', {}, 'Order reference: ' + order.orderNumber),

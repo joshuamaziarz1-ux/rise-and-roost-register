@@ -1,4 +1,4 @@
-import { defaultCalendar, calendarConfig, paymentDestination, providers, pickupDeadline, orderAttention } from '../public/commerce.mjs';
+import { defaultCalendar, calendarConfig, paymentDestination, providers, pickupDeadline, orderAttention, paymentReadiness } from '../public/commerce.mjs';
 import { ZONE, localInstant, clone } from '../public/model.mjs';
 import { trackingPath } from '../public/orders.mjs';
 import { enqueue } from './orders.mjs';
@@ -101,7 +101,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     const products = doc.products.map(p => ({ ...p, booked: bookedUnits(ledger, p.id), available: Math.max(0, p.stock - bookedUnits(ledger, p.id)) }));
     const contentOnly = document => { const d = clone(document); delete d.products; delete d.pickups; delete d.orderingPaused; return d; };
     return { ...ownerResult(source), hasContentDraft: canonical(contentOnly(JSON.parse(source.draft_json))) !== canonical(contentOnly(doc)), orders: ownerResult(source).orders.map(o => ({ ...o, businessDate: businessDay(o.at), attention: orderAttention(o, now) })), ledgerVersion: source.ledger_version, actor, layoutLocked: true, now: at,
-      management: { settings: m.settings || { calendar: defaultCalendar(), payments: {} }, reports: financialReport(ledger.orders, range), today, products,
+      management: { paymentReadiness: paymentReadiness(m.settings), settings: m.settings || { calendar: defaultCalendar(), payments: {} }, reports: financialReport(ledger.orders, range), today, products,
         members: members.map(m => ({ id: m.id, profile: JSON.parse(m.profile_json), createdAt: m.created_at,
           orderCount: ledger.orders.filter(o => o.customer?.memberId === m.id).length,
           benefits: (ledger.management?.benefits || []).filter(b => b.memberId === m.id) })), comments,
@@ -110,7 +110,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
         notifications: { externalEnabled: false, preferences: m.notificationPreferences || { orders: true, payments: true, stock: true, pickups: true, comments: true, errors: true } },
         limits: { orderCount: ledger.orders.length, orderLimit: 300, memberDirectoryLimit: 500 },
         attention: {
-          payments: ledger.orders.filter(o => !o.paymentVerifiedAt && o.status !== 'canceled' && !o.resolution).length,
+          payments: ledger.orders.filter(o => o.total > 0 && !o.paymentVerifiedAt && o.status !== 'canceled' && !o.resolution).length,
           preparing: ledger.orders.filter(o => o.status === 'preparing' && !o.resolution).length,
           ready: ledger.orders.filter(o => o.status === 'ready' && !o.resolution).length,
           contacted: ledger.orders.filter(o => orderAttention(o,now).customerContacted).length,
@@ -147,7 +147,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
   const ledger = JSON.parse(row.ledger_json), draft = JSON.parse(row.draft_json), published = JSON.parse(row.published_json);
   ledger.management ||= { audit: [], operations: [], benefits: [] };
   const m = ledger.management; m.audit ||= []; m.operations ||= []; m.benefits ||= [];
-  const logical = { ...input }; for (const key of ['operationId', 'revision', 'ledgerVersion', 'orderVersion']) delete logical[key];
+  const logical = { ...input }; for (const key of ['operationId', 'revision', 'ledgerVersion', 'orderVersion', 'paymentsVersion']) delete logical[key];
   const fingerprint = await digest(path + canonical(logical)), prior = m.operations.find(o => o.id === input.operationId);
   if (prior) {
     if (path === '/api/manage/abandon-operation') return json({ ...await snapshot(await current()), result: prior.result });
@@ -163,18 +163,47 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     if (input.orderVersion !== (o.version || 1)) bad('This order changed on another device. Refresh it before trying again.', 409);
     o.audit ||= []; return o;
   };
-  if (path === '/api/manage/settings') {
-    if (input.ledgerVersion !== row.ledger_version) bad('Settings changed or an order arrived. Refresh before saving.', 409);
-    const calendar = calendarConfig(input.calendar);
-    const payments = {};
-    if (!input.payments || typeof input.payments !== 'object' || Array.isArray(input.payments) || Object.keys(input.payments).some(k => !Object.hasOwn(providers,k))) bad('Choose supported payment destinations.');
-    for (const [provider, value] of Object.entries(input.payments)) {
-      if (!value?.url) continue;
-      if (value.businessConfirmed !== true) bad('Confirm the payment destination is approved for your business sales.');
-      payments[provider] = { url: paymentDestination(provider, value.url), businessConfirmed: true, reviewedAt: at, actor };
+  if (['/api/manage/payment-destination','/api/manage/payment-test-start','/api/manage/payment-test-confirm'].includes(path)) {
+    const provider = input.provider;
+    if (!Object.hasOwn(providers,provider)) bad('Choose PayPal, Venmo or Cash App.');
+    m.settings ||= { calendar: defaultCalendar(), payments: {} }; m.settings.payments ||= {};
+    const version = m.settings.paymentsVersion || 0;
+    if (input.paymentsVersion !== version) bad('Payment settings changed on another device. Refresh and review the saved settings before retrying.',409);
+    const previous = clone(m.settings.payments[provider] || {});
+    if (path.endsWith('payment-destination')) {
+      if (typeof input.url !== 'string' || typeof input.enabled !== 'boolean' || typeof input.businessConfirmed !== 'boolean') bad('Check the payment link and enable setting.');
+      const url = input.url.trim() ? paymentDestination(provider,input.url) : '';
+      if (input.enabled && !url) bad('Save a supported payment link before enabling this method.');
+      if (url && !input.businessConfirmed) bad('Confirm this destination is approved for your business sales.');
+      const retained = previous.url === url && input.businessConfirmed ? previous : {};
+      m.settings.payments[provider] = { ...retained, url, enabled: input.enabled, businessConfirmed: input.businessConfirmed, updatedAt: at, updatedBy: actor };
+      description = providers[provider] + ' payment destination saved' + (previous.url && previous.url !== url ? '; previous link test invalidated' : '');
+    } else {
+      const destination = m.settings.payments[provider];
+      if (!destination?.url || !destination.businessConfirmed) bad('Save and confirm the business payment link before testing it.');
+      const url = paymentDestination(provider,destination.url);
+      if (path.endsWith('payment-test-start')) {
+        destination.pendingTest = { id: opaque(), url, at, actor };
+        result = { provider, url, testId: destination.pendingTest.id };
+        description = providers[provider] + ' link test started; no payment or verification performed';
+      } else {
+        const pending = destination.pendingTest;
+        if (input.confirmed !== true) bad('Confirm you opened the saved link and checked the correct business recipient. Do not send money for this test.');
+        if (!pending || pending.id !== input.testId || pending.url !== url || now - Date.parse(pending.at) > 30 * 60000) bad('The payment link test changed or expired. Start Test Link again for the current saved destination.',409);
+        destination.tested = { url, at, actor, testId: pending.id, startedAt: pending.at, startedBy: pending.actor };
+        delete destination.pendingTest;
+        description = providers[provider] + ' link test confirmed by owner; payment receipt remains independently verified';
+      }
     }
-    m.audit.unshift({ id: opaque(), kind: 'settings-history', at, actor, before: clone(m.settings || { calendar: defaultCalendar(), payments: {} }), after: { calendar, payments } });
-    m.settings = { calendar, payments }; description = 'Business days, closures and business payment destinations saved; existing order deadlines retained';
+    m.settings.paymentsVersion = version + 1;
+    m.audit.unshift({ id: opaque(), kind: 'payment-settings-history', at, actor, provider, before: previous, after: clone(m.settings.payments[provider]) });
+    result = { ...result, provider }; // Test metadata is owner-only; public APIs return active URLs only.
+  } else if (path === '/api/manage/settings') {
+    if (input.ledgerVersion !== row.ledger_version) bad('Settings changed or an order arrived. Refresh before saving.', 409);
+    if (input.payments !== undefined) bad('Use Settings → Payments to change or test payment destinations.');
+    const calendar = calendarConfig(input.calendar);
+    m.audit.unshift({ id: opaque(), kind: 'settings-history', at, actor, before: clone(m.settings || {}), after: { ...clone(m.settings || {}), calendar } });
+    m.settings = { ...m.settings, calendar }; description = 'Business days and closures saved; payment settings and existing deadlines retained';
   } else if (path === '/api/manage/reply') {
     const o = order();
     const body = text(input.body, 2000, 'the reply', true);
@@ -288,6 +317,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     description = path.endsWith('restore-content') ? 'Website content restored' : 'Website content published';
   } else if (path === '/api/manage/verify-payment') {
     const o = order();
+    if (o.total === 0) bad('This order does not require payment.');
     if (o.paymentVerifiedAt && !o.paymentCorrectedAt) return json({ ...await snapshot(), duplicate: true });
     if (o.resolution) bad('Review the pickup resolution before verifying payment.');
     if (o.status === 'canceled') bad('Check cancellation and payment records before verifying a canceled order.');

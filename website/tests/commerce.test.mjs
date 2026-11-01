@@ -8,7 +8,7 @@ import { POLICY_VERSION, POLICY, requestedPickupLabel, pickupDeadline, paymentDe
 import { pickupLabel } from '../public/model.mjs';
 import { reportRange } from '../server/management.mjs';
 
-async function fixture() {
+async function fixture({ readyPayments = true } = {}) {
   const sql = new DatabaseSync(':memory:'); sql.exec(readFileSync(new URL('../schema.sql',import.meta.url),'utf8'));
   const db = sqliteD1(sql), now = Date.parse('2026-11-01T17:00:00Z');
   const config = { commerceEnabled:true, studioManagementEnabled:true, customerExperienceEnabled:true, reviewBuild:true };
@@ -20,7 +20,7 @@ async function fixture() {
   }
   const site=(await call('/api/workspaces',{})).data;config.publicWorkspaceId=site.id;
   const snapshot=async()=> (await call('/api/manage/snapshot')).data;
-  async function change(action, body={}, options) { const s=await snapshot();return call('/api/manage/'+action,{ operationId:crypto.randomUUID(), revision:s.revision, ledgerVersion:s.ledgerVersion,...body },options); }
+  async function change(action, body={}, options) { const s=await snapshot();return call('/api/manage/'+action,{ operationId:crypto.randomUUID(), revision:s.revision, ledgerVersion:s.ledgerVersion, paymentsVersion:s.management.settings?.paymentsVersion || 0,...body },options); }
   async function order(overrides={}) {
     const s=await snapshot(),p=s.published.products[0];
     return call('/api/orders',{ workspaceId:site.id,storefront:'main',revision:s.publishedRevision,requestId:crypto.randomUUID(),pickupId:s.published.pickups[0].id,checkoutMode:'guest',customerDetails:{name:'Fictional Preview Customer'},policyAccepted:true,policyVersion:POLICY_VERSION,total:p.price,lines:[{productId:p.id,variantId:p.variants[0].id,qty:1,unitPrice:p.price}],...overrides },{guest:true});
@@ -28,7 +28,13 @@ async function fixture() {
   function track(o, action='', body, options={}) {
     const u=new URL(o.trackingPath,'https://preview.test');return call(u.pathname.replace('/orders/','/api/order-tracking/')+action,body,{guest:true,...options,headers:{Authorization:'Bearer '+u.hash.split('=')[1],...options.headers}});
   }
-  return {sql,now,config,call,site,snapshot,change,order,track};
+  async function configurePayment(provider, value) {
+    let r = await change('payment-destination',{provider,url:value.url,enabled:value.enabled !== false,businessConfirmed:true}); assert.equal(r.status,200,r.data.error);
+    r = await change('payment-test-start',{provider}); assert.equal(r.status,200,r.data.error);
+    r = await change('payment-test-confirm',{provider,testId:r.data.result.testId,confirmed:true}); assert.equal(r.status,200,r.data.error); return r;
+  }
+  if (readyPayments) await configurePayment('paypal',{url:'https://www.paypal.com/ncp/payment/FICTIONAL_PREVIEW'});
+  return {sql,db,now,config,call,site,snapshot,change,order,track,configurePayment};
 }
 const payments = { paypal:{url:'https://www.paypal.com/ncp/payment/FICTIONAL_PREVIEW',businessConfirmed:true},venmo:{url:'https://venmo.com/u/FictionalPreviewBusiness',businessConfirmed:true},cashapp:{url:'https://cash.app/$FictionalPreviewBusiness',businessConfirmed:true} };
 
@@ -54,7 +60,8 @@ test('payment destinations reject redirects, credentials, queries and unconfirme
   for (const [provider,p] of Object.entries(payments)) assert.equal(paymentDestination(provider,p.url),p.url);
   for (const url of ['https://evil.test/$x','https://cash.app.evil.test/$x','https://cash.app/$x?amount=1','https://user@cash.app/$x','javascript:alert(1)']) assert.throws(()=>paymentDestination('cashapp',url));
   assert.equal((await h.change('settings',{calendar:{days:[1,3,6],closures:[]},payments:{paypal:{...payments.paypal,businessConfirmed:false}}})).status,400);
-  assert.equal((await h.change('settings',{calendar:{days:[1,3,6],closures:[]},payments})).status,200);
+  assert.equal((await h.change('settings',{calendar:{days:[1,3,6],closures:[]}})).status,200);
+  for (const [provider,value] of Object.entries(payments)) await h.configurePayment(provider,value);
   const o=(await h.order()).data;
   assert.equal(Object.keys(o.paymentDestinations).length,3);
   for (const method of Object.keys(payments)) {
@@ -149,6 +156,9 @@ test('full business backup restores conversations, approvals and payment audit w
   assert.equal(restored.status,200,restored.data.error);const saved=restored.data.orders[0];
   for(const field of ['messages','extensionHistory','originalPickup','policyAcceptance','pickupDeadline','verifications','paidReceipt'])assert.deepEqual(saved[field],original[field]);
   assert.notEqual(saved.trackingPath,original.trackingPath);assert.equal(saved.notifications.length,0);assert.equal(restored.data.id,target.id);assert.equal(restored.data.management.today.verifiedSales,o.total);
+  const destination=restored.data.management.settings.payments.paypal;
+  assert.equal(destination.url,backup.ledger.management.settings.payments.paypal.url);assert.equal(destination.enabled,false);assert.equal(destination.tested,undefined);assert.equal(destination.pendingTest,undefined);assert.equal(restored.data.management.paymentReadiness.ready,false);
+  assert.deepEqual(JSON.parse(h.sql.prepare('SELECT ledger_json FROM workspaces WHERE id=?').get(h.site.id).ledger_json).management.settings,backup.ledger.management.settings); // Source settings are unchanged.
   assert.equal((await h.track(o)).status,200); // Source order and its original private link are intact.
 });
 test('dispute records prevent pickup resolution and remain independently auditable',async()=>{
@@ -204,4 +214,69 @@ test('an optional requested pickup time can be supplied without inventing or req
   const sent=await h.track(o,'/message',request);assert.equal(sent.status,200);assert.equal(sent.data.messages[0].requestedTime,'17:00');assert.equal(sent.data.messages[0].requestedDate,'');assert.equal(requestedPickupLabel(sent.data.messages[0]),'5:00 PM · date not specified');
   assert.equal(sent.data.attention.customerContacted,true);assert.equal(sent.data.attention.extensionRequested,true);assert.equal(sent.data.attention.extensionApproved,false);assert.deepEqual(sent.data.pickup,o.pickup);assert.equal(sent.data.pickupDeadline,o.pickupDeadline);
   const duplicate=await h.track(o,'/message',request);assert.equal(duplicate.status,200);assert.equal(duplicate.data.messages.length,1);assert.deepEqual(duplicate.data.messageConfirmation,sent.data.messageConfirmation);
+});
+
+test('launch readiness: Studio stays accessible while payable checkout refuses unconfigured, saved-only and opened-only links',async()=>{
+  const h=await fixture({readyPayments:false});let s=await h.snapshot();assert.equal(s.management.paymentReadiness.ready,false);
+  const before=structuredClone(s.management.products);assert.equal((await h.order()).status,409);
+  const saved=await h.change('payment-destination',{provider:'paypal',url:' https://paypal.me/FictionalPreviewBusiness ',enabled:true,businessConfirmed:true,tested:{at:new Date(h.now).toISOString(),url:'https://paypal.me/FictionalPreviewBusiness',actor:{id:'forged'}}});assert.equal(saved.status,200);
+  s=await h.snapshot();assert.equal(s.management.settings.payments.paypal.url,'https://paypal.me/FictionalPreviewBusiness');assert.equal(s.management.settings.payments.paypal.tested,undefined);assert.equal((await h.order()).status,409);
+  const begun=await h.change('payment-test-start',{provider:'paypal'});assert.equal(begun.status,200);assert.equal((await h.order()).status,409);
+  assert.equal((await h.change('payment-test-confirm',{provider:'paypal',testId:begun.data.result.testId,confirmed:false})).status,400);
+  assert.equal((await h.change('payment-test-confirm',{provider:'paypal',testId:begun.data.result.testId,confirmed:true})).status,200);
+  const placed=await h.order({paymentMethod:'paypal'});assert.equal(placed.status,201);assert.equal(placed.data.selectedPaymentMethod,'paypal');assert.equal(placed.data.paymentStatus,'not_collected');
+  s=await h.snapshot();assert.equal(s.orders.length,1);assert.equal(s.management.today.verifiedSales,0);assert.equal(s.management.products[0].available,before[0].available-1);
+});
+test('launch readiness: enable and disable synchronize without exposing inactive links or losing existing orders',async()=>{
+  const h=await fixture(),o=(await h.order()).data;
+  let s=await h.snapshot();const p=s.management.settings.payments.paypal;
+  assert.equal((await h.change('payment-destination',{provider:'paypal',url:p.url,enabled:false,businessConfirmed:true})).status,200);
+  const site=(await h.call('/api/site',undefined,{guest:true})).data;assert.equal(site.paymentReadiness.ready,false);assert.deepEqual(site.paymentDestinations,{});assert.equal(JSON.stringify(site).includes('pendingTest'),false);assert.equal(JSON.stringify(site).includes('FictionalPreviewBusiness'),false);
+  assert.equal((await h.order()).status,409);assert.deepEqual((await h.track(o)).data.paymentDestinations,{});assert.equal((await h.track(o)).data.paymentStatus,'not_collected');
+  s=await h.snapshot();assert.equal((await h.order({requestId:s.orders[0].requestId})).status,200);assert.equal((await h.snapshot()).orders.length,1);
+  assert.equal((await h.change('payment-destination',{provider:'paypal',url:p.url,enabled:true,businessConfirmed:true})).status,200);
+  assert.equal((await h.call('/api/site',undefined,{guest:true})).data.paymentReadiness.ready,true);
+  assert.equal((await h.order({paymentMethod:'cashapp',paymentUrl:'https://cash.app/$Invented'})).status,409);
+  assert.equal((await h.change('verify-payment',{id:o.id,orderVersion:o.version,method:'paypal',independentlyVerified:true,evidence:''})).status,200);
+});
+test('launch readiness: link edits invalidate confirmation and stale or expired tests cannot activate a new destination',async()=>{
+  const h=await fixture();const begun=await h.change('payment-test-start',{provider:'paypal'});
+  assert.equal(begun.data.management.paymentReadiness.ready,true); // A routine retest preserves an already confirmed current destination.
+  assert.equal((await h.change('payment-destination',{provider:'paypal',url:'https://paypal.me/FictionalChangedBusiness',enabled:true,businessConfirmed:true})).status,200);
+  assert.equal((await h.change('payment-test-confirm',{provider:'paypal',testId:begun.data.result.testId,confirmed:true})).status,409);
+  let s=await h.snapshot();assert.equal(s.management.settings.payments.paypal.tested,undefined);assert.equal(s.management.settings.payments.paypal.pendingTest,undefined);assert.equal((await h.order()).status,409);
+  const next=await h.change('payment-test-start',{provider:'paypal'});
+  assert.equal((await h.change('payment-test-confirm',{provider:'paypal',testId:next.data.result.testId,confirmed:true},{at:h.now+31*60000})).status,409);
+  const fresh=await h.change('payment-test-start',{provider:'paypal'});
+  const payload={provider:'paypal',testId:fresh.data.result.testId,confirmed:true,operationId:crypto.randomUUID()};
+  const confirmed=await h.change('payment-test-confirm',payload);assert.equal(confirmed.status,200);
+  assert.equal((await h.change('payment-test-confirm',payload)).status,200);
+  s=await h.snapshot();assert.equal(s.management.settings.payments.paypal.tested.testId,fresh.data.result.testId);assert.equal(s.management.paymentReadiness.ready,true);
+});
+test('payment URL validation supports business profile destinations and rejects unsafe or unrelated URLs',()=>{
+  for(const [provider,url] of [['paypal','https://paypal.me/FictionalBusiness'],['paypal','https://www.paypal.com/paypalme/FictionalBusiness'],['paypal','https://www.paypal.com/ncp/payment/FICTIONAL'],['venmo','https://venmo.com/u/FictionalBusiness'],['cashapp','https://cash.app/$FictionalBusiness']])assert.equal(paymentDestination(provider,url),url);
+  for(const [provider,url] of [['paypal','http://paypal.me/Fictional'],['paypal','https://paypal.me.evil.test/Fictional'],['paypal','https://paypal.me/Fictional?redirect=evil'],['paypal','https://www.paypal.com/login'],['paypal','https://user:secret@paypal.me/Fictional'],['venmo','https://venmo.com/login'],['cashapp','https://cash.app/$Line\nBreak'],['cashapp','javascript:alert(1)'],['cashapp','https://cash.app:8443/$Fictional'],['cashapp','https://cash.app/$Fictional#code']])assert.throws(()=>paymentDestination(provider,url));
+});
+test('payment settings require owner access, same-origin requests, supported destinations and conflict versions',async()=>{
+  const h=await fixture({readyPayments:false}),fields={provider:'venmo',url:'https://venmo.com/u/FictionalBusiness',enabled:true,businessConfirmed:true};
+  for(const action of ['payment-destination','payment-test-start','payment-test-confirm'])assert.equal((await h.change(action,fields,{guest:true})).status,401);
+  assert.equal((await h.change('payment-destination',fields,{headers:{Origin:'https://evil.test'}})).status,403);
+  assert.equal((await h.change('payment-destination',{...fields,businessConfirmed:false})).status,400);
+  assert.equal((await h.change('payment-destination',{...fields,url:''})).status,400);
+  assert.equal((await h.change('payment-destination',{...fields,url:'https://evil.test/receiver'})).status,400);
+  const results=await Promise.all([h.change('payment-destination',{...fields,paymentsVersion:0}),h.change('payment-destination',{...fields,paymentsVersion:0})]);assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);
+  assert.equal((await h.change('settings',{calendar:{days:[1,2],closures:[]},payments:{venmo:{...fields,tested:true}}})).status,400);
+  const s=await h.snapshot();assert.deepEqual(s.management.settings.calendar.days,[0,1,2,3,4,5,6]);assert.equal(s.management.paymentReadiness.ready,false);
+});
+test('launch readiness: a concurrent disable wins before order persistence and reserves no inventory',async()=>{
+  const h=await fixture();const prepare=h.db.prepare.bind(h.db);let disabled=false;
+  h.db.prepare=sql=>{const stmt=prepare(sql);if(!sql.includes('ledger_version=? AND published_revision=?'))return stmt;return {bind(...params){const bound=stmt.bind(...params);return {...bound,async run(){if(!disabled){disabled=true;const s=await h.snapshot(),p=s.management.settings.payments.paypal;assert.equal((await h.change('payment-destination',{provider:'paypal',url:p.url,enabled:false,businessConfirmed:true})).status,200);}return bound.run();}};}};};
+  assert.equal((await h.order()).status,409);const s=await h.snapshot();assert.equal(disabled,true);assert.equal(s.orders.length,0);assert.equal(s.management.paymentReadiness.ready,false);
+});
+test('launch readiness applies to server-priced payable orders while zero-value orders need no external payment',async()=>{
+  const h=await fixture({readyPayments:false});assert.notEqual((await h.order({total:0})).status,201);
+  const s=await h.snapshot(),p={...s.published.products[0],price:0,archived:false,soldOut:false};
+  assert.equal((await h.change('product',{product:p,available:5})).status,200);
+  const order=await h.order();assert.equal(order.status,201);assert.equal(order.data.total,0);assert.equal(order.data.paymentStatus,'not_required');assert.equal((await h.snapshot()).management.attention.payments,0);
+  assert.equal((await h.change('verify-payment',{id:order.data.id,orderVersion:order.data.version,method:'paypal',independentlyVerified:true})).status,400);
 });
