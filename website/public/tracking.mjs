@@ -19,12 +19,12 @@ export async function start(root) {
     if (!endpoint || !/^[a-f0-9]{48}$/.test(key || '')) throw new Error('Open the complete private tracking link from your order confirmation, including the part after #.');
     const response = await fetch(endpoint + action, { method: body ? 'POST' : 'GET', cache: 'no-store',
       headers: { Authorization: 'Bearer ' + key, ...(body ? { 'Content-Type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
-    const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Unable to save. Please retry.'); return result;
+    const result = await response.json().catch(() => ({ error: 'Your order status is temporarily unavailable. Please retry.' })); if (!response.ok) throw new Error(result.error || 'Unable to save. Please retry.'); return result;
   }
   async function save(action, payload) {
     if (busy) return false;
     busy = true; error = ''; render();
-    try { order = await call(action,payload); return true; }
+    try { const result = await call(action,payload); if (!order || result.version >= order.version) order = result; return true; }
     catch (e) { error = e.message + ' Your changes are not confirmed. Retry the same request.'; return false; }
     finally { busy = false; render(); }
   }
