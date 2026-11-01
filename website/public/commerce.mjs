@@ -1,4 +1,4 @@
-import { localInstant } from './model.mjs';
+import { localInstant, customerTime } from './model.mjs';
 export const POLICY_VERSION = '2026-11-01';
 export const POLICY_TITLE = 'Rise & Roost Pickup Policy';
 export const POLICY = [
@@ -52,4 +52,10 @@ export function orderAttention(order, now = Date.now()) {
   return { customerContacted: unresolved, extensionRequested: unresolved && !!order.contact?.extensionRequested,
     extensionApproved: !!order.extension && !unresolved && !terminal && !overdue, resolved: !!order.contact?.resolvedAt && !unresolved,
     overdue, history, needsAttention: unresolved || overdue || order.dispute?.open === true };
+}
+
+export function requestedPickupLabel(message) {
+  if (!message.requestedDate) return '';
+  const date = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(message.requestedDate + 'T12:00:00Z'));
+  return date + (message.requestedTime ? ' at ' + customerTime(localInstant(message.requestedDate, message.requestedTime)) : ' · time not specified');
 }

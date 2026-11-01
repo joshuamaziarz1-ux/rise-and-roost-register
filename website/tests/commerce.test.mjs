@@ -4,7 +4,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import { api } from '../server/service.mjs';
 import { sqliteD1 } from '../server/sqlite-adapter.mjs';
-import { POLICY_VERSION, POLICY, pickupDeadline, paymentDestination, orderAttention } from '../public/commerce.mjs';
+import { POLICY_VERSION, POLICY, requestedPickupLabel, pickupDeadline, paymentDestination, orderAttention } from '../public/commerce.mjs';
+import { pickupLabel } from '../public/model.mjs';
 import { reportRange } from '../server/management.mjs';
 
 async function fixture() {
@@ -40,6 +41,9 @@ test('policy acknowledgement is mandatory, versioned and server timed; retries n
   assert.ok(a.data.pickupDeadline); assert.equal((await h.snapshot()).orders.length,1);
 });
 test('business deadlines respect any weekdays, multiple closures and Indiana DST rather than 24 hours',()=>{
+  assert.equal(requestedPickupLabel({requestedDate:'2026-11-09'}), 'Monday, November 9, 2026 · time not specified');
+  assert.match(requestedPickupLabel({requestedDate:'2026-11-09',requestedTime:'17:00'}), /at 5:00 PM$/);
+  assert.equal(pickupLabel({date:'2026-11-09',start:'17:00',end:'17:00'}), 'Monday, November 9 · 5:00 PM');
   const pickup={date:'2026-10-30',start:'15:00',end:'18:00'};
   assert.equal(pickupDeadline(pickup,{days:[0,2,5],closures:['2026-11-01','2026-11-03']}),'2026-11-06T23:00:00.000Z');
   assert.equal(pickupDeadline({date:'2026-10-31',end:'18:00'},{days:[0,6],closures:[]}),'2026-11-01T23:00:00.000Z');
