@@ -279,7 +279,7 @@ export async function start(root, initial, newAccessKey) {
         h('div', { class: 'ms-actions' }, button('Edit product', () => editProduct(p), { class: 'ms-primary' }), button('Duplicate', () => editProduct(p, true), { class: 'ms-secondary' }))))), !products.length ? empty('No products in this view.') : null);
   }
   function editProduct(product, duplicate = false) {
-    const p = product ? clone(product) : { id: 'product-' + id(), name: '', description: '', price: 0, stock: 10, capacity: 10, category: '', channel: 'preorder', active: true, images: [{ src: '/assets/bread.svg', alt: '' }], variants: [{ id: 'standard', name: 'Standard', extra: 0 }], inventoryMode: 'physical' };
+    const p = product ? clone(product) : { id: 'product-' + id(), name: '', description: '', price: 0, stock: 10, capacity: 10, category: '', channel: 'preorder', active: true, images: [{ src: '/assets/bread.svg', alt: '', x: 50, y: 50 }], variants: [{ id: 'standard', name: 'Standard', extra: 0 }], inventoryMode: 'physical' };
     if (duplicate) { p.id = 'product-' + id(); p.name += ' copy'; }
     p.archived = !!p.archived; p.soldOut = !!p.soldOut; p.lowStockThreshold ??= 3;
     p.inventoryMode ||= 'legacy';

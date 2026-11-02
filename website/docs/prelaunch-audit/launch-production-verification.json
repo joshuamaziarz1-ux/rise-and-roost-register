@@ -45,5 +45,9 @@
   "dedicatedCI": "pending",
   "merges": 0,
   "deployments": 0,
-  "dnsChanges": 0
+  "dnsChanges": 0,
+  "emptyCatalogProductUploadSaveAndArchive": {
+    "desktop": "passed",
+    "iphoneWebKit": "passed"
+  }
 }

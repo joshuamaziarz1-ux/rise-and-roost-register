@@ -86,7 +86,8 @@ test('Danielle can start with no products, upload a photo, save a product and re
     await page.getByRole('button', { name: 'Edit product', exact: true }).click(); await page.getByLabel('Archived (keeps order history)', { exact: true }).check();
     page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Save product live', exact: true }).click();
     await expect(page.locator('.ms-main')).toContainText('No products in this view.');
-    const site = (await f.call('/api/site')).data; expect(site.document.products).toHaveLength(0);
+    expect((await f.snapshot()).published.products[0].archived).toBe(true);
+    await page.goto(f.origin + '/shop'); await expect(page.getByRole('heading', { name: 'Synthetic new product', exact: true })).toHaveCount(0);
     expect((await f.snapshot()).orders).toHaveLength(0); expect((await f.snapshot()).management.today.verifiedSales).toBe(0);
   } finally { await f.close(); }
 });
