@@ -49,8 +49,7 @@ test('production owner identities, payment settings, launch lock and complete cu
     await expect(visitor.getByRole('button', { name: 'Place preorder', exact: true })).toBeEnabled();
     await visitor.getByRole('button', { name: 'Place preorder', exact: true }).click(); await expect(visitor.getByRole('heading', { name: 'Thank you. Your preorder is in.', exact: true })).toBeVisible();
     await visitor.bringToFront();
-    const tracking = await visitor.getByRole('link', { name: 'Pay & track your order', exact: true }).getAttribute('href');
-    await visitor.goto(f.origin + tracking);
+    await visitor.getByRole('link', { name: 'Pay & track your order', exact: true }).click();
     await expect(visitor.getByLabel('Current order status')).toContainText('Awaiting Payment Verification');
     await expect(visitor.getByRole('link', { name: 'Open PayPal', exact: true })).toHaveAttribute('href', paymentURL);
     await expect(visitor.getByRole('button', { name: /I've Sent Payment/ })).toHaveCount(0);
