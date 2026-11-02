@@ -29,15 +29,19 @@ jobs:
       - run: npm test
       - run: npm run test:browser
       - run: npm run test:commerce-browser
-      - run: npm run check
+      - run: npm run check -- --outdir /tmp/rise-roost-classic-worker
         env:
           WRANGLER_SEND_METRICS: 'false'
+      - run: node tests/classic-worker-smoke-local.mjs
+        if: github.head_ref == 'codex/final-prelaunch-audit'
+        env:
+          RR_CLASSIC_WORKER_BUNDLE: /tmp/rise-roost-classic-worker/worker.js
       - run: npm run check:experience -- --outdir /tmp/rise-roost-preview-worker
-        if: github.head_ref == 'codex/customer-experience-roost' || (github.head_ref == 'codex/studio-management' || github.head_ref == 'codex/complete-preview')
+        if: github.head_ref == 'codex/customer-experience-roost' || (github.head_ref == 'codex/studio-management' || github.head_ref == 'codex/complete-preview' || github.head_ref == 'codex/final-prelaunch-audit')
         env:
           WRANGLER_SEND_METRICS: 'false'
       - run: node tests/pin-worker-smoke.mjs
-        if: (github.head_ref == 'codex/studio-management' || github.head_ref == 'codex/complete-preview')
+        if: (github.head_ref == 'codex/studio-management' || github.head_ref == 'codex/complete-preview' || github.head_ref == 'codex/final-prelaunch-audit')
         env:
           RR_PIN_WORKER_BUNDLE: /tmp/rise-roost-preview-worker/worker.js
       - uses: actions/upload-artifact@v4

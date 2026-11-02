@@ -125,7 +125,7 @@ export async function start(root) {
         const destinations = order.paymentDestinations || {}, selected = order.selectedPaymentMethod;
         main.append(h('section', { class: 'sub-card', 'aria-label': 'Payment options' }, h('h2', {}, 'Choose how to pay'), h('strong', {}, 'Amount due: ' + money(order.total)),
           h('p', {}, 'Order reference: ' + order.orderNumber),
-          Object.entries(providers).map(([method,label]) => button(label, () => save('/payment-method', { method }), { class: 'secondary-button', disabled: busy || !destinations[method], 'aria-pressed': selected === method })),
+          Object.entries(providers).filter(([method]) => destinations[method]).map(([method,label]) => button(label, () => save('/payment-method', { method }), { class: 'secondary-button', disabled: busy, 'aria-pressed': selected === method })),
           selected && destinations[selected] ? h('a', { href: destinations[selected].url, target: '_blank', rel: 'noopener noreferrer', class: 'primary-link' }, 'Open ' + providers[selected]) : null,
           h('p', {}, 'Your order is saved. Pay the exact amount shown. Include the order reference if your payment app offers a note. No amount or reference is filled automatically. Return to this tab after paying or canceling; opening a payment app never verifies payment.'),
           !Object.keys(destinations).length ? h('p', {}, 'Business payment destinations are not configured yet. Contact Danielle below before paying. Do not send real money during preview testing.') : null));

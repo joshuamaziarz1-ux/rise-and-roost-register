@@ -1,0 +1,125 @@
+{
+  "checkedAt": "2026-11-02T01:54:54.297441+00:00",
+  "branch": "codex/final-prelaunch-audit",
+  "baseCommit": "f54f793d93eeafde396e3de25a83066718321dd2",
+  "status": "BLOCKED: production launch not authorized or ready",
+  "tests": {
+    "backend": {
+      "passed": 140,
+      "failed": 0,
+      "skipped": 0
+    },
+    "browser": {
+      "passed": 120,
+      "failed": 0,
+      "profiles": [
+        "desktop Chromium",
+        "desktop WebKit",
+        "iPhone WebKit",
+        "Android Chromium",
+        "tablet Chromium"
+      ]
+    },
+    "commerce": {
+      "passed": 8,
+      "failed": 0,
+      "profiles": [
+        "desktop Chromium",
+        "iPhone WebKit"
+      ],
+      "providerPages": "fictional intercepts; no money sent"
+    },
+    "actualLocalWorkerdD1": "passed",
+    "actualLocalR2RestartAndEncryptedRestore": "passed",
+    "previewAndBetaDryRuns": "passed",
+    "backupDispatcherDryRun": "passed, disabled",
+    "hostedBrowserAcceptance": "blocked by environment proxy CONNECT 403; not passed",
+    "productionBackupProviderAndScheduling": "not configured; not operational",
+    "actualLocalClassicWorkerD1": "passed through file-based isolated wrapper; no hosted target"
+  },
+  "timeTravel": {
+    "actualDatabaseId": "21352b95-d7f6-406f-8527-4b8dbcebf1bf",
+    "engineVersion": "production (D1 engine, not business launch environment)",
+    "bookmarkRetrieved": true,
+    "inPlaceRestorePerformed": false,
+    "documentedFreeRetentionDays": 7
+  },
+  "backupRestore": {
+    "database": "rise-roost-experience-preview-db",
+    "databaseId": "21352b95-d7f6-406f-8527-4b8dbcebf1bf",
+    "applicationTables": 14,
+    "explicitIndexes": 2,
+    "everyRestoredRecordMatches": true,
+    "restoredSchemaMatches": true,
+    "remoteRowsStableDuringRead": true,
+    "snapshotSha256": "04e105ab2684946bd1d4bfc3f88f9c9198c462dfe27571302325770a27b9bdc5",
+    "remoteWrites": 0
+  },
+  "preservation": {
+    "allExistingPreviewTablesPreserved": {
+      "assets": true,
+      "customer_comments": true,
+      "device_links": true,
+      "limits": true,
+      "previews": true,
+      "roost_challenges": true,
+      "roost_credentials": true,
+      "roost_members": true,
+      "roost_sessions": true,
+      "sessions": true,
+      "studio_pin_limits": true,
+      "studio_pin_sessions": true,
+      "studio_pin_settings": true,
+      "workspaces": true
+    },
+    "addedRows": {},
+    "originalBetaTablesPreserved": 6,
+    "originalBetaSettingsAndDeploymentPreserved": true,
+    "previewDatabaseBindingVerified": true
+  },
+  "domain": {
+    "providerZoneStatus": "active",
+    "assignedNameservers": [
+      "faye.ns.cloudflare.com",
+      "uriah.ns.cloudflare.com"
+    ],
+    "workerCustomDomains": [],
+    "dnsRecordInspection": 403,
+    "workerRouteInspection": 403,
+    "certificateInspection": 403,
+    "sslModeInspection": 403,
+    "authoritativeDNSAndServedHTTPS": "not independently verified"
+  },
+  "dependencyAudit": {
+    "runtime": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "allIncludingExistingDevelopmentTools": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 6,
+      "critical": 0,
+      "total": 6
+    }
+  },
+  "productionDatabaseExists": false,
+  "productionOwnerAuthenticationConfigured": false,
+  "sourceCustomerClassificationResolved": false,
+  "previewBusinessPaymentDestinationsConfigured": false,
+  "productionBackupsOperational": false,
+  "mutations": {
+    "existingRemoteDatabaseWrites": 0,
+    "productionResourcesCreated": 0,
+    "deployments": 0,
+    "merges": 0,
+    "dnsOrNameserverChanges": 0,
+    "realCheckoutActivation": false
+  },
+  "ci": "not claimed passed until the current draft PR checks complete"
+}

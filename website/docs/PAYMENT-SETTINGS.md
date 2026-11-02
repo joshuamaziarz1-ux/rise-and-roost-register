@@ -13,7 +13,7 @@ Payment destinations belong to Danielle's authenticated Studio workspace. No acc
 5. Confirm the method says **Ready**. Customer checkout now uses this exact saved destination. Repeat for the other methods as needed. At least one enabled, valid destination with an owner-confirmed test is required for payable orders.
 6. Open Studio on your other device. Saved destinations, enable settings and test confirmations synchronize automatically. **Disable …** removes a method from checkout. **Enable …** can reuse a confirmed test of the unchanged URL. Editing a URL invalidates its prior test, and the replacement cannot be used until tested again. Cancel discards an unsaved edit.
 
-Customer checkout displays all three providers, disabling unavailable methods. When no tested method is active, customers can browse and use their basket, but cannot place a positive-total order. The server independently enforces this before reserving inventory, including a concurrent owner disable. Zero-total orders do not require external payment.
+The launch-audit candidate displays only configured, enabled, tested providers at checkout and on private tracking. Unavailable methods remain rejected server-side. When no tested method is active, customers can browse and use their basket, but cannot place a positive-total order. The server independently enforces this before reserving inventory, including a concurrent owner disable. Zero-total orders do not require external payment. These audit changes remain on the development branch pending review; the earlier deployed preview displayed unavailable methods as disabled buttons.
 
 Orders are saved before payment links are offered. Opening, canceling, abandoning or returning from a provider page never changes payment status or verified sales. Danielle must continue to check her independent provider records and use **Verify Payment** with its confirmation. Disabling or editing a link does not cancel an existing order, release its reservation or erase its financial history. Existing tracking pages receive the current active destinations and preserve Contact Danielle.
 
@@ -29,7 +29,7 @@ Orders are saved before payment links are offered. Opening, canceling, abandonin
 
 Automated coverage runs through `npm test`, `npm run test:commerce-browser` and the local workerd/D1 smoke test. The commerce browser suite includes the following on desktop Chromium and iPhone-sized WebKit:
 
-- Access Studio with no configured links; all checkout methods and positive-total ordering are disabled.
+- Access Studio with no configured links; unavailable checkout methods are hidden and positive-total ordering is disabled.
 - Save all three supported destinations; reject unsafe and provider-mismatched URLs without losing edits.
 - Open a test without confirming: checkout remains paused. Confirm a test: only the saved active destination becomes available. A forged client test field cannot enable checkout.
 - Enable/disable from a second independent owner session; confirm checkout and Studio update. Reject stale snapshots and conflicting edits; review and retry safely.
