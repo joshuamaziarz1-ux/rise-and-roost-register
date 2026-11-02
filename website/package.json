@@ -12,12 +12,13 @@
     "test:experience-browser": "playwright test --config playwright.experience-hosted.config.mjs",
     "test": "node --test tests/*.test.mjs",
     "test:browser": "playwright test",
-    "test:all": "npm test && npm run test:browser",
-    "deploy": "wrangler deploy",
+    "test:all": "npm test && npm run test:browser && npm run test:commerce-browser",
+    "deploy": "wrangler deploy --config wrangler.experience.toml",
     "check": "wrangler deploy --dry-run",
     "test:worker": "node tests/worker-smoke.mjs",
     "screenshots": "node tests/capture-evidence.mjs",
-    "test:studio-hosted": "playwright test --config playwright.management-hosted.config.mjs"
+    "test:studio-hosted": "playwright test --config playwright.management-hosted.config.mjs",
+    "test:commerce-browser": "playwright test --config playwright.commerce.config.mjs"
   },
   "dependencies": {
     "@simplewebauthn/server": "14.0.3",

@@ -58,7 +58,7 @@ export async function drainNotifications(db, env, { fetcher = fetch, now = Date.
             `Order total: ${money(order.total)}`,
             `Pickup: ${pickupLabel(order.pickup)}`,
             "Your private status page (keep this link private):",
-            BETA_ORIGIN + trackingPath(row.id, order),
+            (env.WEBSITE_BASE_URL || BETA_ORIGIN).replace(/\/$/, "") + trackingPath(row.id, order),
             "This is an isolated website beta. No Square payment was processed. Your status page is the source of current order information. You requested transactional order updates; no marketing messages.",
           ].join("\n\n"),
         }),

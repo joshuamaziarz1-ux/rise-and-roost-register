@@ -35,6 +35,11 @@ export async function restoreBusinessBackup({ db, row, input, fingerprint, actor
     o.notifications = []; // Never resend old notifications during restoration.
   }
   restoredLedger.management ||= {};
+  // A copied backup cannot certify that its payment recipients are still suitable.
+  for (const destination of Object.values(restoredLedger.management.settings?.payments || {})) {
+    destination.enabled = false; delete destination.tested; delete destination.pendingTest;
+  }
+  if (restoredLedger.management.settings) restoredLedger.management.settings.paymentsVersion = (restoredLedger.management.settings.paymentsVersion || 0) + 1;
   for (const b of restoredLedger.management.benefits || []) if (members.has(b.memberId)) b.memberId = members.get(b.memberId);
   restoredLedger.management.operations = [{ id: input.operationId, fingerprint, at, result: { restored: true } }];
   restoredLedger.management.audit ||= []; restoredLedger.management.audit.unshift({ id: token(), action: 'Business backup restored into a new private copy', at, actor });

@@ -13,10 +13,12 @@ export const security = {
 };
 export default {
   async fetch(request, env, ctx) {
+    if (env.STUDIO_MANAGEMENT_ENABLED === 'true' && env.REVIEW_BUILD !== 'true') return new Response('Production launch is blocked pending individual owner accounts and launch review.', { status: 503 });
+    if (env.COMMERCE_UPDATE_ENABLED === 'true' && (env.REVIEW_BUILD !== 'true' || env.PREVIEW_DATABASE_ID !== '21352b95-d7f6-406f-8527-4b8dbcebf1bf')) return new Response('Production launch is blocked pending owner accounts and launch review.', { status: 503 });
     const pin = await studioPinAccess(request, env);
     const access = pin.active ? pin : await previewAccess(request, env);
     let response = pin.response || (!pin.active && access.active && !access.grant ? restrictedResponse(request, access) : new URL(request.url).pathname.startsWith("/api/")
-      ? await api(request, env.DB, Date.now(), { publicWorkspaceId: env.PUBLIC_WORKSPACE_ID, emailEnabled: emailConfigured(env), customerExperienceEnabled: env.CUSTOMER_EXPERIENCE_ENABLED === "true", reviewBuild: env.REVIEW_BUILD === "true", studioManagementEnabled: env.STUDIO_MANAGEMENT_ENABLED === "true", previewGrant: access.grant, previewPinMode: pin.active })
+      ? await api(request, env.DB, Date.now(), { publicWorkspaceId: env.PUBLIC_WORKSPACE_ID, emailEnabled: emailConfigured(env), customerExperienceEnabled: env.CUSTOMER_EXPERIENCE_ENABLED === "true", reviewBuild: env.REVIEW_BUILD === "true", studioManagementEnabled: env.STUDIO_MANAGEMENT_ENABLED === "true", previewGrant: access.grant, previewPinMode: pin.active, commerceEnabled: env.COMMERCE_UPDATE_ENABLED === "true" })
       : await env.ASSETS.fetch(request));
     if (request.method === "POST" && response.ok && emailConfigured(env))
       ctx?.waitUntil(drainNotifications(env.DB, env));

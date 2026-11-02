@@ -74,6 +74,7 @@ export function customerTimestamp(value) {
 }
 export function pickupLabel(p) {
   const start = localInstant(p.date, p.start);
+  if (p.start === p.end) return `${customerDate.format(start)} · ${customerTime(start)}`;
   return `${customerDate.format(start)} · ${customerTime(start)} – ${customerTime(localInstant(p.date, p.end))}`;
 }
 export function orderByLabel(p) {

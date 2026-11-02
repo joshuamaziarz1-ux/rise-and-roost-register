@@ -1,3 +1,4 @@
+import { POLICY_VERSION, pickupDeadline, defaultCalendar, providers, configuredPayments, paymentReadiness } from '../public/commerce.mjs';
 import * as css from "css-tree";
 import { customerOrder, emailAddress, enqueue } from "./orders.mjs";
 import { roostApi, commentsApi, memberFor, customerProfile } from "./roost.mjs";
@@ -240,6 +241,7 @@ export function validateDocument(doc) {
   )
     fail("Use unique pickup windows, up to 100.");
   for (const p of doc.pickups) {
+    if (p.dailyCapacity !== undefined && !integer(p.dailyCapacity, 0, 10000)) fail('Check the daily combined order limit.');
     for (const [id, value] of Object.entries(p.productionLimits || {})) if (!doc.products.some(product => product.id === id) || !integer(value, 0, 10000)) fail('Check production limits for this pickup.');
     if (!keyPattern.test(p.id) || !integer(p.capacity, 0, 10000))
       fail("Check pickup capacity.");
@@ -282,6 +284,7 @@ export function quote(doc, ledger, input, now = Date.now()) {
   );
   if (active.length >= pickup.capacity)
     fail("This pickup window is full.", 409);
+  if (doc.pickups.filter(p => p.date === pickup.date && p.dailyCapacity !== undefined).some(p => ledger.orders.filter(o => holdsInventory(o) && (o.originalPickup || o.pickup).date === pickup.date).length >= p.dailyCapacity)) fail('This pickup date has reached its daily order limit.', 409);
   const seen = new Set();
   const lines = input.lines.map((line) => {
     const product = doc.products.find((p) => p.id === line.productId);
@@ -301,7 +304,7 @@ export function quote(doc, ledger, input, now = Date.now()) {
     const sameProductQty = input.lines
       .filter((l) => l.productId === product.id)
       .reduce((n, l) => n + (Number.isInteger(l.qty) ? l.qty : 100000), 0);
-    const booked = active
+    const booked = (product.inventoryMode === 'production' ? ledger.orders.filter(o => holdsInventory(o) && (o.originalPickup || o.pickup).date === pickup.date) : active)
       .flatMap((o) => o.lines)
       .filter((l) => l.productId === product.id)
       .reduce((n, l) => n + l.qty, 0);
@@ -311,7 +314,7 @@ export function quote(doc, ledger, input, now = Date.now()) {
       .filter((l) => l.productId === product.id)
       .reduce((n, l) => n + l.qty, 0);
     if (
-      (product.inventoryMode !== 'physical' && booked + sameProductQty > productionLimit(product, pickup)) ||
+      (product.inventoryMode !== 'physical' && booked + sameProductQty > productionLimit(product, pickup, doc.pickups)) ||
       (product.inventoryMode !== 'production' && allBooked + sameProductQty > product.stock)
     )
       fail(product.name + " has reached its capacity.", 409);
@@ -343,30 +346,34 @@ export function quote(doc, ledger, input, now = Date.now()) {
 // Publish aggregate availability, never order details or customer/owner credentials.
 export function availableDocument(document, ledger, { managed = false, now = Date.now() } = {}) {
   const doc = copy(document);
-  const units = new Map(), orders = new Map();
+  const units = new Map(), orders = new Map(), dayOrders = new Map();
   for (const order of ledger.orders) {
     if (!holdsInventory(order)) continue;
+    const day = (order.originalPickup || order.pickup).date; dayOrders.set(day, (dayOrders.get(day) || 0) + 1);
     orders.set(order.pickupId, (orders.get(order.pickupId) || 0) + 1);
     for (const line of order.lines)
       units.set(line.productId, (units.get(line.productId) || 0) + line.qty);
   }
-  const perPickup = new Map();
+  const perPickup = new Map(), perDate = new Map();
   for (const order of ledger.orders.filter(holdsInventory)) for (const line of order.lines) {
+    const dayKey = (order.originalPickup || order.pickup).date + ':' + line.productId; perDate.set(dayKey, (perDate.get(dayKey) || 0) + line.qty);
     const key = order.pickupId + ':' + line.productId; perPickup.set(key, (perPickup.get(key) || 0) + line.qty);
   }
   for (const product of doc.products) {
     if (product.inventoryMode !== 'production') product.stock = Math.max(0, product.stock - (units.get(product.id) || 0));
     else {
-      const remaining = doc.pickups.filter(p => !p.closed && localInstant(p.cutoffDate, p.cutoffTime) > now).map(p => Math.max(0, productionLimit(product, p) - (perPickup.get(p.id + ':' + product.id) || 0)));
+      const remaining = doc.pickups.filter(p => !p.closed && localInstant(p.cutoffDate, p.cutoffTime) > now).map(p => Math.max(0, productionLimit(product, p, document.pickups) - (perDate.get(p.date + ':' + product.id) || 0)));
       product.stock = product.capacity = Math.max(0, ...remaining);
     }
     if (product.archived) product.active = false;
     if (product.soldOut) product.stock = 0;
   }
-  for (const pickup of doc.pickups)
-    pickup.capacity = Math.max(0, pickup.capacity - (orders.get(pickup.id) || 0));
+  for (const pickup of doc.pickups) {
+    const daily = document.pickups.filter(p => p.date === pickup.date && p.dailyCapacity !== undefined).map(p => p.dailyCapacity - (dayOrders.get(p.date) || 0));
+    pickup.capacity = Math.max(0, Math.min(pickup.capacity - (orders.get(pickup.id) || 0), ...daily));
+  }
   if (managed) {
-    for (const p of doc.pickups) p.productionRemaining = Object.fromEntries(doc.products.filter(v => v.inventoryMode === 'production').map(product => [product.id, Math.max(0, productionLimit(document.products.find(v => v.id === product.id), p) - (perPickup.get(p.id + ':' + product.id) || 0))]));
+    for (const p of doc.pickups) p.productionRemaining = Object.fromEntries(doc.products.filter(v => v.inventoryMode === 'production').map(product => [product.id, Math.max(0, productionLimit(document.products.find(v => v.id === product.id), p, document.pickups) - (perDate.get(p.date + ':' + product.id) || 0))]));
     doc.pickups = doc.orderingPaused ? [] : doc.pickups.filter(p => !p.closed && p.capacity > 0 && localInstant(p.cutoffDate, p.cutoffTime) > now && localInstant(p.date, p.start) > now);
   }
   return doc;
@@ -398,7 +405,7 @@ export function inspectImage(bytes, mime) {
     );
   return true;
 }
-export async function api(request, db, now = Date.now(), { publicWorkspaceId = "", emailEnabled = false, customerExperienceEnabled = false, reviewBuild = false, studioManagementEnabled = false, previewGrant, previewPinMode = false } = {}) {
+export async function api(request, db, now = Date.now(), { publicWorkspaceId = "", emailEnabled = false, customerExperienceEnabled = false, reviewBuild = false, studioManagementEnabled = false, previewGrant, previewPinMode = false, commerceEnabled = false } = {}) {
   const url = new URL(request.url),
     path = url.pathname;
   const first = (sql, ...args) =>
@@ -506,6 +513,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       notificationsEnabled: emailEnabled && row.id === publicWorkspaceId,
       owner: "Danielle · Demo Owner",
       customerExperienceEnabled,
+      commerceEnabled,
       studioManagementEnabled,
       previewDirectAccess: !!previewGrant,
       previewPinAccess: previewGrant?.actor.authentication === 'preview_pin',
@@ -644,6 +652,9 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       if (!row) fail("This published workspace was not found. Contact the beta operator; saved content has not been reset.", id === publicWorkspaceId ? 503 : 404);
       return json({
         customerExperienceEnabled,
+      commerceEnabled,
+        paymentDestinations: commerceEnabled ? configuredPayments(JSON.parse(row.ledger_json).management?.settings) : {},
+        paymentReadiness: commerceEnabled ? paymentReadiness(JSON.parse(row.ledger_json).management?.settings) : undefined,
         notificationsEnabled: emailEnabled && id === publicWorkspaceId,
         document: availableDocument(JSON.parse(row.published_json), JSON.parse(row.ledger_json), { managed: studioManagementEnabled, now }),
         revision: row.published_revision,
@@ -667,6 +678,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         id: row.workspace_id,
         preview: true,
         customerExperienceEnabled,
+      commerceEnabled,
       });
     }
     if (path.startsWith("/api/assets/") && request.method === "GET") {
@@ -821,7 +833,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           );
         const ledger = JSON.parse(row.ledger_json),
           prior = ledger.orders.find((o) => o.requestId === input.requestId);
-        if (prior) return json(customerOrder(prior, row.id));
+        if (prior) return json(customerOrder(prior, row.id, ledger.management?.settings, now));
         if (input.revision !== row.published_revision)
           fail(
             "The published site changed. Refresh your basket and review the latest prices and deadlines.",
@@ -831,6 +843,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           fail(
             "This demo has reached its order limit. Create a new workspace.",
           );
+        if (commerceEnabled && (input.policyAccepted !== true || input.policyVersion !== POLICY_VERSION)) fail('Please read and acknowledge the Rise & Roost Pickup Policy before placing your order.');
         const customer = { emailOptIn: false };
         if (customerExperienceEnabled && (input.checkoutMode || input.customerDetails)) {
           const profile = customerProfile(input.customerDetails);
@@ -848,8 +861,17 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           customer.emailOptIn = true;
           customer.consentedAt = new Date(now).toISOString();
         }
+        const quoted = quote(JSON.parse(row.published_json), ledger, input, now);
+        let selectedPaymentMethod;
+        if (commerceEnabled && quoted.total > 0) {
+          const active = configuredPayments(ledger.management?.settings);
+          if (!Object.keys(active).length) fail('Ordering is paused while Danielle finishes payment setup. Please check back soon.',409);
+          selectedPaymentMethod = input.paymentMethod ?? Object.keys(active)[0];
+          if (!Object.hasOwn(active,selectedPaymentMethod)) fail('That payment method is no longer available. Review the current payment options.',409);
+        }
         const order = {
-          ...quote(JSON.parse(row.published_json), ledger, input, now),
+          ...quoted,
+          ...(selectedPaymentMethod ? { selectedPaymentMethod } : {}),
           id: token(),
           requestId: input.requestId,
           trackingKey: token(),
@@ -863,6 +885,14 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           at: new Date(now).toISOString(),
           audit: [{ action: "Demo request", at: new Date(now).toISOString() }],
         };
+        if (commerceEnabled) {
+          const settings = ledger.management?.settings || {};
+          order.commerceEnabled = true;
+          if (order.total === 0) order.paymentStatus = 'not_required';
+          order.policyAcceptance = { version: POLICY_VERSION, at: order.at, calendar: settings.calendar || defaultCalendar() };
+          order.pickupDeadline = pickupDeadline(order.pickup, order.policyAcceptance.calendar);
+          order.originalPickup = copy(order.pickup);
+        }
         order.orderNumber = "RR-" + order.id.slice(0, 16).toUpperCase();
         enqueue(order, "received", order.at, token);
         ledger.orders.unshift(order);
@@ -873,14 +903,14 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           row.ledger_version,
           row.published_revision,
         );
-        if (result.meta.changes === 1) return json(customerOrder(order, row.id), 201);
+        if (result.meta.changes === 1) return json(customerOrder(order, row.id, ledger.management?.settings, now), 201);
       }
       fail(
         "Another order reserved capacity. Review availability and try again.",
         409,
       );
     }
-    const tracking = /^\/api\/order-tracking\/([a-f0-9]{48})\/([a-f0-9]{48})(\/report)?$/.exec(path);
+    const tracking = /^\/api\/order-tracking\/([a-f0-9]{48})\/([a-f0-9]{48})(\/(?:report|message|payment-method))?$/.exec(path);
     if (tracking && ((request.method === "GET" && !tracking[3]) || (request.method === "POST" && tracking[3]))) {
       const raw = /^Bearer ([a-f0-9]{48})$/.exec(request.headers.get("Authorization") || "")?.[1];
       if (!raw) fail("Use the complete private tracking link from your order confirmation.", 401);
@@ -892,16 +922,54 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           await rateLimit("tracking-denied", 60);
           fail("This private tracking link is invalid. Check the complete link or contact the farm.", 404);
         }
-        if (request.method === "GET") return json(customerOrder(order, row.id));
-        if (order.status === "canceled") fail("This order was canceled. Contact the farm about payment.", 409);
-        if (["reported", "verified"].includes(order.paymentStatus)) return json(customerOrder(order, row.id));
-        order.paymentStatus = "reported";
-        order.paymentReportedAt = new Date(now).toISOString();
+        if (request.method === "GET") return json(customerOrder(order, row.id, ledger.management?.settings, now));
+        if (tracking[3] === '/report') {
+          if (commerceEnabled || studioManagementEnabled) fail('Payment reporting is no longer needed. Danielle verifies payments independently.', 410);
+          // Backward compatibility for the original beta API, which is not deployed by this task.
+          if (order.status === 'canceled') fail('This order was canceled.', 409);
+          if (['reported','verified'].includes(order.paymentStatus)) return json(customerOrder(order,row.id));
+          order.paymentStatus = 'reported'; order.paymentReportedAt = new Date(now).toISOString();
+          order.audit.push({ action: 'Payment reported by customer; not verified', at: order.paymentReportedAt });
+        } else
+        if (tracking[3] === '/payment-method') {
+          if (!Object.hasOwn(providers, input.method) || !configuredPayments(ledger.management?.settings)[input.method]) fail('This business payment destination is not configured. Contact Danielle.');
+          if (order.total === 0 || order.paymentVerifiedAt || order.status === 'canceled' || order.resolution) fail('This order no longer needs payment.', 409);
+          if (order.selectedPaymentMethod === input.method) return json(customerOrder(order, row.id, ledger.management?.settings, now));
+          order.selectedPaymentMethod = input.method;
+          order.audit.push({ action: 'Customer selected ' + providers[input.method] + '; payment remains unverified', at: new Date(now).toISOString() });
+        } else if (tracking[3] === '/message') {
+          if (input.website || typeof input.body !== 'string' || input.body.trim().length < 3 || input.body.length > 2000 || !/^[a-f0-9-]{32,48}$/.test(input.requestId || '')) fail('Write a message of 3–2,000 characters.');
+          const topic = input.topic ?? '';
+          if (!['', 'pickup', 'order'].includes(topic)) fail('Choose pickup help or an order question.');
+          const existing = (order.messages || []).find(m => m.requestId === input.requestId);
+          if (existing) {
+            if ((existing.topic || '') !== topic || existing.body !== input.body.trim() || (existing.requestedDate || '') !== (input.requestedDate || '') || (existing.requestedTime || '') !== (input.requestedTime || '')) fail('Use a new request for a different message.', 409);
+            return json({ ...customerOrder(order, row.id, ledger.management?.settings, now), messageConfirmation: { requestId: input.requestId, messageId: existing.id } });
+          }
+          if ((order.messages || []).length >= 100) fail('This conversation has reached its message limit. Please contact the farm directly.', 409);
+          const requestedDate = input.requestedDate || '', requestedTime = input.requestedTime || '';
+          if (requestedDate || requestedTime) { try {
+            if ((requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) || (requestedTime && !/^\d{2}:\d{2}$/.test(requestedTime))) throw new Error();
+            // A time alone is a request for owner review, not an approved dated appointment.
+            localInstant(requestedDate || '2000-01-01', requestedTime || '12:00');
+          } catch { fail('Choose a valid requested pickup date or time.'); } }
+          if (attempt === 0) { await rateLimit('order-message', 30); await rateLimit('message-order:' + order.id, 30); }
+          const at = new Date(now).toISOString();
+          order.messages ||= []; order.messages.push({ id: token(), requestId: input.requestId, sender: 'customer', name: order.customer?.name || 'Guest customer', body: input.body.trim(), topic, at, requestedDate, requestedTime });
+          // One persistent attention item per conversation, rather than one alert per retry/message.
+          const alreadyOpen = order.contact?.unresolved;
+          order.contact = { ...order.contact, unresolved: true, extensionRequested: topic === 'pickup' || !!requestedDate || !!requestedTime || !!order.contact?.extensionRequested, lastMessageAt: at, alertedAt: alreadyOpen ? order.contact.alertedAt : at };
+          order.audit.push({ action: 'Customer Contacted — awaiting owner review', at });
+        } else fail('This action was not found.', 404);
         order.version = (order.version || 1) + 1;
-        order.audit.push({ action: "Payment reported by customer; not verified", at: order.paymentReportedAt });
+        if (new TextEncoder().encode(JSON.stringify(ledger)).length > 1200000) fail('The conversation could not be saved. Contact the farm directly.', 409);
         const result = await run("UPDATE workspaces SET ledger_json=?,ledger_version=ledger_version+1 WHERE id=? AND ledger_version=?",
           JSON.stringify(ledger), row.id, row.ledger_version);
-        if (result.meta.changes === 1) return json(customerOrder(order, row.id));
+        if (result.meta.changes === 1) {
+          const response = customerOrder(order, row.id, ledger.management?.settings, now);
+          if (tracking[3] === '/message') response.messageConfirmation = { requestId: input.requestId, messageId: order.messages.find(m => m.requestId === input.requestId).id };
+          return json(response);
+        }
       }
       fail("Another update arrived first. Refresh your order status and try again.", 409);
     }

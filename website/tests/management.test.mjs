@@ -123,7 +123,7 @@ test('payment reports never become sales; independently verified refunds are ide
   const h = await fixture(), o = (await h.order()).data;
   const tracking = new URL(o.trackingPath, h.origin), secret = new URLSearchParams(tracking.hash.slice(1)).get('access');
   await h.call(h.guest, tracking.pathname.replace('/orders/', '/api/order-tracking/')+'/report', {}, { headers: { Authorization: 'Bearer '+secret } });
-  let s = await h.snapshot(); assert.equal(s.management.today.verifiedSales, 0); assert.equal(s.management.today.reportedValue, 900);
+  let s = await h.snapshot(); assert.equal(s.management.today.verifiedSales, 0); assert.equal(s.management.today.outstandingValue, 900);
   assert.equal((await h.verify(s.orders[0])).status, 200); s = await h.snapshot(); assert.equal(s.management.today.verifiedSales, 900);
   assert.equal((await h.change('fulfillment', { id: o.id, orderVersion: s.orders[0].version, status: 'canceled', reason: 'Synthetic cancellation', releaseInventory: true })).status, 200);
   s = await h.snapshot(); assert.equal(s.management.today.netVerifiedReceipts, 900);

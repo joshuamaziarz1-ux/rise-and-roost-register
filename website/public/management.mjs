@@ -1,3 +1,4 @@
+import { requestedPickupLabel, providers, defaultCalendar, paymentDestination, configuredPayments } from './commerce.mjs';
 import { h, button, field, request as apiRequest, notify } from './dom.mjs';
 import { clone, money, pickupLabel, orderByLabel, customerTimestamp, customerTime, localInstant } from './model.mjs';
 import { paymentLabels, fulfillmentLabels } from './orders.mjs';
@@ -25,9 +26,13 @@ export async function start(root, initial, newAccessKey) {
   const bindings = new WeakMap();
   const workspace = initial.id, storageKey = 'rr-studio-draft:' + workspace;
   const pendingKey = 'rr-studio-pending:' + workspace;
+  const testChecks = new Map();
+  const paymentsVersion = () => data.management.settings?.paymentsVersion || 0;
+  const paymentFields = provider => { const p = data.management.settings?.payments?.[provider] || {}; return { provider, url: p.url || '', enabled: p.enabled === true, businessConfirmed: p.businessConfirmed === true }; };
+  const formChanged = () => editing && (editing.type === 'payment-settings' ? editing.paymentsVersion !== paymentsVersion() : editing.revision !== data.revision || editing.ledgerVersion !== data.ledgerVersion);
   const request = (path, body) => apiRequest(path, body, { workspaceId: workspace });
   const stamp = at => at ? customerTimestamp(at) : 'Not recorded';
-  const marked = () => { if (editing && ['product', 'calendar', 'content'].includes(editing.type)) try { sessionStorage.setItem(storageKey, JSON.stringify(editing)); } catch {} };
+  const marked = () => { if (editing && ['product', 'calendar', 'content', 'payment-settings'].includes(editing.type)) try { sessionStorage.setItem(storageKey, JSON.stringify(editing)); } catch {} };
   const f = (label, object, key, options = {}) => {
     const set = v => { object[key] = options.type === 'number' ? Number(v) : v; marked(); };
     const node = field(label, object[key] ?? '', set, options), input = node.querySelector('input,textarea,select');
@@ -35,11 +40,11 @@ export async function start(root, initial, newAccessKey) {
   };
   const check = (label, object, key) => f(label, object, key, { type: 'checkbox' });
   function go(next, selected = '', nextFilter = 'all') {
-    if (editing && !confirm('Leave this form? The latest unfinished product, calendar, or content form is kept in this tab until you save, cancel, or replace it with another form.')) return;
+    if (editing && !confirm('Leave this form? The latest unfinished product, calendar, content or payment link form is kept in this tab until you save, cancel, or replace it with another form.')) return;
     editing = null; error = ''; selection = selected; filter = nextFilter; search = ''; view = next;
     history.replaceState({}, '', initial.studioPath + '#' + encodeURIComponent(next)); render(); window.scrollTo(0, 0);
   }
-  function edit(type, values) { editing = { type, values: clone(values), original: clone(values), revision: data.revision, ledgerVersion: data.ledgerVersion }; error = ''; marked(); render(); }
+  function edit(type, values) { editing = { type, values: clone(values), original: clone(values), revision: data.revision, ledgerVersion: data.ledgerVersion }; editing.paymentsVersion = paymentsVersion(); error = ''; marked(); render(); }
   const merge = (base, local, remote) => {
     if (JSON.stringify(base) === JSON.stringify(local)) return remote === undefined ? undefined : clone(remote);
     if (local && base && remote && !Array.isArray(local) && typeof local === 'object' && typeof base === 'object' && typeof remote === 'object') {
@@ -60,12 +65,12 @@ export async function start(root, initial, newAccessKey) {
     else if (e.type === 'calendar') {
       const current = data.published.pickups.find(p => p.id === v.pickup.id);
       if (current) { const remote = { ...v, pickup: current }; e.values = merge(e.original || v, v, remote); e.original = clone(remote); }
-    } else if (v.orderId) { const current = data.orders.find(o => o.id === v.orderId); if (current) v.orderVersion = current.version; }
+    } else if (e.type === 'payment-settings') { const remote = paymentFields(v.provider); e.values = merge(e.original || v, v, remote); e.original = clone(remote); e.paymentsVersion = paymentsVersion(); } else if (v.orderId) { const current = data.orders.find(o => o.id === v.orderId); if (current) v.orderVersion = current.version; }
     e.revision = data.revision; e.ledgerVersion = data.ledgerVersion; error = ''; marked(); render();
   }
   async function cancel() {
     if (busy) return;
-    const discardDraft = ['product', 'calendar', 'content'].includes(editing?.type) || ['product', 'calendar', 'content'].includes(pending?.form?.type);
+    const discardDraft = ['product', 'calendar', 'content', 'payment-settings'].includes(editing?.type) || ['product', 'calendar', 'content', 'payment-settings'].includes(pending?.form?.type);
     if (pending) {
       busy = true; error = ''; render();
       try {
@@ -84,6 +89,7 @@ export async function start(root, initial, newAccessKey) {
       const q = new URLSearchParams({ period }); if (period === 'custom') { q.set('start', from); q.set('end', through); }
       const next = await request('/api/manage/snapshot?' + q);
       if (next.id !== workspace) throw new Error('This response belongs to another workspace. Sign in to the correct saved website.');
+      if (next.revision < data.revision || next.ledgerVersion < data.ledgerVersion) return;
       data = next; connected = true; reauth = false;
       if (pending && !busy) {
         const resolving = pending;
@@ -91,7 +97,7 @@ export async function start(root, initial, newAccessKey) {
         if (status.found && pending === resolving && !busy) {
           data = await request('/api/manage/snapshot?' + q);
           if (pending === resolving && !busy) {
-            pending = null; if (editing === resolving.form) { if (['product', 'calendar', 'content'].includes(editing?.type)) sessionStorage.removeItem(storageKey); editing = null; }
+            pending = null; if (editing === resolving.form) { if (['product', 'calendar', 'content', 'payment-settings'].includes(editing?.type)) sessionStorage.removeItem(storageKey); editing = null; }
             error = ''; sessionStorage.removeItem(pendingKey); notify(status.result?.abandoned ? 'The previous request was canceled.' : 'The server confirms your previous save.');
           }
         }
@@ -105,9 +111,9 @@ export async function start(root, initial, newAccessKey) {
     if (status) { status.textContent = connected ? 'Connected' : 'Offline / reconnecting'; status.classList.toggle('offline', !connected); }
     const notice = root.querySelector('#management-error'); if (notice) { notice.textContent = error; notice.hidden = !error; }
     const reopen = root.querySelector('#management-reopen'); if (reopen) reopen.hidden = connected;
-    const conflict = root.querySelector('#management-conflict'); if (conflict) conflict.hidden = !editing || editing.revision === data.revision && editing.ledgerVersion === data.ledgerVersion;
+    const conflict = root.querySelector('#management-conflict'); if (conflict) conflict.hidden = !formChanged();
   }
-  async function send(path, payload, { keepForm = false } = {}) {
+  async function send(path, payload, { keepForm = false, successMessage = 'Saved.' } = {}) {
     if (busy) return;
     if (!navigator.onLine) { connected = false; error = 'You’re offline. Your fields are unsaved. Reconnect, then retry.'; chrome(); return; }
     const logical = JSON.stringify({ path, payload });
@@ -115,9 +121,10 @@ export async function start(root, initial, newAccessKey) {
     pending ||= { id: id(), logical, form: editing }; try { sessionStorage.setItem(pendingKey, JSON.stringify({ id: pending.id })); } catch {} busy = true; error = ''; render();
     try {
       const result = await request('/api/manage/' + path, { ...payload, operationId: pending.id });
-      if (result.management) data = result; else await refresh(false);
-      pending = null; sessionStorage.removeItem(pendingKey); if (!keepForm) { if (['product', 'calendar', 'content'].includes(editing?.type)) sessionStorage.removeItem(storageKey); editing = null; }
-      connected = true; notify('Saved.');
+      if (!result.management || result.id !== workspace || result.result === undefined && result.duplicate !== true) throw new Error('The server did not confirm this save. Your fields are kept; check the connection before retrying.');
+      data = result;
+      pending = null; sessionStorage.removeItem(pendingKey); if (!keepForm) { if (['product', 'calendar', 'content', 'payment-settings'].includes(editing?.type)) sessionStorage.removeItem(storageKey); editing = null; }
+      connected = true; notify(successMessage); return result;
     } catch (e) {
       error = e.message; if (e.status && e.status < 500 && !(initial.previewDirectAccess && e.status === 403)) { pending = null; sessionStorage.removeItem(pendingKey); }
       if (initial.previewDirectAccess && [403, 503].includes(e.status)) reauth = true;
@@ -144,7 +151,7 @@ export async function start(root, initial, newAccessKey) {
     return h('div', { class: 'ms-form-actions' }, h('button', { type: 'submit', class: 'ms-primary', disabled: busy }, busy ? 'Saving…' : label), button('Cancel', cancel, { class: 'ms-secondary', disabled: busy }));
   }
   function form(title, children, save, label) {
-    const changedElsewhere = editing && (editing.revision !== data.revision || editing.ledgerVersion !== data.ledgerVersion);
+    const changedElsewhere = formChanged();
     return h('form', { class: 'ms-panel ms-edit', onsubmit: async e => { e.preventDefault(); for (const input of e.currentTarget.elements) bindings.get(input)?.(); await save(); } }, h('h2', {}, title), h('div', { id: 'management-conflict', class: 'ms-warning', hidden: !changedElsewhere }, h('p', {}, 'New changes were saved while this form was open. Your unsaved fields are still here.'), button('Review latest and keep my edits', rebase, { class: 'ms-secondary', disabled: !!pending })), children, actions(save, label));
   }
   const panel = (title, ...children) => h('section', { class: 'ms-panel' }, h('h2', {}, title), children);
@@ -153,7 +160,7 @@ export async function start(root, initial, newAccessKey) {
   const menu = (label, target, count, targetFilter = 'all') => button([h('span', {}, label), count !== undefined ? h('strong', {}, count) : null, h('span', { 'aria-hidden': true }, '›')], () => go(target, '', targetFilter), { class: 'ms-menu' });
   function rangeControls() {
     return h('div', { class: 'ms-ranges', 'aria-label': 'Report period' },
-      [['today', 'Today'], ['week', 'Week'], ['month', 'Month'], ['year', 'Year'], ['custom', 'Custom Date']].map(([value, label]) => button(label, async () => {
+      [['today', 'Today'], ['yesterday', 'Yesterday'], ['week', 'This Week'], ['month', 'This Month'], ['year', 'This Year'], ['custom', 'Custom Date Range']].map(([value, label]) => button(label, async () => {
         period = value; if (value === 'custom') { from ||= data.management.today.range.start; through ||= from; } await refresh();
       }, { 'aria-pressed': period === value })),
       period === 'custom' ? h('div', { class: 'ms-two' }, field('From', from, v => from = v, { type: 'date' }), field('Through', through, v => through = v, { type: 'date' }), button('Apply dates', () => refresh(), { class: 'ms-secondary' })) : null);
@@ -164,9 +171,13 @@ export async function start(root, initial, newAccessKey) {
     const metric = (label, value, dest, filter) => button([h('span', {}, label), h('strong', {}, value)], () => go(dest, '', filter), { class: 'ms-metric' });
     return h('div', {}, h('div', { class: 'ms-welcome' }, h('h1', {}, 'Hi, Danielle!'), h('p', {}, 'Here’s what’s happening at Rise & Roost.')),
       button([h('span', {}, 'Today’s Verified Sales'), h('strong', {}, money(t.verifiedSales)), h('small', {}, 'Payments independently verified today')], () => { period = 'today'; go('Sales Reports'); void refresh(); }, { class: 'ms-sales' }),
-      h('div', { class: 'ms-metrics' }, metric('Today’s order value', money(t.orderValue), 'Orders', 'today'), metric('Awaiting verification', a.payments, 'Orders', 'reported'), metric('New orders', a.newOrders, 'Orders', 'pending'), metric('Upcoming pickups', a.upcoming, 'Orders', 'upcoming'), metric('Low-stock products', a.lowStock, 'Products', 'low'), metric('New comments', a.comments, 'Customer Comments', 'pending')),
+      h('div', { class: 'ms-metrics' }, metric('Today’s order value', money(t.orderValue), 'Orders', 'today'), metric('Awaiting verification', a.payments, 'Orders', 'unverified'), metric('New orders', a.newOrders, 'Orders', 'pending'), metric('Preparing', a.preparing, 'Orders', 'preparing'), metric('Ready for Pickup', a.ready, 'Orders', 'ready'), metric('Customer Contacted', a.contacted, 'Orders', 'contacted'), metric('Pickup Extension Requests', a.extensions, 'Orders', 'extensions'), metric('Pickup Overdue', a.overdue, 'Orders', 'overdue'), metric('Other Attention Items', a.other, 'Orders', 'disputes'), metric('Upcoming pickups', a.upcoming, 'Orders', 'upcoming'), metric('Low-stock products', a.lowStock, 'Products', 'low'), metric('New comments', a.comments, 'Customer Comments', 'pending')),
       panel('Needs Your Attention',
-        pref.payments && a.payments ? menu('Review reported payments', 'Orders', a.payments, 'reported') : null,
+        a.contacted ? menu('Customer Contacted — review messages', 'Orders', a.contacted, 'contacted') : null,
+        a.extensions ? menu('Review pickup extension requests', 'Orders', a.extensions, 'extensions') : null,
+        a.overdue ? menu('Review overdue pickups', 'Orders', a.overdue, 'overdue') : null,
+        a.other ? menu('Review disputes', 'Orders', a.other, 'disputes') : null,
+        pref.payments && a.payments ? menu('Verify payments', 'Orders', a.payments, 'reported') : null,
         pref.orders && a.newOrders ? menu('Review new orders', 'Orders', a.newOrders, 'pending') : null,
         pref.stock && a.lowStock ? menu('Check low inventory', 'Products', a.lowStock, 'low') : null,
         pref.pickups && a.upcoming ? menu('Prepare upcoming pickups', 'Orders', a.upcoming, 'upcoming') : null,
@@ -178,15 +189,24 @@ export async function start(root, initial, newAccessKey) {
     if (selection && !/^\d{4}-\d{2}-\d{2}$/.test(selection)) return orderDetail(data.orders.find(o => o.id === selection));
     const day = data.management.today.range.start;
     const matches = o => {
+      if (filter === 'all' && o.attention?.history) return false;
+      if (filter === 'history' && !o.attention?.history) return false;
+      if (['pending','preparing','ready'].includes(filter) && (o.attention?.history || o.resolution)) return false;
+      if (filter === 'unverified' && (o.paymentVerifiedAt || o.status === 'canceled' || o.resolution)) return false;
+      if (filter === 'disputes' && !o.dispute?.open) return false;
+      if (filter === 'attention' && !o.attention?.needsAttention) return false;
+      if (filter === 'contacted' && !o.attention?.customerContacted) return false;
+      if (filter === 'extensions' && !o.attention?.extensionRequested) return false;
+      if (filter === 'overdue' && !o.attention?.overdue) return false;
       if (filter === 'today' && o.businessDate !== day) return false;
-      if (filter === 'upcoming' && (['canceled', 'picked-up'].includes(o.status) || localInstant(o.pickup.date, o.pickup.end) <= Date.parse(data.now) || localInstant(o.pickup.date, o.pickup.start) >= Date.parse(data.now) + 2 * 86400000)) return false;
-      if (!['all', 'today', 'upcoming'].includes(filter) && o.status !== filter && o.paymentStatus !== filter) return false;
+      if (filter === 'upcoming' && (o.resolution || ['canceled', 'picked-up'].includes(o.status) || localInstant(o.pickup.date, o.pickup.end) <= Date.parse(data.now) || localInstant(o.pickup.date, o.pickup.start) >= Date.parse(data.now) + 2 * 86400000)) return false;
+      if (!['all', 'today', 'upcoming', 'history', 'unverified', 'attention', 'contacted', 'extensions', 'overdue', 'disputes'].includes(filter) && o.status !== filter && o.paymentStatus !== filter) return false;
       return !search || [o.orderNumber, o.customer?.name, o.customer?.email, o.customer?.phone, ...o.lines.map(l => l.name)].join(' ').toLowerCase().includes(search.toLowerCase());
     };
     const selected = data.orders.filter(matches);
     return h('div', {}, h('div', { class: 'ms-heading' }, h('h1', {}, 'Orders'), button('Export orders', exportOrders, { class: 'ms-secondary' })),
       field('Search orders or customers', search, value => { search = value; renderList(); }, { type: 'search' }),
-      h('div', { class: 'ms-chips' }, [['all', 'All'], ['pending', 'New'], ['reported', 'Payment Reported'], ['preparing', 'Preparing'], ['ready', 'Ready'], ['picked-up', 'Picked Up'], ['canceled', 'Canceled'], ['verified', 'Verified']].map(([value, label]) => button(label, () => { filter = value; render(); }, { 'aria-pressed': value === filter }))),
+      h('div', { class: 'ms-chips' }, [['all', 'Active'], ['pending', 'New'], ['preparing', 'Preparing'], ['ready', 'Ready for Pickup'], ['attention', 'Needs Attention'], ['unverified', 'Awaiting Verification'], ['history', 'History']].map(([value, label]) => button(label, () => { filter = value; render(); }, { 'aria-pressed': value === filter }))),
       h('div', { id: 'ms-order-list' }, orderCards(selected)));
     function renderList() {
       const box = root.querySelector('#ms-order-list');
@@ -196,7 +216,7 @@ export async function start(root, initial, newAccessKey) {
   function orderCards(items) {
     const cards = items.map(o => button([
       h('div', { class: 'ms-row' }, h('strong', {}, o.customer?.name || 'Guest customer'), pill(fulfillmentLabels[o.status])),
-      h('span', {}, o.orderNumber), h('span', {}, pickupLabel(o.pickup)),
+      h('span', {}, o.orderNumber), h('span', {}, pickupLabel(o.pickup)), attentionPills(o),
       h('div', { class: 'ms-row' }, h('span', {}, paymentLabels[o.paymentStatus] || 'Awaiting Payment'), h('strong', {}, money(o.total))),
     ], () => go('Orders', o.id), { class: 'ms-order-card' }));
     if (!items.length) return [empty('No matching orders.')];
@@ -204,26 +224,43 @@ export async function start(root, initial, newAccessKey) {
       h('thead', {}, h('tr', {}, ['Order', 'Customer', 'Pickup', 'Payment', 'Fulfillment', 'Total'].map(label => h('th', { scope: 'col' }, label)))),
       h('tbody', {}, items.map(o => h('tr', {}, h('td', {}, o.orderNumber), h('td', {}, button(o.customer?.name || 'Guest customer', () => go('Orders', o.id), { class: 'ms-text' })), h('td', {}, pickupLabel(o.pickup)), h('td', {}, paymentLabels[o.paymentStatus] || 'Awaiting Payment'), h('td', {}, fulfillmentLabels[o.status]), h('td', {}, money(o.total)))))))];
   }
+  function attentionPills(o) {
+    const a = o.attention || {};
+    return h('div', { class: 'ms-row' }, a.customerContacted ? pill('Customer Contacted') : null, a.extensionRequested ? pill('Pickup Extension Request') : null, a.extensionApproved ? pill('Extension Approved') : null, a.overdue ? pill('Pickup Overdue') : null, a.resolved ? pill('Resolved') : null, o.dispute?.open ? pill('Payment Dispute') : null, o.resolution ? pill('Owner Reviewed') : null);
+  }
   function orderDetail(o) {
     if (!o) return empty('This order is not available.');
     return h('div', {}, button('← All orders', () => go('Orders'), { class: 'ms-text' }),
       h('div', { class: 'ms-heading' }, h('h1', {}, o.orderNumber), pill(fulfillmentLabels[o.status])),
-      panel('Customer & pickup', h('h3', {}, o.customer?.name || 'Guest customer'), h('p', {}, o.customer?.memberId ? 'The Roost member' : 'Guest checkout'),
-        o.customer?.email ? h('p', {}, h('a', { href: 'mailto:' + o.customer.email }, o.customer.email)) : null,
-        o.customer?.phone ? h('p', {}, h('a', { href: 'tel:' + o.customer.phone }, o.customer.phone)) : null,
-        h('p', {}, pickupLabel(o.pickup)), h('p', {}, 'Order by ' + orderByLabel(o.pickup))),
-      panel('Order details', o.lines.map(l => h('div', { class: 'ms-row ms-line' }, h('span', {}, l.qty + ' × ' + l.name + ' · ' + l.variant), h('strong', {}, money(l.qty * l.unitPrice)))), h('div', { class: 'ms-row' }, h('strong', {}, 'Total'), h('strong', {}, money(o.total)))),
-      panel('Payment', pill(paymentLabels[o.paymentStatus] || 'Awaiting Payment'), h('p', {}, o.verification ? 'Method: ' + o.verification.method.replace(/_/g, ' ') : 'Payment method is recorded when the owner verifies an independent record.'),
-        !o.paymentVerifiedAt && o.status !== 'canceled' ? button('Verify payment', () => edit('payment', { orderId: o.id, orderVersion: o.version, method: 'bank_record', evidence: '', independentlyVerified: false }), { class: 'ms-primary' }) : null,
+      attentionPills(o),
+      panel('Payment', h('h3', {}, o.customer?.name || 'Guest customer'), h('strong', {}, 'Order total: ' + money(o.total)), pill(paymentLabels[o.paymentStatus] || 'Awaiting Payment'), h('p', {}, 'Selected method: ' + (providers[o.selectedPaymentMethod] || providers[o.verification?.method] || o.verification?.method || 'Not chosen yet')),
+        o.total > 0 && !o.paymentVerifiedAt && o.status !== 'canceled' && !o.resolution ? button('Verify payment', () => edit('payment', { orderId: o.id, orderVersion: o.version, method: o.selectedPaymentMethod || 'paypal', evidence: '', independentlyVerified: false }), { class: 'ms-primary' }) : null,
         o.paymentVerifiedAt ? h('p', {}, 'Verified ' + stamp(o.paymentVerifiedAt)) : null,
         o.paymentVerifiedAt ? button('Correct a mistaken verification', () => edit('payment-correction', { orderId: o.id, orderVersion: o.version, reason: '', independentlyChecked: false }), { class: 'ms-text' }) : null,
         (o.refunds || []).map(r => h('p', {}, 'Recorded refund: ' + money(r.amount) + ' · ' + stamp(r.at))),
         o.paymentVerifiedAt ? button('Record an external refund', () => edit('refund', { orderId: o.id, orderVersion: o.version, amount: '', evidence: '', reason: '', independentlyVerified: false }), { class: 'ms-secondary' }) : null),
-      panel('Preparation & pickup', h('div', { class: 'ms-action-grid' }, [['preparing', 'Preparing'], ['ready', 'Ready for Pickup'], ['picked-up', 'Picked Up'], ['canceled', 'Cancel order']].filter(([v]) => v !== o.status).map(([status, label]) => button(label, () => edit('status', { orderId: o.id, orderVersion: o.version, status, reason: '', confirmCorrection: false, releaseInventory: false }), { class: status === 'canceled' ? 'ms-secondary' : 'ms-primary' }))),
-        o.status === 'canceled' && o.keepInventory ? button('Release canceled reservation', () => edit('status', { orderId: o.id, orderVersion: o.version, status: 'canceled', reason: '', confirmCorrection: false, releaseInventory: true }), { class: 'ms-secondary' }) : null,
-        button('Correct a status mistake', () => edit('status', { orderId: o.id, orderVersion: o.version, status: 'pending', reason: '', confirmCorrection: true, releaseInventory: false }), { class: 'ms-text' }),
-        h('p', { class: 'ms-note' }, 'Payment and preparation stay separate. Mark Preparing only when work actually begins.')),
-      panel('Order history', (o.audit || []).map(e => h('div', { class: 'ms-audit' }, h('strong', {}, e.action), h('span', {}, stamp(e.at)), h('small', {}, e.author || 'Customer / system')))),
+      panel('Preparation & pickup',
+        !o.resolution && ['pending','preparing'].includes(o.status) ? button(o.status === 'pending' ? 'Start Preparing' : 'Mark Ready for Pickup', () => send('fulfillment', { id: o.id, orderVersion: o.version, status: o.status === 'pending' ? 'preparing' : 'ready' }), { class: 'ms-primary', disabled: busy }) : null,
+        o.status === 'ready' ? h('p', {}, 'Ready for Pickup. No further normal action is required.') : null,
+        !o.resolution && o.status !== 'picked-up' ? h('details', {}, h('summary', {}, 'Corrections & cancellation'),
+          button('Cancel order', () => edit('status', { orderId: o.id, orderVersion: o.version, status: 'canceled', reason: '', confirmCorrection: false, releaseInventory: false }), { class: 'ms-secondary' }),
+          button('Correct a status mistake', () => edit('status', { orderId: o.id, orderVersion: o.version, status: 'pending', reason: '', confirmCorrection: true, releaseInventory: false }), { class: 'ms-text' })) : null,
+        o.status === 'canceled' && o.keepInventory ? button('Release canceled reservation', () => edit('status', { orderId: o.id, orderVersion: o.version, status: 'canceled', reason: '', confirmCorrection: false, releaseInventory: true }), { class: 'ms-secondary' }) : null),
+      panel('Customer & pickup', h('h3', {}, o.customer?.name || 'Guest customer'), h('p', {}, o.customer?.memberId ? 'The Roost member' : 'Guest checkout'),
+        o.customer?.email ? h('p', {}, h('a', { href: 'mailto:' + o.customer.email }, o.customer.email)) : null,
+        o.customer?.phone ? h('p', {}, h('a', { href: 'tel:' + o.customer.phone }, o.customer.phone)) : null,
+        h('p', {}, pickupLabel(o.pickup)), o.pickupDeadline ? h('p', {}, 'Pickup deadline: ' + stamp(o.pickupDeadline)) : h('p', {}, 'Historical order: no new policy deadline applied'), o.originalPickup && o.extension ? h('p', {}, 'Original pickup: ' + pickupLabel(o.originalPickup)) : null),
+      h('details', { class: 'ms-panel' }, h('summary', {}, 'Order details'), o.lines.map(l => h('div', { class: 'ms-row ms-line' }, h('span', {}, l.qty + ' × ' + l.name + ' · ' + l.variant), h('strong', {}, money(l.qty * l.unitPrice)))), h('div', { class: 'ms-row' }, h('strong', {}, 'Total'), h('strong', {}, money(o.total)))),
+      panel('Customer messages & pickup arrangements',
+        o.contact?.unresolved ? h('p', {}, 'Customer Contacted — awaiting owner review. A request does not approve an extension.') : null,
+        (o.messages || []).map(m => h('article', { class: 'ms-audit' }, h('strong', {}, m.sender === 'owner' ? 'Danielle' : o.customer?.name || 'Customer'), h('p', {}, m.body), h('small', {}, stamp(m.at)), (m.requestedDate || m.requestedTime) ? h('p', {}, 'Requested: ' + requestedPickupLabel(m)) : m.topic === 'pickup' ? h('p', {}, 'Pickup delay or more time requested; alternative date/time not specified.') : null)),
+        button('Reply to customer', () => edit('reply', { orderId: o.id, orderVersion: o.version, body: '' }), { class: 'ms-secondary' }),
+        !['canceled','picked-up'].includes(o.status) && !o.resolution ? button('Approve New Pickup Time', () => edit('extension', { orderId: o.id, orderVersion: o.version, date: o.pickup.date, time: o.pickup.start, confirmed: false }), { class: 'ms-primary' }) : null,
+        o.contact?.unresolved ? button('Resolve conversation', () => edit('contact-resolution', { orderId: o.id, orderVersion: o.version, reason: '', confirmed: false }), { class: 'ms-secondary' }) : null),
+      panel('Owner review', o.resolution ? h('p', {}, o.resolution.kind + ': ' + o.resolution.reason) : null,
+        !o.resolution && !['canceled','picked-up'].includes(o.status) ? button('Review pickup resolution', () => edit('pickup-resolution', { orderId: o.id, orderVersion: o.version, reason: '', resolution: 'reviewed', confirmed: false }), { class: 'ms-secondary' }) : null,
+        button(o.dispute?.open ? 'Resolve payment dispute' : 'Record payment dispute', () => edit('dispute', { orderId: o.id, orderVersion: o.version, reason: '', open: !o.dispute?.open, confirmed: false }), { class: 'ms-text' })),
+      h('details', { class: 'ms-panel' }, h('summary', {}, 'Order history'), (o.audit || []).map(e => h('div', { class: 'ms-audit' }, h('strong', {}, e.action), h('span', {}, stamp(e.at)), h('small', {}, e.author || 'Customer / system')))),
       o.trackingPath ? h('a', { href: o.trackingPath, target: '_blank', rel: 'noopener noreferrer', class: 'ms-secondary private-link' }, 'Open customer tracking') : null);
   }
   function exportOrders() {
@@ -259,7 +296,7 @@ export async function start(root, initial, newAccessKey) {
   }
   function calendar() {
     const date = selection || data.management.today.range.start, list = data.published.pickups.slice().sort((a, b) => a.date.localeCompare(b.date));
-    const orders = data.orders.filter(o => o.pickup.date === date && !['canceled', 'picked-up'].includes(o.status));
+    const orders = data.orders.filter(o => o.pickup.date === date && !o.resolution && !['canceled', 'picked-up'].includes(o.status));
     const totals = new Map(); for (const o of orders) for (const l of o.lines) { const k = l.productId + ':' + l.variantId; const v = totals.get(k) || { name: l.name, variant: l.variant, qty: 0 }; v.qty += l.qty; totals.set(k, v); }
     return h('div', {}, h('div', { class: 'ms-heading' }, h('h1', {}, 'Calendar'), button('Add pickup', () => editPickup(), { class: 'ms-primary' })),
       h('div', { class: 'ms-actions' }, button('Set recurring days', () => edit('recurrence', { start: date, end: date, weekdays: [], startTime: '15:00', endTime: '18:00', cutoffTime: '18:00', deadlineDays: 1, capacity: 24 }), { class: 'ms-secondary' }),
@@ -308,9 +345,10 @@ export async function start(root, initial, newAccessKey) {
     const row = (label, value) => h('div', { class: 'ms-row ms-report-row' }, h('span', {}, label), h('strong', {}, value));
     return h('div', {}, h('h1', {}, 'Sales Reports'), rangeControls(), panel(r.range.start + ' through ' + r.range.end,
       row('Verified payments', money(r.verifiedSales)), row('Recorded refunds', money(r.refunds)), row('Verification corrections', money(r.verificationCorrections)), row('Net verified receipts', money(r.netVerifiedReceipts)),
-      row('Order value placed', money(r.orderValue)), row('Orders placed', r.ordersPlaced), row('Reported payments awaiting verification', money(r.reportedValue)), row('Outstanding payments', money(r.outstandingValue)), row('Canceled orders', r.canceledOrders), row('Canceled order value', money(r.canceledOrderValue)), row('Returning Roost members', r.returningMembers)),
+      row('Order value placed', money(r.orderValue)), row('Orders placed', r.ordersPlaced), row('Outstanding payments', money(r.outstandingValue)), row('Canceled orders', r.canceledOrders), row('Canceled order value', money(r.canceledOrderValue)), row('Returning Roost members', r.returningMembers)),
+      panel('Sales by payment method', (r.salesByPaymentMethod || []).map(p => row(providers[p.method] || p.method, money(p.value)))),
       panel('Popular products · verified orders', r.popularProducts.map(p => row(p.name + ' · ' + p.variant, p.quantity + ' · ' + money(p.value)))),
-      panel('How totals work', h('p', {}, 'Verified payments use the date an owner checked an independent payment record. Order value uses the order date. A payment report is not a verified sale. Voided verification records are excluded from verified payments; correction totals are disclosed separately and never deducted twice. Refunds use the date the external refund was recorded. Cancellation does not automatically issue or record a refund. Net verified receipts subtract recorded refunds. Returning customers counts identified Roost members; guest identities are not guessed. Roadside Register sales are excluded.'),
+      panel('How totals work', h('p', {}, 'Verified payments use the date an owner checked an independent payment record. Order value uses the order date. Voided verification records are excluded from verified payments; correction totals are disclosed separately and never deducted twice. Refunds use the date the external refund was recorded. Cancellation does not automatically issue or record a refund. Net verified receipts subtract recorded refunds. Returning customers counts identified Roost members; guest identities are not guessed. Roadside Register sales are excluded.'),
         button('Export sales report', () => download('rise-roost-sales.csv', csv([['Range start', 'Range end', 'Verified cents', 'Refund cents', 'Net verified cents', 'Order value cents', 'Orders'], [r.range.start, r.range.end, r.verifiedSales, r.refunds, r.netVerifiedReceipts, r.orderValue, r.ordersPlaced]]), 'text/csv'), { class: 'ms-primary' }), button('Export orders', exportOrders, { class: 'ms-secondary' })));
   }
   function content() {
@@ -325,23 +363,51 @@ export async function start(root, initial, newAccessKey) {
   }
   function settings() {
     let code = '';
+    const business = data.management.settings || { calendar: defaultCalendar(), payments: {} };
     const preferences = clone(data.management.notifications.preferences);
-    return h('div', {}, h('h1', {}, 'Settings'),
+    return h('div', {}, h('h1', {}, 'Settings'), menu('Payments', 'Settings/Payments'),
       data.previewPinAccess ? panel('Studio access', h('p', {}, 'This device is remembered for up to 30 days. Use Lock Studio whenever you want the PIN required again on this device.'), h('p', {}, 'This shared testing PIN is temporary. Individual owner accounts can replace it before launch.')) : data.previewDirectAccess ? panel('Testing access', h('p', {}, 'Cloudflare Access remembers this browser. No separate Studio sign-in is needed.'), h('p', {}, 'Approved tester: ' + data.previewTesterEmail), h('p', {}, 'Testing session ends ' + stamp(data.previewAccessExpiresAt) + '. Re-verification is needed after expiry, logout, or clearing cookies.'), h('a', { href: '/cdn-cgi/access/logout', class: 'ms-secondary' }, 'Sign out of testing access')) : panel('Owner access', h('p', {}, 'Current sign-in: secure workspace access. Individual Descope owner accounts are not connected yet. The existing authentication has not been replaced.'), h('p', {}, 'Both owner accounts must be tested and approved before activation. Do not share private access keys in chat.'),
         h('a', { href: data.studioPath, class: 'ms-secondary' }, 'Studio link for this saved website'),
         field('Connection code from your other device', code, v => code = v, { maxlength: 20, autocomplete: 'off' }), button('Review device connection', async () => {
           try { const r = await request('/api/device-review', { code }); if (confirm('Approve the browser showing this exact code for this saved website? Only approve a request you started.')) { await request('/api/device-approve', { code, requestId: r.requestId, confirmed: true }); notify('Device request approved. Finish connecting on that device.'); } }
           catch (e) { error = e.message; chrome(); }
         }, { class: 'ms-primary' })),
+      panel('Business days', h('p', {}, 'Set business weekdays and closures for pickup deadlines. Existing orders keep their recorded deadlines.'), button('Edit business days', () => edit('business-settings', { calendar: clone(business.calendar || defaultCalendar()), closuresText: (business.calendar?.closures || []).join('\n') }), { class: 'ms-primary' })),
       panel('Backup & data protection', h('p', {}, 'Download an owner-only business backup containing website revisions, orders, members, comments, and photos. It excludes sign-in credentials and recovery secrets. Keep downloads private.'),
         button('Download business backup', async () => { try { const backup = await request('/api/manage/export'); download('rise-roost-business-backup.json', JSON.stringify(backup)); notify('Business backup downloaded.'); } catch (e) { error = e.message; chrome(); } }, { class: 'ms-primary' }),
         h('p', { class: 'ms-note' }, 'Saved records are never removed automatically. Cloudflare D1 recovery remains available through the hosting account.')), 
       panel('Notifications', h('p', {}, 'Choose which in-app alerts appear in Needs Your Attention. External email/push services are not enabled. Save failures always remain visible.'),
-        [['orders', 'New orders'], ['payments', 'Reported payments'], ['stock', 'Low stock'], ['pickups', 'Upcoming pickups'], ['comments', 'New comments'], ['errors', 'System alerts']].map(([key, label]) => check(label, preferences, key)),
+        [['orders', 'New orders'], ['payments', 'Awaiting payment verification'], ['stock', 'Low stock'], ['pickups', 'Upcoming pickups'], ['comments', 'New comments'], ['errors', 'System alerts']].map(([key, label]) => check(label, preferences, key)),
         button('Save alert preferences', () => send('notifications', { preferences }), { class: 'ms-primary' })),
       panel('Install on iPhone', h('p', {}, 'In Safari, open Share → Add to Home Screen. Private business data is fetched securely while online and is not stored in an offline service-worker cache.')),
       panel('Audit history', data.management.audit.slice(0, 60).map(a => h('div', { class: 'ms-audit' }, h('strong', {}, a.action || a.kind), h('span', {}, stamp(a.at)), h('small', {}, a.actor?.name || 'Owner')))),
       !data.previewDirectAccess ? button('Sign out', async () => { if (editing && !confirm('Sign out and discard the unsaved form?')) return; try { await request('/api/logout', {}); disposed = true; sessionStorage.removeItem(storageKey); location.reload(); } catch (e) { error = e.message; chrome(); } }, { class: 'ms-secondary' }) : null);
+  }
+  async function testPaymentLink(provider) {
+    const popup = window.open('about:blank', '_blank'); if (popup) popup.opener = null;
+    const response = await send('payment-test-start', { provider, paymentsVersion: paymentsVersion() }, { successMessage: 'Link test started. Check the recipient, then confirm here. Do not send money.' });
+    if (!response) { popup?.close(); return; }
+    const url = paymentDestination(provider, response.result.url);
+    if (popup) { try { popup.location.replace(url); } catch { popup.close(); } }
+  }
+  function payments() {
+    const saved = data.management.settings?.payments || {}, active = configuredPayments(data.management.settings);
+    return h('div', {}, button('← Settings', () => go('Settings'), { class: 'ms-text' }), h('h1', {}, 'Payments'),
+      panel('Customer ordering', h('p', { role: 'status' }, Object.keys(active).length ? 'Ready — an enabled payment link has an owner-confirmed test.' : 'Ordering paused — save, enable and test at least one payment link.'), h('p', {}, 'Studio stays available while payment links are being set up. Payments are always verified manually by Danielle.')),
+      Object.entries(providers).map(([provider,label]) => {
+        const p = saved[provider] || {}, ready = !!active[provider], test = p.pendingTest;
+        return panel(label, pill(!p.url ? 'Not configured' : !p.enabled ? 'Disabled' : ready ? 'Ready' : 'Test required'),
+          p.url ? h('p', { style: { overflowWrap: 'anywhere' } }, p.url) : h('p', {}, 'No payment link saved.'),
+          button(p.url ? 'Edit ' + label + ' link' : 'Add ' + label + ' link', () => edit('payment-settings', paymentFields(provider)), { class: 'ms-primary' }),
+          p.url ? button((p.enabled ? 'Disable ' : 'Enable ') + label, () => send('payment-destination', { ...paymentFields(provider), enabled: !p.enabled, paymentsVersion: paymentsVersion() }), { class: 'ms-secondary', disabled: busy }) : null,
+          button('Test ' + label + ' Link', () => testPaymentLink(provider), { class: 'ms-secondary', disabled: busy || !p.url }),
+          p.tested?.at ? h('p', { class: 'ms-note' }, 'Last owner-confirmed test: ' + stamp(p.tested.at)) : null,
+          test && test.url === p.url ? h('form', { onsubmit: e => { e.preventDefault(); return send('payment-test-confirm', { provider, testId: test.id, confirmed: testChecks.get(test.id) === true, paymentsVersion: paymentsVersion() }, { successMessage: 'Link test confirmed. No payment was sent or verified.' }); } },
+            h('p', {}, 'Check the saved destination and correct business recipient. Do not send money for this test.'),
+            h('a', { href: p.url, target: '_blank', rel: 'noopener noreferrer', class: 'ms-text' }, 'Open saved ' + label + ' test link'),
+            field('I opened the ' + label + ' link and confirmed the correct business recipient', testChecks.get(test.id) || false, value => testChecks.set(test.id,value), { type: 'checkbox', required: true }),
+            h('button', { type: 'submit', class: 'ms-primary', disabled: busy }, 'Confirm ' + label + ' Link Test')) : null);
+      }), h('p', { class: 'ms-note' }, 'Use payment destinations approved for business sales. Link tests are owner confirmations of the destination, not proof of payment. Editing a link requires a new test.'));
   }
   function editForm() {
     const e = editing, v = e.values;
@@ -359,8 +425,8 @@ export async function start(root, initial, newAccessKey) {
       ], () => { if (p.archived && !e.original?.product.archived && !confirm('Archive this product? It will leave the storefront while historical orders and photos stay intact.')) return; p.price = price(v.dollars); return send('product', { revision: e.revision, ledgerVersion: e.ledgerVersion, product: p, available: p.inventoryMode === 'production' ? undefined : v.available, reason: v.reason, confirmArchive: p.archived }); }, 'Save product live');
     }
     if (e.type === 'calendar') {
-      const p = v.pickup;
-      return form('Pickup date', [f('Pickup date', p, 'date', { type: 'date', required: true }), clockField('Pickup start', p, 'start'), clockField('Pickup end', p, 'end'), f('Order-by date', p, 'cutoffDate', { type: 'date', required: true }), clockField('Order-by time', p, 'cutoffTime'), f('Daily order limit', p, 'capacity', { type: 'number', min: 0, max: 10000 }), f('Special event name (optional)', p, 'event', { maxlength: 120 }), check('Block this pickup date', p, 'closed'),
+      const p = v.pickup; p.dailyCapacity ??= p.capacity;
+      return form('Pickup date', [f('Pickup date', p, 'date', { type: 'date', required: true }), clockField('Pickup start', p, 'start'), clockField('Pickup end', p, 'end'), f('Order-by date', p, 'cutoffDate', { type: 'date', required: true }), clockField('Order-by time', p, 'cutoffTime'), f('Pickup window order limit', p, 'capacity', { type: 'number', min: 0, max: 10000 }), f('Daily combined order limit', p, 'dailyCapacity', { type: 'number', min: 0, max: 10000 }), f('Special event name (optional)', p, 'event', { maxlength: 120 }), check('Block this pickup date', p, 'closed'),
         h('h3', {}, 'Production limits for this date'), data.published.products.filter(p => !p.archived && p.inventoryMode === 'production').map(product => field(product.name + ' units', p.productionLimits[product.id] ?? product.capacity, value => { p.productionLimits[product.id] = +value; marked(); }, { type: 'number', min: 0, max: 10000 })),
         check('I understand existing orders keep their original pickup details', v, 'confirmExistingOrders'),
       ], () => { const pickups = clone(data.published.pickups), i = pickups.findIndex(n => n.id === p.id); if (i < 0) pickups.push(p); else pickups[i] = p; return send('calendar', { revision: e.revision, pickups, paused: !!data.published.orderingPaused, confirmExistingOrders: v.confirmExistingOrders }); }, 'Save pickup live');
@@ -372,15 +438,27 @@ export async function start(root, initial, newAccessKey) {
         const pickups = clone(data.published.pickups);
         for (let n = first; n <= last; n += 86400000) if (v.weekdays.includes(new Date(n).getUTCDay())) {
           const date = new Date(n).toISOString().slice(0, 10);
-          if (!pickups.some(p => p.date === date && p.start === v.startTime && p.end === v.endTime)) pickups.push({ id: 'pickup-' + id(), date, start: v.startTime, end: v.endTime, cutoffDate: new Date(n - v.deadlineDays * 86400000).toISOString().slice(0, 10), cutoffTime: v.cutoffTime, capacity: v.capacity, closed: false });
+          if (!pickups.some(p => p.date === date && p.start === v.startTime && p.end === v.endTime)) pickups.push({ id: 'pickup-' + id(), date, start: v.startTime, end: v.endTime, cutoffDate: new Date(n - v.deadlineDays * 86400000).toISOString().slice(0, 10), cutoffTime: v.cutoffTime, capacity: v.capacity, dailyCapacity: v.capacity, closed: false });
         }
         return send('calendar', { revision: e.revision, pickups, paused: !!data.published.orderingPaused, confirmExistingOrders: true });
       }, 'Save recurring pickups');
     }
-    if (e.type === 'payment') return form('Verify payment', [h('p', {}, 'Check an independent record for the full order total. This records verification; it does not charge or transfer money.'), f('Payment method', v, 'method', { choices: [{ value: 'bank_record', label: 'Bank transfer record' }, { value: 'cash_record', label: 'Cash received' }, { value: 'external_record', label: 'Other independent record' }] }), f('Independent payment reference', v, 'evidence', { required: true, minlength: 5, maxlength: 500 }), check('I checked an independent record for the full payment', v, 'independentlyVerified')], () => send('verify-payment', { id: v.orderId, orderVersion: v.orderVersion, method: v.method, evidence: v.evidence, independentlyVerified: v.independentlyVerified }), 'Record verified payment');
+    if (e.type === 'payment') return form('Verify payment', [h('p', {}, 'Open your payment account and check the customer name and full order total. Confirm below only after you have received the payment.'), f('Payment method', v, 'method', { choices: [...Object.entries(providers).map(([value,label]) => ({ value,label })), { value: 'external_record', label: 'Historical independent record' }] }), f('Transaction reference (optional)', v, 'evidence', { maxlength: 500 }), check('I checked an independent record for the full payment', v, 'independentlyVerified')], () => send('verify-payment', { id: v.orderId, orderVersion: v.orderVersion, method: v.method, evidence: v.evidence, independentlyVerified: v.independentlyVerified }), 'Confirm Verify Payment');
     if (e.type === 'refund') return form('Record an external refund', [h('p', {}, 'Record a refund only after checking that it happened outside this website. This does not send money or change Square.'), f('Refund amount ($)', v, 'amount', { type: 'number', min: '.01', max: 10000, step: '.01', required: true }), f('Independent refund reference', v, 'evidence', { required: true, minlength: 5, maxlength: 500 }), f('Refund reason', v, 'reason', { required: true, maxlength: 500 }), check('I independently verified this refund', v, 'independentlyVerified')], () => send('refund', { id: v.orderId, orderVersion: v.orderVersion, amount: price(v.amount), evidence: v.evidence, reason: v.reason, independentlyVerified: v.independentlyVerified }), 'Record refund');
     if (e.type === 'payment-correction') return form('Correct a mistaken verification', [h('p', {}, 'Use only if the payment was marked verified by mistake. The original verification and receipt stay in the private audit history as voided records. This does not issue a refund or move money.'), f('Correction reason', v, 'reason', { required: true, minlength: 5, maxlength: 500 }), check('I checked independent records and confirm the verification was a mistake', v, 'independentlyChecked')], () => send('payment-correction', { id: v.orderId, orderVersion: v.orderVersion, reason: v.reason, independentlyChecked: v.independentlyChecked }), 'Void mistaken verification');
-    if (e.type === 'status') return form('Update fulfillment', [f('Fulfillment status', v, 'status', { choices: [['pending', 'New'], ['preparing', 'Preparing'], ['ready', 'Ready for Pickup'], ['picked-up', 'Picked Up'], ['canceled', 'Canceled']].map(([value, label]) => ({ value, label })) }), f('Reason for cancellation / correction', v, 'reason', { maxlength: 500 }), check('I confirm this correction if the order is moving backward', v, 'confirmCorrection'), check('I confirm cancellation if Canceled is selected; no refund is processed', v, 'confirmCancellation'), check('Release this canceled order’s items back to available inventory', v, 'releaseInventory')], () => send('fulfillment', { id: v.orderId, orderVersion: v.orderVersion, status: v.status, reason: v.reason, confirmCorrection: v.confirmCorrection, confirmCancellation: v.confirmCancellation === true, releaseInventory: v.releaseInventory }), 'Save order status');
+    if (e.type === 'status') return form('Update fulfillment', [f('Fulfillment status', v, 'status', { choices: [['pending', 'New'], ['preparing', 'Preparing'], ['ready', 'Ready for Pickup'], ['canceled', 'Canceled']].map(([value, label]) => ({ value, label })) }), f('Reason for cancellation / correction', v, 'reason', { maxlength: 500 }), check('I confirm this correction if the order is moving backward', v, 'confirmCorrection'), check('I confirm cancellation if Canceled is selected; no refund is processed', v, 'confirmCancellation'), check('Release this canceled order’s items back to available inventory', v, 'releaseInventory')], () => send('fulfillment', { id: v.orderId, orderVersion: v.orderVersion, status: v.status, reason: v.reason, confirmCorrection: v.confirmCorrection, confirmCancellation: v.confirmCancellation === true, releaseInventory: v.releaseInventory }), 'Save order status');
+    if (e.type === 'reply') return form('Reply to customer', [f('Your reply', v, 'body', { type: 'textarea', required: true, maxlength: 2000 })], () => send('reply', { id: v.orderId, orderVersion: v.orderVersion, body: v.body }), 'Send reply');
+    if (e.type === 'extension') return form('Approve New Pickup Time', [h('p', {}, 'Only an owner can approve this arrangement. The original schedule and customer request are retained.'), f('Approved pickup date', v, 'date', { type: 'date', required: true }), clockField('Approved pickup time', v, 'time'), check('I confirm this new pickup arrangement', v, 'confirmed')], () => send('approve-extension', { id: v.orderId, orderVersion: v.orderVersion, date: v.date, time: v.time, confirmed: v.confirmed }), 'Approve New Pickup Time');
+    if (['contact-resolution','pickup-resolution','dispute'].includes(e.type)) return form(e.type === 'contact-resolution' ? 'Resolve conversation' : e.type === 'dispute' ? 'Payment dispute review' : 'Review pickup resolution', [h('p', {}, 'No money is transferred or refunded by this action. Forfeiture requires a passed deadline with no unresolved communication or dispute.'), e.type === 'pickup-resolution' ? f('Resolution', v, 'resolution', { choices: [{ value: 'reviewed', label: 'Owner reviewed and resolved' }, { value: 'forfeited', label: 'Owner reviewed forfeiture' }] }) : null, f('Owner review and reason', v, 'reason', { type: 'textarea', required: true, maxlength: 500 }), check('I confirm this owner-reviewed decision', v, 'confirmed')], () => send(e.type === 'contact-resolution' ? 'resolve-contact' : e.type === 'dispute' ? 'dispute' : 'resolve-pickup', { id: v.orderId, orderVersion: v.orderVersion, reason: v.reason, confirmed: v.confirmed, resolution: v.resolution, open: v.open }), 'Confirm decision');
+    if (e.type === 'payment-settings') return form(providers[v.provider] + ' payment link', [
+      f(providers[v.provider] + ' payment URL', v, 'url', { type: 'url', maxlength: 500, placeholder: 'Paste your business payment link' }),
+      check('Enabled for customer payments', v, 'enabled'), check('This destination is approved for my business sales', v, 'businessConfirmed'),
+      h('p', {}, 'Save the link, then use Test Link and confirm the correct recipient. An edited link needs a new test before checkout can use it.'),
+    ], () => send('payment-destination', { ...v, paymentsVersion: e.paymentsVersion }), 'Save payment link');
+    if (e.type === 'business-settings') return form('Business days', [
+      h('h3', {}, 'Business days for pickup deadlines'), ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((name,day) => field(name, v.calendar.days.includes(day), checked => { v.calendar.days = checked ? [...v.calendar.days,day] : v.calendar.days.filter(d => d !== day); }, { type: 'checkbox' })),
+      f('Closures (one YYYY-MM-DD date per line)', v, 'closuresText', { type: 'textarea', maxlength: 5000 }),
+    ], () => send('settings', { ledgerVersion: e.ledgerVersion, calendar: { ...v.calendar, closures: v.closuresText.split(/\s+/).filter(Boolean) } }), 'Save business days');
     if (e.type === 'benefit') return form('Record return / credit', [f('Adjustment type', v, 'kind', { choices: [{ value: 'bottle_return', label: 'Bottles returned' }, { value: 'credit', label: 'Credit added (dollars)' }, { value: 'debit', label: 'Credit reduced (dollars)' }] }), f('Bottle quantity or credit dollars', v, 'amount', { type: 'number', min: '.01', step: '.01', required: true }), f('Reason / reference', v, 'reason', { required: true, maxlength: 500 })], () => send('benefit', { memberId: v.memberId, kind: v.kind, amount: v.kind === 'bottle_return' ? Number(v.amount) : price(v.amount), reason: v.reason }), 'Save member adjustment');
     if (e.type === 'content') return contentForm(e);
     return empty('Choose an existing form.');
@@ -410,15 +488,15 @@ export async function start(root, initial, newAccessKey) {
   function render() {
     if (reauth) { root.replaceChildren(h('main', { class: 'ms-loading' }, h('h1', {}, initial.previewPinAccess ? 'Studio is locked' : initial.previewDirectAccess ? 'Testing access needs verification' : 'Sign-in required'), h('p', {}, initial.previewPinAccess ? 'Enter your owner PIN in another tab, then check the connection here. Your unsaved form is kept here.' : initial.previewDirectAccess ? 'Reopen Studio in another tab to verify your Cloudflare Access session. Your unsaved form is kept here.' : 'Your unsaved form is kept in this tab. Sign in to this exact website in a new tab, then check the connection.'), h('a', { href: initial.studioPath, target: '_blank', rel: 'noopener' }, initial.previewPinAccess ? 'Unlock Studio' : initial.previewDirectAccess ? 'Reopen Website Studio' : 'Sign in to this website'), button('Check connection', () => refresh()))); return; }
     if (!data.management) { root.replaceChildren(h('main', { class: 'ms-loading' }, 'Opening Rise & Roost Website Studio…')); return; }
-    const page = editing ? editForm() : view === 'Home' ? home() : view === 'Orders' ? orders() : view === 'Products' ? products() : view === 'Calendar' ? calendar() : view === 'The Roost' ? members() : view === 'Website Content' ? content() : view === 'Customer Comments' ? comments() : view === 'Sales Reports' ? reports() : view === 'Settings' ? settings() : h('div', {}, h('h1', {}, 'More'), secondary.map(label => menu(label, label)));
+    const page = editing ? editForm() : view === 'Home' ? home() : view === 'Orders' ? orders() : view === 'Products' ? products() : view === 'Calendar' ? calendar() : view === 'The Roost' ? members() : view === 'Website Content' ? content() : view === 'Customer Comments' ? comments() : view === 'Sales Reports' ? reports() : view === 'Settings/Payments' ? payments() : view === 'Settings' ? settings() : h('div', {}, h('h1', {}, 'More'), secondary.map(label => menu(label, label)));
     root.replaceChildren(h('div', { class: 'management' },
       h('aside', { class: 'ms-sidebar' }, h('a', { href: initial.studioPath, class: 'ms-brand' }, h('img', { src: '/assets/logo.webp', alt: 'Rise & Roost' }), h('span', {}, 'Rise & Roost', h('small', {}, 'Website Studio'))),
-        h('nav', { 'aria-label': 'Studio navigation' }, primary.filter(v => v !== 'More').map(label => button(label, () => go(label), { 'aria-current': view === label ? 'page' : undefined })), h('details', { open: true }, h('summary', {}, 'More'), secondary.map(label => button(label, () => go(label), { 'aria-current': view === label ? 'page' : undefined })))), h('a', { href: initial.publishedPath, target: '_blank', rel: 'noopener', class: 'ms-secondary' }, 'View website')),
+        h('nav', { 'aria-label': 'Studio navigation' }, primary.filter(v => v !== 'More').map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view === 'Settings/Payments' ? 'page' : undefined })), h('details', { open: true }, h('summary', {}, 'More'), secondary.map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view === 'Settings/Payments' ? 'page' : undefined })))), h('a', { href: initial.publishedPath, target: '_blank', rel: 'noopener', class: 'ms-secondary' }, 'View website')),
       h('div', { class: 'ms-workspace' }, h('header', { class: 'ms-top' }, h('div', { class: 'ms-mobile-brand' }, h('img', { src: '/assets/logo.webp', alt: '' }), h('strong', {}, 'Rise & Roost', h('small', {}, 'Website Studio'))),
         h('span', { id: 'management-connection', role: 'status', class: connected ? '' : 'offline' }, connected ? 'Connected' : 'Offline / reconnecting'), button('Check connection', () => refresh(), { class: 'ms-text' }), initial.previewPinAccess ? button('Lock Studio', lockStudio, { class: 'ms-text' }) : null, initial.previewDirectAccess ? h('a', { id: 'management-reopen', href: initial.studioPath, target: '_blank', rel: 'noopener', class: 'ms-text', hidden: connected }, 'Reopen Studio') : null, pending && !busy ? button('Resolve previous save', cancel, { class: 'ms-text' }) : null),
         h('div', { id: 'management-error', role: 'alert', class: 'ms-error', hidden: !error }, error),
         h('main', { id: 'main-content', class: 'ms-main' }, credentials(), page)),
-      h('nav', { class: 'ms-bottom', 'aria-label': 'Primary Studio navigation' }, primary.map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'More' && secondary.includes(view) ? 'page' : undefined })))));
+      h('nav', { class: 'ms-bottom', 'aria-label': 'Primary Studio navigation' }, primary.map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'More' && (secondary.includes(view) || view === 'Settings/Payments') ? 'page' : undefined })))));
     if (busy) for (const control of root.querySelectorAll('button,input,select,textarea')) control.disabled = true;
   }
   window.addEventListener('beforeunload', event => { if (editing || pending) { event.preventDefault(); event.returnValue = ''; } });
@@ -426,8 +504,8 @@ export async function start(root, initial, newAccessKey) {
   window.addEventListener('online', () => refresh());
   window.addEventListener('focus', () => refresh());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) void refresh(); });
-  try { const target = decodeURIComponent(location.hash.slice(1)); if ([...primary, ...secondary].includes(target)) view = target; } catch {}
-  try { const saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null'); if (saved?.type && ['product', 'calendar', 'content'].includes(saved.type)) { editing = saved; view = { product: 'Products', calendar: 'Calendar', content: 'Website Content' }[saved.type]; } } catch {}
+  try { const target = decodeURIComponent(location.hash.slice(1)); if ([...primary, ...secondary, 'Settings/Payments'].includes(target)) view = target; } catch {}
+  try { const saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null'); if (saved?.type && ['product', 'calendar', 'content', 'payment-settings'].includes(saved.type)) { editing = saved; view = { product: 'Products', calendar: 'Calendar', content: 'Website Content', 'payment-settings': 'Settings/Payments' }[saved.type]; } } catch {}
   try { const saved = JSON.parse(sessionStorage.getItem(pendingKey) || 'null'); if (/^[a-f0-9-]{32,48}$/.test(saved?.id || '')) pending = { id: saved.id, form: editing }; } catch {}
   render(); await refresh();
   setInterval(() => { if (!document.hidden && !busy && !disposed) void refresh(); }, 5000);

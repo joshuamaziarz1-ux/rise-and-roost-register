@@ -95,7 +95,8 @@ test('two PIN devices share existing main orders and live publication; customer 
  for(const path of ['/api/workspaces','/api/login','/api/device-start'])assert.equal((await h.call(path,{}, {cookie:a})).status,403);
  const tracking=new URL(made.data.trackingPath,origin),key=new URLSearchParams(tracking.hash.slice(1)).get('access'),api=tracking.pathname.replace('/orders/','/api/order-tracking/');
  assert.equal((await h.call(api)).status,401);assert.equal((await h.call(api,undefined,{headers:{Authorization:'Bearer '+key}})).status,200);
- assert.equal((await h.call(api+'/report',{}, {headers:{Authorization:'Bearer '+key}})).data.paymentStatus,'reported');
+ assert.equal((await h.call(api+'/report',{}, {headers:{Authorization:'Bearer '+key}})).status,401);
+ assert.equal((await h.call(api,undefined,{headers:{Authorization:'Bearer '+key}})).data.paymentStatus,'not_collected');
  assert.equal(h.sql.prepare('SELECT count(*) n FROM workspaces').get().n,2);
 });
 test('missing pepper, wrong host/database/workspace and D1 outages fail closed; disabling PIN restores unchanged original authentication',async()=>{

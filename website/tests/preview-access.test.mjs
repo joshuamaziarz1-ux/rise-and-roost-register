@@ -111,10 +111,10 @@ test('guest orders and tracking remain associated with the existing preview behi
   const h = await fixture(), site = (await h.call('/api/site')).data, p = site.document.products[0], pickup = site.document.pickups[0];
   const made = await h.call('/api/orders', { workspaceId: PREVIEW_WORKSPACE, storefront: 'main', revision: site.revision, requestId: crypto.randomUUID(), pickupId: pickup.id, checkoutMode: 'guest', customerDetails: { name: 'Synthetic Direct Preview Guest' }, lines: [{ productId: p.id, variantId: p.variants[0].id, qty: 1, unitPrice: p.price }], total: p.price });
   assert.equal(made.status, 201); const s = (await h.call('/api/manage/snapshot')).data; assert.equal(s.orders.length, 1); assert.equal(s.orders[0].id, made.data.id);
-  assert.equal((await h.call('/api/manage/fulfillment', { operationId: crypto.randomUUID(), id: made.data.id, orderVersion: s.orders[0].version, status: 'ready' })).status, 200);
+  assert.equal((await h.call('/api/manage/fulfillment', { operationId: crypto.randomUUID(), id: made.data.id, orderVersion: s.orders[0].version, status: 'preparing' })).status, 200);
   const tracking = new URL(made.data.trackingPath, origin), secret = new URLSearchParams(tracking.hash.slice(1)).get('access');
   const tracked = await h.call(tracking.pathname.replace('/orders/', '/api/order-tracking/'), undefined, { headers: { Authorization: 'Bearer '+secret } });
-  assert.equal(tracked.data.status, 'ready'); assert.notEqual(tracked.data.paymentStatus, 'verified');
+  assert.equal(tracked.data.status, 'preparing'); assert.notEqual(tracked.data.paymentStatus, 'verified');
 });
 test('disabling temporary Access restores original key authentication without changing credentials; old cookies cannot bypass Access', async () => {
   const h = await fixture(); h.env.PREVIEW_ACCESS_MODE = 'off'; assert.equal((await h.call('/api/studio')).status, 401);

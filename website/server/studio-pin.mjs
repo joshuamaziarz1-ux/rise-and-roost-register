@@ -20,7 +20,7 @@ const denied = (error='Enter your owner PIN to open Website Studio.',status=401,
   return json({error,previewAccessRequired:true,previewPinRequired:true},status,headers);
 };
 const cookie = (value,seconds) => `${COOKIE}=${value}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${seconds}`;
-const publicApi = (path,method) => method==='GET' && (path==='/api/site'||/^\/api\/assets\/[a-f0-9]{48}$/.test(path)||path==='/api/comments'||path==='/api/roost/me'||/^\/api\/order-tracking\/[a-f0-9]{48}\/[a-f0-9]{48}$/.test(path)) || method==='POST' && (['/api/orders','/api/comments','/api/roost/profile','/api/roost/logout','/api/roost/options','/api/roost/verify','/api/roost/recover','/api/roost/claim-order'].includes(path)||/^\/api\/order-tracking\/[a-f0-9]{48}\/[a-f0-9]{48}\/report$/.test(path));
+const publicApi = (path,method) => method==='GET' && (path==='/api/site'||/^\/api\/assets\/[a-f0-9]{48}$/.test(path)||path==='/api/comments'||path==='/api/roost/me'||/^\/api\/order-tracking\/[a-f0-9]{48}\/[a-f0-9]{48}$/.test(path)) || method==='POST' && (['/api/orders','/api/comments','/api/roost/profile','/api/roost/logout','/api/roost/options','/api/roost/verify','/api/roost/recover','/api/roost/claim-order'].includes(path)||/^\/api\/order-tracking\/[a-f0-9]{48}\/[a-f0-9]{48}\/(?:message|payment-method)$/.test(path));
 export async function studioPinAccess(request,env,now=Date.now()) {
   if(env.PREVIEW_ACCESS_MODE!=='pin')return {active:false};
   const result={active:true},url=new URL(request.url),path=url.pathname;

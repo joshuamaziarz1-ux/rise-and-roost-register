@@ -1,0 +1,113 @@
+{
+  "verifiedAt": "2026-11-01T19:49:44.809501+00:00",
+  "sourceCommit": "f6771fdd3bb9dbcb2bca184b5349a0b749ad844e",
+  "worker": "rise-roost-experience-preview",
+  "deploymentId": "836a2977-3254-437a-bd76-ab2d42c609f5",
+  "versionId": "cb19c0f3-651c-48d8-a8d2-f9f729ed1399",
+  "trafficPercentage": 100,
+  "databaseId": "21352b95-d7f6-406f-8527-4b8dbcebf1bf",
+  "bindingsPreserved": true,
+  "alternatePreviewUrlsEnabled": false,
+  "backend": {
+    "passed": 120,
+    "failed": 0,
+    "skipped": 0
+  },
+  "browserRegressionSweep": {
+    "passed": 120,
+    "failed": 0,
+    "profiles": [
+      "desktop Chromium",
+      "desktop WebKit",
+      "iPhone WebKit",
+      "Android Chromium",
+      "tablet Chromium"
+    ],
+    "repeatedDuringUnattendedFollowup": true
+  },
+  "finalAffectedCommerceJourneys": {
+    "passed": 4,
+    "failed": 0,
+    "profiles": [
+      "desktop Chromium",
+      "iPhone WebKit"
+    ],
+    "providerPages": "intercepted fictional destinations; no money sent",
+    "coverage": [
+      "private independent sessions",
+      "lost confirmation and reload",
+      "blocked draft storage",
+      "malformed success response",
+      "wrong-order response",
+      "missing mutation acknowledgment",
+      "pickup request without date",
+      "time-only request",
+      "owner-only approval"
+    ]
+  },
+  "actualLocalWorkerdD1CommerceSmoke": "passed",
+  "previewWorkerBundle": "passed",
+  "betaWorkerDryRun": "passed; no beta deployment",
+  "backupRestoration": {
+    "previewRestoreEveryRecordMatchesBackup": true,
+    "applicationTables": 14
+  },
+  "preservation": {
+    "allExistingPreviewTablesPreserved": {
+      "assets": true,
+      "customer_comments": true,
+      "device_links": true,
+      "limits": true,
+      "previews": true,
+      "roost_challenges": true,
+      "roost_credentials": true,
+      "roost_members": true,
+      "roost_sessions": true,
+      "sessions": true,
+      "studio_pin_limits": true,
+      "studio_pin_sessions": true,
+      "studio_pin_settings": true,
+      "workspaces": true
+    },
+    "addedRows": {
+      "workspaces": 1
+    },
+    "originalBetaTablesPreserved": 6,
+    "originalBetaSettingsAndDeploymentPreserved": true,
+    "previewDatabaseBindingVerified": true
+  },
+  "sqlMigrations": 0,
+  "hostedHttpAcceptance": "blocked by environment proxy CONNECT 403; not claimed passed",
+  "ci": "pending at report preparation; not counted as passed",
+  "productionWrites": 0,
+  "dnsChanges": 0,
+  "previousDeployment": {
+    "sourceCommit": "c31f94588cec65966b4223b5b33dac17ad2b58c9",
+    "deploymentId": "60a9dcc1-bc31-43ea-a145-cdf2481a2852",
+    "versionId": "5bf4f885-a044-41d3-b87a-fd68fb6cc230"
+  },
+  "followupCustomerRegression": {
+    "passed": 12,
+    "failed": 0,
+    "profiles": [
+      "desktop Chromium",
+      "desktop WebKit",
+      "iPhone WebKit"
+    ]
+  },
+  "operatorBackup": {
+    "database": "rise-roost-experience-preview-db",
+    "databaseId": "21352b95-d7f6-406f-8527-4b8dbcebf1bf",
+    "applicationTables": 14,
+    "explicitIndexes": 2,
+    "everyRestoredRecordMatches": true,
+    "restoredSchemaMatches": true,
+    "remoteRowsStableDuringRead": true,
+    "snapshotSha256": "50aa29e29bc1728e6cfd24288f27f1184a4d739a0e336428b1343b0d698ccac0",
+    "remoteWrites": 0
+  },
+  "backupGuardChecks": {
+    "passed": 3,
+    "remoteWrites": 0
+  }
+}
