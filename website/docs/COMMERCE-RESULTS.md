@@ -1,5 +1,7 @@
 # Isolated preview release report — November 1, 2026
 
+**Payment Settings follow-up:** the new [Payment Settings release report](PAYMENT-SETTINGS-RESULTS.md) records the current deployment, setup flow, checkout readiness enforcement and additional launch tests. The deployment/test counts below describe the earlier coordinated release.
+
 This update continues the existing approved website and Studio from draft PR #10 in [draft PR #11](https://github.com/joshuamaziarz1-ux/rise-and-roost-register/pull/11). It remains unmerged. The customer Home/Shop design, branding, colors, typography, navigation, basket and product presentation are preserved.
 
 ## Completed changes

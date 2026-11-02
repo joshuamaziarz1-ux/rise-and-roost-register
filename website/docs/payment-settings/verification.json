@@ -1,0 +1,93 @@
+{
+  "verifiedAt": "2026-11-01T23:17:41.310646+00:00",
+  "sourceCommit": "a586150ee60134b157fcb12da7eff8ab50522891",
+  "worker": "rise-roost-experience-preview",
+  "deploymentId": "33ea5ada-a966-4cc2-85ab-cb1039096e1c",
+  "versionId": "147988f7-5432-4e9b-86cf-d920d6bf1013",
+  "deployedAt": "2026-11-01T23:17:27.691237Z",
+  "trafficPercentage": 100,
+  "databaseId": "21352b95-d7f6-406f-8527-4b8dbcebf1bf",
+  "bindingsPreserved": true,
+  "alternatePreviewUrlsEnabled": false,
+  "reportedAt": "2026-11-02T00:35:35.225999+00:00",
+  "backend": {
+    "passed": 127,
+    "failed": 0,
+    "skipped": 0
+  },
+  "browserRegressionSweep": {
+    "passed": 120,
+    "failed": 0,
+    "profiles": [
+      "desktop Chromium",
+      "desktop WebKit",
+      "iPhone WebKit",
+      "Android Chromium",
+      "tablet Chromium"
+    ]
+  },
+  "commerceAndPaymentSettings": {
+    "passed": 8,
+    "failed": 0,
+    "profiles": [
+      "desktop Chromium",
+      "iPhone WebKit"
+    ],
+    "providerPages": "fictional intercepts; no money sent",
+    "repeatedAfterRetrySelectorCorrection": true
+  },
+  "actualLocalWorkerdD1": "passed",
+  "workerDryRuns": "isolated preview and original beta passed; no beta deployment",
+  "operatorBackup": {
+    "database": "rise-roost-experience-preview-db",
+    "databaseId": "21352b95-d7f6-406f-8527-4b8dbcebf1bf",
+    "applicationTables": 14,
+    "explicitIndexes": 2,
+    "everyRestoredRecordMatches": true,
+    "restoredSchemaMatches": true,
+    "remoteRowsStableDuringRead": true,
+    "snapshotSha256": "04e105ab2684946bd1d4bfc3f88f9c9198c462dfe27571302325770a27b9bdc5",
+    "remoteWrites": 0
+  },
+  "preservation": {
+    "allExistingPreviewTablesPreserved": {
+      "assets": true,
+      "customer_comments": true,
+      "device_links": true,
+      "limits": true,
+      "previews": true,
+      "roost_challenges": true,
+      "roost_credentials": true,
+      "roost_members": true,
+      "roost_sessions": true,
+      "sessions": true,
+      "studio_pin_limits": true,
+      "studio_pin_sessions": true,
+      "studio_pin_settings": true,
+      "workspaces": true
+    },
+    "addedRows": {},
+    "originalBetaTablesPreserved": 6,
+    "originalBetaSettingsAndDeploymentPreserved": true,
+    "previewDatabaseBindingVerified": true
+  },
+  "sqlMigrations": 0,
+  "hostedDatabaseWritesForThisFeature": 0,
+  "hostedAcceptance": "blocked by proxy CONNECT 403 for preview hostname; not claimed passed",
+  "productionWrites": 0,
+  "dnsChanges": 0,
+  "firstCI": {
+    "runId": 41361357151,
+    "backendPassed": 127,
+    "browserRegressionPassed": 120,
+    "commercePassed": 7,
+    "commerceFailed": 1,
+    "failure": "test assertion selected both Customer Contacted and pending message status; corrected to await confirmed send and select the specific indicator",
+    "currentStatus": "See pull request Checks; separate from local totals"
+  },
+  "dependencyAudit": {
+    "runtimeReportedVulnerabilities": 0,
+    "existingDevelopmentToolHighSeverityEntries": 6,
+    "dependenciesChanged": false
+  }
+}
