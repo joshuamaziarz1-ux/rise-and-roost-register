@@ -1,0 +1,47 @@
+name: Production business backup (disabled until configured)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: rise-roost-production-business-backup
+  cancel-in-progress: false
+jobs:
+  backup:
+    if: vars.RR_PRODUCTION_BACKUP_ENABLED == 'true'
+    environment: production-backups
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      RR_PRODUCTION_SOURCE_COMMIT: ${{ vars.RR_PRODUCTION_SOURCE_COMMIT }}
+    steps:
+      - name: Require the exact approved production release
+        shell: bash
+        run: '[[ "$RR_PRODUCTION_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ vars.RR_PRODUCTION_SOURCE_COMMIT }}
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '24'
+      - name: Check the storage client
+        run: aws --version
+      - name: Export, encrypt, store and read back the complete backup
+        working-directory: website
+        run: node scripts/production-backup.mjs
+        env:
+          RR_PRODUCTION_BACKUP_ENABLED: ${{ vars.RR_PRODUCTION_BACKUP_ENABLED }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.RR_PRODUCTION_CLOUDFLARE_ACCOUNT_ID }}
+          RR_PRODUCTION_DATABASE_ID: ${{ vars.RR_PRODUCTION_DATABASE_ID }}
+          RR_PRODUCTION_WORKSPACE_ID: ${{ vars.RR_PRODUCTION_WORKSPACE_ID }}
+          RR_PRODUCTION_BACKUP_BUCKET: ${{ vars.RR_PRODUCTION_BACKUP_BUCKET }}
+          RR_BACKUP_KEY_ID: ${{ vars.RR_BACKUP_KEY_ID }}
+          RR_D1_EXPORT_TOKEN: ${{ secrets.RR_D1_EXPORT_TOKEN }}
+          RR_BACKUP_ENCRYPTION_KEY: ${{ secrets.RR_BACKUP_ENCRYPTION_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.RR_BACKUP_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.RR_BACKUP_R2_SECRET_ACCESS_KEY }}
+          RR_BACKUP_SUCCESS_HEARTBEAT_URL: ${{ secrets.RR_BACKUP_SUCCESS_HEARTBEAT_URL }}
+# No deploy, database restore/write, artifact upload, cleanup, PR trigger or DNS action.
+# Triggered daily by the private Cloudflare dispatcher; no GitHub cron inactivity
+# dependency. A missing-success heartbeat monitor is REQUIRED before activation.
