@@ -19,6 +19,11 @@ database_name = "rise-roost-production-db"
 database_id = "889a4b96-cabd-43d1-ad45-79f65b0052b0"
 
 [vars]
+DEPLOYMENT_ENVIRONMENT = "production"
+PRODUCTION_RELEASE_APPROVED = "false"
+REAL_CHECKOUT_ENABLED = "false"
+# Add PRODUCTION_ACCESS_TEAM_DOMAIN, PRODUCTION_ACCESS_AUD and PRODUCTION_OWNERS
+# only after the individual owners and the /studio* Access application are set up.
 # Reserved fresh identifier; no workspace/business records are inserted yet.
 PUBLIC_WORKSPACE_ID = "5c6b64c991570cc03df650282e1a5a90bf72283c1de5f542"
 PRODUCTION_DATABASE_ID = "889a4b96-cabd-43d1-ad45-79f65b0052b0"

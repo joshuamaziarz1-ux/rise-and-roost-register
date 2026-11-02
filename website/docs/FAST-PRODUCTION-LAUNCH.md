@@ -1,0 +1,50 @@
+# Production launch preparation — November 2, 2026
+
+**No public launch, merge, deployment, domain/DNS change or real-checkout activation has occurred.** This report supersedes the earlier requirement to configure R2 before launch. The owner has postponed R2 backups.
+
+## Production data is initialized
+
+Database: `rise-roost-production-db`, UUID **`889a4b96-cabd-43d1-ad45-79f65b0052b0`**. Its reviewed schema contains 12 tables and two indexes. The only records added are one fresh business workspace and one production identity marker. All ten other tables are empty. There are **zero products, orders, verified sales, payment destinations, customers, members, messages and comments**. No test purchases or financial history were copied. No genuine source records were deleted or changed.
+
+The owner explicitly chose an empty catalog: Danielle will add her own products, prices, stock and pictures. The approved published layout/content and existing calendar settings were retained; the confirmed pickup address is **3431 County Rd. 60, Auburn, IN 46706**. Ordering is paused. Danielle should review pickup dates/hours and business days before opening. The old preview's stock/product examples were not used as opening inventory.
+
+The production configuration binds only this UUID. Experience preview remains `21352b95-d7f6-406f-8527-4b8dbcebf1bf`; original beta remains `7824ffe0-d69a-4221-9aec-0f335257477a`. No writes or deployments were made to those environments. Register/Admin, Supabase and Square remain untouched. No production Worker or hosted Studio has been deployed yet.
+
+`scripts/initialize-production.mjs` is fixed to the new UUID. It validates exact schema, an empty catalog, paused ordering, empty history/payment settings and the approved artifact hash. It inserts without replacing/deleting; matching repeats are read-only. Changed/populated targets are refused. A partial failure leaves the production identity absent, so the runtime stays closed; only the identical initialization can finish. No usable legacy owner key or PIN is created.
+
+## Essential runtime and security changes
+
+- Production owner pages, content previews and owner APIs live under **`/studio`**. A single Cloudflare Access application for `rise-and-roost.com/studio*` protects them. The Worker independently verifies RS256 signatures, exact issuer/audience, expiry, maximum 24-hour token lifetime, individual subject/email and an explicit owner allowlist. Owner audit records use distinct stable identities. Legacy keys, cookies, PIN setup, demo/workspace creation and raw owner API URLs cannot grant production access.
+- The database identity marker is verified before storage-backed operation. Customer tracking still requires its private bearer capability; published/customer responses exclude private customer details, verification evidence and owner metadata. Same-origin writes, workspace boundaries and existing rate limits remain enforced.
+- `PRODUCTION_RELEASE_APPROVED=false` blocks deployment use until approval/configuration. **`REAL_CHECKOUT_ENABLED=false`** independently blocks all orders before reservation, even after payment setup. Opening ordering later requires explicit approval, an unpaused calendar, and a saved/enabled/business-confirmed/owner-tested destination. An unset, disabled, unsafe or changed-but-untested URL cannot accept a payable order.
+- Production orders use truthful production metadata and receipts, rather than the preview's simulation/beta labels. Payment remains awaiting verification until an identified owner confirms receipt. No provider webhooks, automatic payment verification or real-money test was added.
+
+The authentication implementation is prepared and tested locally; **hosted owner authentication is not configured or accepted yet**. The current Cloudflare credential receives **403** for Access organization/application inspection. Actual owner email identities and the Access application's team URL/audience are still needed. No identity service, DNS route or shared testing bypass was provisioned as a workaround.
+
+## Essential validation
+
+Current evidence is in [launch-production-verification.json](prelaunch-audit/launch-production-verification.json). Local backend tests cover the complete production order process, private tracking, individual authorization, payment setup and its launch lock, manual verification/duplicate prevention, the three fulfillment stages, inventory races/cancellation releases, and insert-only initialization/recovery from partial setup.
+
+The actual local Cloudflare workerd/D1 test verifies signed owner authorization, saved/tested destinations, concurrent orders without overselling, private tracking, manual verification and fulfillment. Its synthetic certificate service sends no hosted requests or money. This check caught an edge-runtime redirect incompatibility in the new auth implementation; production certificate requests now use manual redirects and reject non-200 responses.
+
+Desktop and iPhone-sized WebKit browser tests exercise production Studio boot, two-owner persistence, the explicit checkout lock, checkout/confirmation/tracking, verification, fulfillment and empty-catalog photo/product management. The managed local WebKit runtime encountered a native C++ page crash during navigation; that is not recorded as a passing mobile test. The dedicated `production-readiness` CI job runs these same loopback-only tests using the standard supported Playwright container. Its actual result must be reviewed before approval. Existing preview regression checks also run in CI; no hosted preview/beta test data is created.
+
+Hosted Access sign-in/logout/recovery for both actual owners, actual provider recipients/native-app return, and physical iPhone/MacBook acceptance remain owner checks. No fictional order has been inserted in production to test them.
+
+## Recovery with R2 postponed
+
+An actual Time Travel bookmark was retrieved for the production database after initialization. Cloudflare documents **seven days on Free and 30 days on Paid**. Account subscription inspection is unavailable, so use seven days as the conservative planning limit until confirmed in the dashboard. A bookmark is a point-in-time recovery reference, not an independent backup. No hosted restore was performed.
+
+There is **no independent automated production backup, external encrypted R2 archive or missing-backup alert**. History outside the available window, loss of Cloudflare account access, or an account-wide incident may be unrecoverable. Time Travel does not restore Worker code, Access policies, secrets or DNS. An in-place restore can overwrite newer orders and interrupt in-flight work; never use it as a production test.
+
+For now, an authorized operator should download a private D1 SQL export before every migration or configuration rollout and regularly while taking orders, and keep the approved code/configuration in Git. Studio's existing owner-only business export includes products, orders, messages, comments and uploaded photos, but excludes owner/member sign-in credentials and recovery secrets; it is not a complete authentication recovery archive. Store exports securely because they contain customer information. Recovery tooling restores into a new local database/media directory and refuses an existing target. A remote recovery/cutover still needs review and approval.
+
+R2 scheduling remains disabled and its code is unchanged. The deferral is an acknowledged recovery risk, **not a requirement to add more infrastructure before this launch**.
+
+## Fewest remaining launch steps
+
+1. **Configure the two individual owners and Access.** Supply Danielle's and the other owner's login emails (no passwords/codes). In Cloudflare Zero Trust → Access → Applications → Add application → Self-hosted, protect `rise-and-roost.com` with path `studio*`. Allow only those exact owner identities; no Everyone/Bypass/service-token policy. Use the owners' existing identity provider with MFA, or Cloudflare's individual One-time PIN email login with MFA-protected email accounts. Set session duration to eight hours. Copy the team URL and application AUD into production-only variables `PRODUCTION_ACCESS_TEAM_DOMAIN` and `PRODUCTION_ACCESS_AUD`; set `PRODUCTION_OWNERS` to the approved email/name/`owner` entries. Do not put them in preview settings. Enable MFA/recovery for the Cloudflare administrators and test each owner's recovery path. The developer's current credential cannot configure Access.
+2. **Approve the reviewed code merge and a staged domain rollout with checkout OFF.** Until that explicit approval, all release/checkout flags, routes and public Worker URLs stay disabled. The operator must review existing DNS/route/SSL state, install the Access protection before exposing Studio, verify the deployed D1 binding, deploy the reviewed commit and connect the official domain only within the approved scope. Test both owners and anonymous denials on HTTPS before Danielle uses Studio. No production test purchases. See [the domain checklist](GODADDY-CLOUDFLARE-CHECKLIST.md); do not repeat nameserver changes blindly.
+3. **Danielle completes Studio setup, then approves real checkout.** Products → Add product → enter price/stock → Replace photo → Save product live. To remove a product, Edit → Archived → Save; historical records remain intact. Calendar → confirm pickup dates/hours, cutoffs, capacities and business days. More → Settings → Payments → save a business destination → enable it → Test Link → confirm the correct recipient without sending money. Confirm the pickup-policy/provider requirements and the deferred-backup risk. After the hosted checks and explicit final checkout approval, the operator may enable the production checkout flag and Danielle may unpause ordering. Verify the first genuine order through its saved confirmation, private tracking and independent payment check.
+
+No additional website features, layout redesign or R2 setup is required by this preparation.

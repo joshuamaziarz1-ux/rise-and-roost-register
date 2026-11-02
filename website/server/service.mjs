@@ -7,6 +7,7 @@ import { normalizeDeviceCode } from "../public/access.mjs";
 import { seed, ZONE, localInstant, safeLink } from "../public/model.mjs";
 import { managementApi, holdsInventory, productionLimit, structure } from './management.mjs';
 import { isPreviewGrant } from './preview-access.mjs';
+import { isProductionContext } from './production-access.mjs';
 
 const encoder = new TextEncoder();
 const token = () =>
@@ -405,7 +406,7 @@ export function inspectImage(bytes, mime) {
     );
   return true;
 }
-export async function api(request, db, now = Date.now(), { publicWorkspaceId = "", emailEnabled = false, customerExperienceEnabled = false, reviewBuild = false, studioManagementEnabled = false, previewGrant, previewPinMode = false, commerceEnabled = false } = {}) {
+export async function api(request, db, now = Date.now(), { publicWorkspaceId = "", emailEnabled = false, customerExperienceEnabled = false, reviewBuild = false, studioManagementEnabled = false, previewGrant, previewPinMode = false, commerceEnabled = false, productionContext } = {}) {
   const url = new URL(request.url),
     path = url.pathname;
   const first = (sql, ...args) =>
@@ -419,6 +420,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       .bind(...args)
       .run();
   try {
+    if (productionContext && (!isProductionContext(productionContext) || productionContext.workspaceId !== publicWorkspaceId || reviewBuild || previewGrant)) fail('Production authorization could not be verified.', 403);
     if (previewGrant && (!isPreviewGrant(previewGrant) || previewGrant.expiresAt <= now || previewGrant.workspaceId !== publicWorkspaceId || !reviewBuild || !studioManagementEnabled)) fail('The private testing restriction could not be verified.', 403);
     if (previewGrant && (path === '/api/workspaces' || path === '/api/login' || path === '/api/logout' || path.startsWith('/api/device-'))) fail('This testing session uses the existing preview website. Workspace creation and legacy sign-in changes are disabled.', 403);
     if (
@@ -458,6 +460,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         fail("Too many attempts. Please try again in an hour.", 429);
     };
     const requestedOwnerId = request.headers.get("X-RR-Workspace") || "";
+    if (productionContext && [requestedOwnerId, input.workspaceId, url.searchParams.get('workspace')].some(id => id && id !== publicWorkspaceId)) fail('Open this website’s own order or Studio page.', 403);
     if (requestedOwnerId && !/^[a-f0-9]{48}$/.test(requestedOwnerId)) fail("Use a valid workspace identifier.");
     let authenticated;
     const cookieValue = (name) => (request.headers.get("Cookie") || "").split(";").map((p) => p.trim()).find((p) => p.startsWith(name + "="))?.slice(name.length + 1);
@@ -483,6 +486,13 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       return preserveLegacy(sessionCookies(id, raw));
     };
     const owner = async () => {
+      if (productionContext) {
+        if (!productionContext.owner?.actor) fail('Sign in with your individual owner account.', 401);
+        const row = await first('SELECT * FROM workspaces WHERE id=?', publicWorkspaceId);
+        if (!row) fail('Production business setup is unavailable.', 503);
+        authenticated = { expires: productionContext.owner.expiresAt, production: true };
+        return row;
+      }
       if (previewGrant) {
         if (requestedOwnerId && requestedOwnerId !== publicWorkspaceId) fail('This test session can manage only the existing main preview website.', 403);
         const row = await first('SELECT * FROM workspaces WHERE id=?', publicWorkspaceId);
@@ -511,7 +521,9 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       versions: JSON.parse(row.versions_json).map(({ document, ...v }) => v),
       orders: JSON.parse(row.ledger_json).orders.map((o) => ({ ...o, orderNumber: o.orderNumber || "RR-" + o.id.slice(0, 16).toUpperCase(), version: o.version || 1, trackingPath: trackingPath(row.id, o) })),
       notificationsEnabled: emailEnabled && row.id === publicWorkspaceId,
-      owner: "Danielle · Demo Owner",
+      owner: productionContext?.owner?.actor.name || "Danielle · Demo Owner",
+      productionOwnerAccess: !!productionContext,
+      checkoutEnabled: !productionContext || productionContext.checkoutEnabled,
       customerExperienceEnabled,
       commerceEnabled,
       studioManagementEnabled,
@@ -523,7 +535,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       sessionExpiresAt: authenticated ? new Date(authenticated.expires).toISOString() : undefined,
       isPrimary: row.id === publicWorkspaceId,
       publishedPath: row.id === publicWorkspaceId ? "/" : "/demo/" + row.id,
-      studioPath: previewGrant ? '/studio' : "/studio?workspace=" + row.id,
+      studioPath: productionContext || previewGrant ? '/studio' : "/studio?workspace=" + row.id,
       mainStudioPath: previewGrant ? '/studio' : publicWorkspaceId ? "/studio?workspace=" + publicWorkspaceId : "",
     });
     if (customerExperienceEnabled && path.startsWith("/api/roost/"))
@@ -535,7 +547,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
     }
     if (studioManagementEnabled && path.startsWith('/api/manage/')) {
       const row = await owner();
-      const actor = previewGrant ? previewGrant.actor : { id: 'workspace-session:' + authenticated.hash.slice(0, 16), name: 'Owner · workspace access', authentication: 'workspace_access' };
+      const actor = productionContext ? productionContext.owner.actor : previewGrant ? previewGrant.actor : { id: 'workspace-session:' + authenticated.hash.slice(0, 16), name: 'Owner · workspace access', authentication: 'workspace_access' };
       return await managementApi({ request, db, now, row, actor, input, path, json, validateDocument, ownerResult });
     }
     if (path === "/api/workspaces" && request.method === "POST") {
@@ -651,6 +663,8 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       );
       if (!row) fail("This published workspace was not found. Contact the beta operator; saved content has not been reset.", id === publicWorkspaceId ? 503 : 404);
       return json({
+        productionMode: !!productionContext,
+        checkoutEnabled: !productionContext || productionContext.checkoutEnabled && !JSON.parse(row.published_json).orderingPaused,
         customerExperienceEnabled,
       commerceEnabled,
         paymentDestinations: commerceEnabled ? configuredPayments(JSON.parse(row.ledger_json).management?.settings) : {},
@@ -662,7 +676,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         studioManagementEnabled,
         id,
         isPrimary: id === publicWorkspaceId,
-        studioPath: previewGrant || previewPinMode ? '/studio' : "/studio?workspace=" + id,
+        studioPath: productionContext || previewGrant || previewPinMode ? '/studio' : "/studio?workspace=" + id,
       });
     }
     if (path.startsWith("/api/preview/") && request.method === "GET") {
@@ -673,7 +687,9 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       );
       if (!row)
         fail("This preview expired. Create a new preview in Studio.", 404);
+      if (productionContext && row.workspace_id !== publicWorkspaceId) fail('Preview not found.', 404);
       return json({
+        productionMode: !!productionContext,
         document: JSON.parse(row.document_json),
         id: row.workspace_id,
         preview: true,
@@ -687,6 +703,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         path.split("/").at(-1),
       );
       if (!row) fail("Image not found.", 404);
+      if (productionContext && row.workspace_id !== publicWorkspaceId) fail('Image not found.', 404);
       // D1 returns BLOBs as number arrays; SQLite returns Uint8Array. Response
       // would stringify a plain array into comma-separated text and break images.
       return new Response(new Uint8Array(row.bytes), {
@@ -701,7 +718,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
     if (path === "/api/studio" && request.method === "GET") {
       const row = await owner();
       const response = json(ownerResult(row));
-      if (!previewGrant && cookieValue("rr_studio_" + row.id) !== authenticated.raw)
+      if (!productionContext && !previewGrant && cookieValue("rr_studio_" + row.id) !== authenticated.raw)
         response.headers.append("Set-Cookie", cookie("rr_studio_" + row.id, authenticated.raw, Math.max(1, Math.floor((authenticated.expires - now) / 1000))));
       return response;
     }
@@ -755,7 +772,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           row.draft_json,
           now + 7 * 86400000,
         );
-        return json({ path: "/preview/" + raw });
+        return json({ path: (productionContext ? '/studio' : '') + "/preview/" + raw });
       }
       let document = input.document,
         versions = JSON.parse(row.versions_json);
@@ -810,6 +827,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       );
     }
     if (path === "/api/orders" && request.method === "POST") {
+      if (productionContext && !productionContext.checkoutEnabled) fail('Ordering is not open yet. Please check back soon.', 409);
       await rateLimit("orders", 100);
       const checkoutMember = customerExperienceEnabled && input.checkoutMode === "member"
         ? await memberFor(request, db, input.workspaceId, now, true) : null;
@@ -861,6 +879,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           customer.emailOptIn = true;
           customer.consentedAt = new Date(now).toISOString();
         }
+        if (productionContext && !JSON.parse(row.published_json).business.pickupAddress?.street?.trim()) fail('Pickup details are not ready yet. Please check back soon.', 409);
         const quoted = quote(JSON.parse(row.published_json), ledger, input, now);
         let selectedPaymentMethod;
         if (commerceEnabled && quoted.total > 0) {
@@ -871,6 +890,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         }
         const order = {
           ...quoted,
+          ...(productionContext ? { simulated: false, environment: 'production' } : {}),
           ...(selectedPaymentMethod ? { selectedPaymentMethod } : {}),
           id: token(),
           requestId: input.requestId,
@@ -883,7 +903,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
             return { name, address, email, ...(studioManagementEnabled ? { pickupAddress: pickupAddress || { name: 'Rise & Roost', street: '3431 County Rd. 60', city: 'Auburn, IN 46706' } } : {}) };
           })(),
           at: new Date(now).toISOString(),
-          audit: [{ action: "Demo request", at: new Date(now).toISOString() }],
+          audit: [{ action: productionContext ? 'Order received' : "Demo request", at: new Date(now).toISOString() }],
         };
         if (commerceEnabled) {
           const settings = ledger.management?.settings || {};

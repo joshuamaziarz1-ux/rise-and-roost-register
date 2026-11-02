@@ -1,5 +1,7 @@
 # Production backup and disaster recovery — preparation only
 
+**Latest update:** The owner approved an empty production catalog and confirmed the pickup address. Production now contains one business workspace and one identity marker, with zero products/orders/sales/customer activity. R2 backups are postponed by owner decision. [The current launch report](FAST-PRODUCTION-LAUNCH.md) supersedes older provisioning, initialization and mandatory-R2 launch gates below; earlier test evidence remains historical. Hosted individual owner authentication and explicit launch approvals are still required.
+
 **Not operational in production.** The owner-created production D1 now has its authorized empty schema; see [the production preparation report](PRODUCTION-DATABASE-PREPARATION.md). No backup bucket, credentials, scheduled Worker or workflow was activated. Existing preview/beta data and deployments remain unchanged. Schema preparation does not authorize business initialization, domain changes or public launch.
 
 ## Daily design and Free-plan constraints

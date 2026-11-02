@@ -144,6 +144,9 @@
     "schemaWriteRequests": 1,
     "businessRowsInserted": 0,
     "previewOrBetaWrites": 0,
-    "deployed": false
-  }
+    "deployed": false,
+    "historicalEmptySchemaEvidence": true
+  },
+  "latestLaunchPreparation": "launch-production-verification.json",
+  "r2BackupsPostponedByOwner": true
 }

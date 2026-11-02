@@ -128,7 +128,7 @@ export async function start(root) {
           Object.entries(providers).filter(([method]) => destinations[method]).map(([method,label]) => button(label, () => save('/payment-method', { method }), { class: 'secondary-button', disabled: busy, 'aria-pressed': selected === method })),
           selected && destinations[selected] ? h('a', { href: destinations[selected].url, target: '_blank', rel: 'noopener noreferrer', class: 'primary-link' }, 'Open ' + providers[selected]) : null,
           h('p', {}, 'Your order is saved. Pay the exact amount shown. Include the order reference if your payment app offers a note. No amount or reference is filled automatically. Return to this tab after paying or canceling; opening a payment app never verifies payment.'),
-          !Object.keys(destinations).length ? h('p', {}, 'Business payment destinations are not configured yet. Contact Danielle below before paying. Do not send real money during preview testing.') : null));
+          !Object.keys(destinations).length ? h('p', {}, 'Business payment destinations are not configured yet. Contact Danielle below before paying.' + (order.simulated ? ' Do not send real money during preview testing.' : '')) : null));
       }
       main.append(button('Contact Danielle', () => { messaging = !messaging; rememberMessage(); render(); root.querySelector('#contact-message')?.focus(); }, { class: 'primary-link' }),
         order.attention?.customerContacted ? h('p', { role: 'status' }, 'Customer Contacted — awaiting owner review. Your current pickup time stays unchanged until Danielle approves an arrangement.') : null,
@@ -175,7 +175,7 @@ export async function start(root) {
           h("p", {}, receipt.verification),
           receipt.lines.map((line) => h("p", {}, `${line.qty} × ${line.name} (${line.variant}) · ${money(line.qty * line.unitPrice)}`)),
           h("strong", {}, "Paid total: " + money(receipt.total)),
-          h("p", {}, "This beta receipt records Danielle's independent verification. No payment was processed by this website or its Square integration."),
+          h("p", {}, receipt.beta ? "This beta receipt records Danielle's independent verification. No payment was processed by this website or its Square integration." : "This receipt records Danielle's independent verification of your external payment. The website did not process the payment."),
           button("Print or save receipt as PDF", () => window.print(), { class: "secondary-button" })));
       }
       if (order.refunds?.length) main.append(h('section', { class: 'sub-card', 'aria-label': 'Recorded refunds' }, h('h2', {}, 'Recorded refunds'), order.refunds.map(r => h('p', {}, money(r.amount) + ' · ' + stamp(r.at))), h('p', {}, 'An owner checked independent refund records. This website did not process these refunds. The original paid receipt remains part of the order history.')));
