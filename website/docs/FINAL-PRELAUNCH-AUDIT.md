@@ -1,8 +1,12 @@
 # Rise & Roost final pre-launch audit — November 2, 2026
 
-**BLOCKED: not ready for public launch.** This audit does not approve launch. No merge, official-domain deployment, DNS/nameserver/custom-route change, production provisioning, existing data deletion/reset, real checkout activation or protected-system change was performed. Code is isolated on `codex/final-prelaunch-audit`; the approved design is preserved.
+**BLOCKED: not ready for public launch.** This audit does not approve launch. The original audit performed no merge, official-domain deployment, DNS/nameserver/custom-route change, production provisioning, existing data deletion/reset, real checkout activation or protected-system change. The November 2 follow-up below adds only the expressly authorized empty production schema. The approved design is preserved.
 
 [Machine-readable verification](prelaunch-audit/verification.json) accompanies this report. The private record-classification assessment is intentionally excluded from Git and public PR artifacts.
+
+## Production-database follow-up
+
+The owner subsequently created `rise-roost-production-db` (`889a4b96-cabd-43d1-ad45-79f65b0052b0`). Its exact identity and empty catalog were verified, then **12 empty application tables and two indexes** were installed under the new authorization. No business/customer/credential rows were inserted; no preview/beta writes, deployment, merge, domain change or checkout activation occurred. A production configuration and review-only business initialization package are prepared on `codex/production-database-preparation`. Individual owner authentication and automated backups remain blocked. See [the current production preparation report](PRODUCTION-DATABASE-PREPARATION.md) for current evidence and the single next Cloudflare step.
 
 ## Status
 
@@ -10,12 +14,12 @@
 | --- | --- | --- |
 | Existing website persistence | PASS for preview architecture and local tests | Business data resides in persistent D1, not browser-only storage. Device synchronization, reload/reconnection and failed-save recovery are exercised. Existing deployed records match protected baseline checks. |
 | Preview vs original beta | PASS | Different Worker bindings and D1 UUIDs, listed below. |
-| Production database and uploaded-file separation | BLOCKED | No dedicated production website database/Worker exists in the configured account. Production isolation cannot be claimed before provisioning and testing actual bindings. |
-| Clean production / zero test sales | BLOCKED | Existing source activity lacks reliable test/real classification. The private owner review remains unresolved. No records were deleted, reclassified or copied. No $0 production dashboard is claimed because no production candidate exists. |
+| Production database and uploaded-file separation | PASS for separate database/config; deployment pending | Dedicated production UUID and empty assets table verified; production configuration binds it exclusively. No production Worker is deployed, so hosted binding acceptance remains pending. |
+| Clean production / zero test sales | PASS for empty schema; initialization BLOCKED | All 12 production tables have zero rows. Existing source classification and business seed review remain unresolved. No live dashboard is available yet; no genuine records were deleted, reclassified or copied. |
 | Owner production authentication | BLOCKED | Current access is the temporary shared preview PIN. Runtime guards refuse public production use pending individual owner accounts and review. No production identity/recovery service is configured. |
 | Customer/owner authorization | PASS in preview/local tests | Private tracking bearer, workspace isolation, owner-only actions, same-origin writes, session expiry/revocation and throttling are tested. This does not certify future production auth. |
-| D1 Time Travel | PASS for actual preview DB; NEEDS ACTION for production | Actual bookmark retrieved from modern D1. No in-place restore performed. Production does not exist yet. |
-| Daily production backups | BLOCKED / not operational | Encrypted job, private daily dispatcher, conditional writes, read-back verification, recovery CLI and tests are prepared. Production DB, R2 permissions/secrets, monitor, deployment and successful scheduled run remain missing. |
+| D1 Time Travel | PASS for actual preview and new production DB | Read-only bookmarks retrieved for both. No in-place restore performed. Independent encrypted backups still require setup. |
+| Daily production backups | BLOCKED / not operational | Encrypted job, private daily dispatcher, conditional writes, read-back verification, recovery CLI and tests are prepared. Production initialization/identity, R2 permissions/secrets, monitor, deployment and successful scheduled run remain missing. |
 | Isolated recovery | PASS locally | Actual preview snapshot restored into a new local DB; encrypted synthetic backup persisted through a real local R2 runtime restart and restored records/media separately. Hosted production/R2 disaster recovery remains untested. |
 | Payment settings and manual verification | PASS locally; NEEDS ACTION for actual destinations | All three provider settings, tests, enable/disable, conflicts and manual financial verification pass. No business payment destinations are saved in the main preview. No real account or money was tested. |
 | Customer checkout | PASS on local audit candidate | Only configured/enabled/tested methods appear. No ready method blocks payable orders server-side before stock reservation. Opening links never proves payment. Interrupted/duplicate submissions and corrections/refunds are covered. |
@@ -50,9 +54,9 @@ D1 data persists independently of application assets/deployments. `schema.sql` u
 | --- | --- | --- |
 | `rise-roost-experience-preview` | `rise-roost-experience-preview-db` | `21352b95-d7f6-406f-8527-4b8dbcebf1bf` |
 | Protected `rise-roost-beta` | `rise-roost-beta-db` | `7824ffe0-d69a-4221-9aec-0f335257477a` |
-| Production customer website | **Not provisioned** | **None** |
+| Production website (configuration only, no Worker deployed) | `rise-roost-production-db` | `889a4b96-cabd-43d1-ad45-79f65b0052b0` |
 
-Cloudflare reports the preview database engine `version: production`; that denotes modern D1 storage/Time Travel support, **not** a production customer website. Its actual schema has 14 application tables. Uploaded files currently live in that same preview database. A new production database must carry its own media blobs, workspace identity, auth and independent Worker binding; no live image URL may point back to preview storage. The production backup bucket must also be separate/private and absent from website bindings.
+Cloudflare reports the preview database engine `version: production`; that denotes modern D1 storage/Time Travel support, **not** a production customer website. Its actual schema has 14 application tables. Uploaded files currently live in that same preview database. The separate new production database must receive reviewed media blobs, workspace identity, auth and an independent deployed Worker binding; no live image URL may point back to preview storage. The production backup bucket must also be separate/private and absent from website bindings.
 
 The configured credential could inspect website bindings, database metadata and Time Travel. R2 inventory and account subscription inspection returned **403**. Actual bucket policy/billing status is therefore unverified; do not interpret that as an empty bucket or confirmed subscription. Free-plan limits below refer to the intended plan stated by the owner.
 
@@ -64,7 +68,7 @@ The private inspection identifies unclassified orders/payment history and a mess
 
 Before a clean candidate is populated, the owner must classify that activity and specify treatment of genuine records. Use an approved **configuration-only allowlist**, never a full disaster-recovery archive: published products/prices/descriptions, approved inventory/capacity, referenced image bytes, pickup/business settings, website copy and approved business destination URLs. Use a fresh production workspace, initial content revision and individual owner access; do not carry preview sessions, PINs, test customers/orders/payments/messages, operation history or verified-sale aggregates. Do not infer physical opening stock from test reservations. Confirm the actual stock counts, future pickup windows/business days and valid payment destinations.
 
-Keep production ordering paused during preparation and payment destinations unavailable until Danielle confirms their recipient/business use in the production candidate and explicit checkout/launch approval is given. Retain all original preview workspaces, data and test activity for future testing. Genuine records cannot be silently discarded to obtain a $0 dashboard. No cleanup or production migration has run.
+Keep production ordering paused during preparation and payment destinations unavailable until Danielle confirms their recipient/business use in the production candidate and explicit checkout/launch approval is given. Retain all original preview workspaces, data and test activity for future testing. Genuine records cannot be silently discarded to obtain a $0 dashboard. No cleanup or business-data migration has run; the separately authorized empty production schema is documented in the follow-up above.
 
 ## Backup/recovery implementation
 
@@ -118,7 +122,7 @@ The audit's small checkout change is a **development candidate**, not a claim th
 
 ### Operator work after those decisions and the required approvals
 
-1. Create an unpublished production candidate with a **new D1 database and separate uploaded media**, copy only approved business configuration, handle any genuine records as explicitly agreed, and verify no test customers/orders/messages/payment verifications/sales remain. Confirm the actual preview and production UUID bindings are different; preserve the preview and original beta.
+1. Complete an unpublished production candidate using the **already-created separate D1 database** `889a4b96-cabd-43d1-ad45-79f65b0052b0` and its own uploaded media. Its empty schema is installed. After owner review, initialize only approved business configuration, handle any genuine records as explicitly agreed, and verify no test customers/orders/messages/payment verifications/sales remain. Confirm the deployed preview and production UUID bindings differ; preserve the preview and original beta. Do not create a duplicate database.
 2. Implement/configure and test individual production owner sign-in, permissions, remembered sessions, sign-out and recovery. Exclude development/demo/setup routes from production. Keep the existing launch guard until those checks pass; never substitute the preview PIN or bypass flags.
 3. Configure the private R2 backup bucket, encryption key recovery, retention and missing-run alerts. The prepared scheduler uses the protected `main` workflow: placing that reviewed code on `main` requires a **separate preparation-only merge approval**, before scheduler activation. It does not authorize public launch. While merging remains prohibited, scheduled production backups stay blocked. Prove an actual provider upload/read-back, a successful scheduled backup, a deliberately failed isolated job/missing-success alert, and a restore into a new isolated database/media directory. **Production backups remain disabled and not operational until this succeeds.**
 4. Check real Free-plan request/CPU/D1 headroom and the application's 300-retained-order/2,000-operation limits. Agree on monitoring and a storage expansion plan. A Workers Paid upgrade alone does not remove application caps; any paid-plan change needs approval.

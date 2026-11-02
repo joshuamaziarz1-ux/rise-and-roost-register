@@ -1,0 +1,33 @@
+# Production preparation only. No public deployment or checkout activation.
+# Default deploy commands continue to select wrangler.experience.toml.
+name = "rise-roost-website-production"
+main = "server/worker.mjs"
+compatibility_date = "2025-10-01"
+workers_dev = false
+preview_urls = false
+# No custom domains, routes or scheduled jobs are configured here.
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
+not_found_handling = "single-page-application"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "rise-roost-production-db"
+database_id = "889a4b96-cabd-43d1-ad45-79f65b0052b0"
+
+[vars]
+# Reserved fresh identifier; no workspace/business records are inserted yet.
+PUBLIC_WORKSPACE_ID = "5c6b64c991570cc03df650282e1a5a90bf72283c1de5f542"
+PRODUCTION_DATABASE_ID = "889a4b96-cabd-43d1-ad45-79f65b0052b0"
+WEBSITE_BASE_URL = "https://rise-and-roost.com"
+CUSTOMER_EXPERIENCE_ENABLED = "true"
+STUDIO_MANAGEMENT_ENABLED = "true"
+COMMERCE_UPDATE_ENABLED = "true"
+ORDER_EMAIL_ENABLED = "false"
+REVIEW_BUILD = "false"
+# The existing runtime production guard returns 503 before any storage/asset
+# access until individual owner authentication and launch review are implemented.
+# Never copy preview PIN/Access bypass settings into this configuration.
