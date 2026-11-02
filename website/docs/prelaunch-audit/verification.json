@@ -109,7 +109,7 @@
       "total": 0
     }
   },
-  "productionDatabaseExists": false,
+  "productionDatabaseExists": true,
   "productionOwnerAuthenticationConfigured": false,
   "sourceCustomerClassificationResolved": false,
   "previewBusinessPaymentDestinationsConfigured": false,
@@ -120,7 +120,8 @@
     "deployments": 0,
     "merges": 0,
     "dnsOrNameserverChanges": 0,
-    "realCheckoutActivation": false
+    "realCheckoutActivation": false,
+    "scope": "Original audit only; later authorized schema preparation is recorded separately in productionDatabaseFollowup."
   },
   "ci": "See current draft PR #12 checks; prior audit CI #58 passed. No pending run is counted as passed.",
   "securityFollowup": {
@@ -132,5 +133,17 @@
     "actualLocalWorkerSmokes": "both passed",
     "configurationDryRuns": "preview, classic and disabled backup trigger passed",
     "applicationOrDeploymentChanges": false
+  },
+  "productionDatabaseFollowup": {
+    "report": "../PRODUCTION-DATABASE-PREPARATION.md",
+    "verification": "production-database-verification.json",
+    "databaseId": "889a4b96-cabd-43d1-ad45-79f65b0052b0",
+    "tables": 12,
+    "indexes": 2,
+    "allTablesEmpty": true,
+    "schemaWriteRequests": 1,
+    "businessRowsInserted": 0,
+    "previewOrBetaWrites": 0,
+    "deployed": false
   }
 }
