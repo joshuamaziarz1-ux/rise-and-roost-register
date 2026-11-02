@@ -145,9 +145,9 @@ test('scheduled runner bounds export polling and never treats a pending export a
 });
 
 test('encrypted backups persist through an actual local R2 runtime restart and restore into a new database and media directory', async () => {
-  const { Miniflare } = await import('miniflare');
+  const { Miniflare, convertV4MiniflareOptions } = await import('miniflare');
   const h = fixture(), directory = await mkdtemp(join(tmpdir(), 'rr-r2-recovery-'));
-  const options = { modules: true, script: 'export default { fetch() { return new Response("Not exposed", {status:404}); } }', compatibilityDate: '2025-10-01', r2Buckets: ['BACKUP_BUCKET'], r2Persist: join(directory, 'r2') };
+  const options = { ...convertV4MiniflareOptions({ modules: true, script: 'export default { fetch() { return new Response("Not exposed", {status:404}); } }', compatibilityDate: '2025-10-01', r2Buckets: ['BACKUP_BUCKET'] }), resourcePersistencePath: join(directory, 'r2') };
   let mf = new Miniflare(options);
   try {
     h.env.BACKUP_BUCKET = await mf.getR2Bucket('BACKUP_BUCKET');

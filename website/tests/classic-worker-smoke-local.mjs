@@ -1,12 +1,12 @@
 // The existing legacy smoke script runs only against this temporary local D1.
-import { Miniflare } from 'miniflare';
+import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 const bundle = process.env.RR_CLASSIC_WORKER_BUNDLE;
 if (!bundle) throw new Error('Provide a local classic Worker dry-run bundle.');
-const mf = new Miniflare({ modules: true, modulesRoot: dirname(bundle), rootPath: dirname(bundle), scriptPath: bundle, compatibilityDate: '2025-10-01', cf: false, d1Databases: ['DB'], serviceBindings: { ASSETS: () => new Response('isolated synthetic assets', { headers: { 'Content-Type': 'text/html' } }) } });
+const mf = new Miniflare(convertV4MiniflareOptions({ modules: true, modulesRoot: dirname(bundle), rootPath: dirname(bundle), scriptPath: bundle, compatibilityDate: '2025-10-01', cf: false, d1Databases: ['DB'], serviceBindings: { ASSETS: () => new Response('isolated synthetic assets', { headers: { 'Content-Type': 'text/html' } }) } }));
 const watchdog = setTimeout(() => { console.error('The isolated legacy runtime did not finish; no hosted target was used.'); process.exit(1); }, 35000);
 try {
   const db = await mf.getD1Database('DB');

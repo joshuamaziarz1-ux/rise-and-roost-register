@@ -35,7 +35,8 @@
     "backupDispatcherDryRun": "passed, disabled",
     "hostedBrowserAcceptance": "blocked by environment proxy CONNECT 403; not passed",
     "productionBackupProviderAndScheduling": "not configured; not operational",
-    "actualLocalClassicWorkerD1": "passed through file-based isolated wrapper; no hosted target"
+    "actualLocalClassicWorkerD1": "passed through file-based isolated wrapper; no hosted target",
+    "frontendRegressionEvidence": "The already completed 120-browser/8-commerce results remain recorded; current PR CI also reruns them after the toolchain upgrade."
   },
   "timeTravel": {
     "actualDatabaseId": "21352b95-d7f6-406f-8527-4b8dbcebf1bf",
@@ -103,9 +104,9 @@
       "info": 0,
       "low": 0,
       "moderate": 0,
-      "high": 6,
+      "high": 0,
       "critical": 0,
-      "total": 6
+      "total": 0
     }
   },
   "productionDatabaseExists": false,
@@ -121,5 +122,15 @@
     "dnsOrNameserverChanges": 0,
     "realCheckoutActivation": false
   },
-  "ci": "not claimed passed until the current draft PR checks complete"
+  "ci": "See current draft PR #12 checks; prior audit CI #58 passed. No pending run is counted as passed.",
+  "securityFollowup": {
+    "checkedAt": "2026-11-02T14:25:48.402826+00:00",
+    "wrangler": "4.156.1",
+    "previousDevelopmentHighSeverityEntries": 6,
+    "currentKnownVulnerabilities": 0,
+    "serverRecoveryTestsPassed": 140,
+    "actualLocalWorkerSmokes": "both passed",
+    "configurationDryRuns": "preview, classic and disabled backup trigger passed",
+    "applicationOrDeploymentChanges": false
+  }
 }
