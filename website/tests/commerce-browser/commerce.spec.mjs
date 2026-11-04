@@ -36,7 +36,7 @@ test('guest checkout, payments, owner verification, messages and extensions sync
     const tracking=await visitor.getByRole('link',{name:'Pay & track your order',exact:true}).getAttribute('href');await visitor.goto(fixture.origin+tracking);
     const current=visitor.getByLabel('Current order status',{exact:true});await expect(current).toContainText('Awaiting Payment Verification');await expect(visitor.getByRole('button',{name:"I've Sent Payment",exact:true})).toHaveCount(0);
     for(const label of ['PayPal','Venmo','Cash App']){
-      await visitor.getByRole('button',{name:label,exact:true}).click();const popup=visitor.waitForEvent('popup');await visitor.getByRole('link',{name:'Open '+label,exact:true}).click();const external=await popup;await expect(external.getByRole('heading')).toContainText('Fictional payment');await external.close();
+      const popup=visitor.waitForEvent('popup');await visitor.getByRole('link',{name:'Open '+label,exact:true}).click();const external=await popup;await expect(external.getByRole('heading')).toContainText('Fictional payment');await external.close();
       await expect(current).toContainText('Awaiting Payment Verification');await expect(visitor.locator('main')).toContainText('Amount due: $9.00');
     }
     await nav(page,'Orders').click();await page.getByRole('button').filter({hasText:'Fictional Preview Neighbor'}).filter({visible:true}).click();await expect(page.locator('.ms-main')).toContainText('Selected method: Cash App');

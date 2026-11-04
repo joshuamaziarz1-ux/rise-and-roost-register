@@ -1,5 +1,7 @@
 # Production launch preparation — November 2, 2026
 
+**November 4 follow-up:** The owner has supplied the two owner emails and reports that the Access application, 24-hour policy, DNS and SSL are configured. Current Cloudflare inspection fails with `Invalid API Token`. Saved-order payment QR tiles, tracking-page fixes and canonical `www` handling are implemented and locally tested. See [the current readiness report and dashboard steps](FINAL-READINESS-NOV4.md); do not repeat the existing database initialization or request the owner emails again.
+
 **No public launch, merge, deployment, domain/DNS change or real-checkout activation has occurred.** This report supersedes the earlier requirement to configure R2 before launch. The owner has postponed R2 backups.
 
 ## Production data is initialized

@@ -10,6 +10,7 @@
     "check:experience": "wrangler deploy --config wrangler.experience.toml --dry-run",
     "check:production": "wrangler deploy --config wrangler.production.toml --dry-run",
     "test:production-browser": "playwright test --config playwright.production.config.mjs",
+    "vendor:payment-qr": "node scripts/vendor-payment-qr.mjs",
     "test:experience-hosted": "node tests/experience-hosted.mjs",
     "test:experience-browser": "playwright test --config playwright.experience-hosted.config.mjs",
     "test": "node --test tests/*.test.mjs",
@@ -29,6 +30,8 @@
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",
+    "jsqr": "1.4.0",
+    "qrcode-generator": "2.0.4",
     "wrangler": "4.156.1"
   }
 }

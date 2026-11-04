@@ -4,6 +4,7 @@ import { productionFixture, installProductionTestKeys } from './production-fixtu
 import { PRODUCTION_DATABASE_ID, PRODUCTION_WORKSPACE_ID } from '../server/production-preparation.mjs';
 import { api } from '../server/service.mjs';
 import { TESTER_A } from './access-jwt-fixture.mjs';
+import worker from '../server/worker.mjs';
 const originalFetch = globalThis.fetch;
 before(installProductionTestKeys); after(() => { globalThis.fetch = originalFetch; });
 
@@ -32,6 +33,24 @@ test('wrong signature, audience, issuer, subject, email, type and token lifetime
     assert.ok([401, 403].includes(r.status), JSON.stringify(options));
   }
   const tampered = h.ownerA.slice(0, -10) + 'badpayload'; assert.equal((await h.call('/studio', undefined, { token: tampered })).status, 403);
+});
+test('the configured 24-hour Access session is accepted until its expiry, without a shared PIN', async t => {
+  const h = await productionFixture(); t.after(() => h.sql.close());
+  const now = Math.floor(h.now / 1000), token = await h.auth.mint({ issuedAt: now, notBefore: now, expiresAt: now + 86400 });
+  assert.equal((await h.call('/studio/api/studio', undefined, { token })).status, 200);
+  assert.equal((await h.call('/studio/api/studio', undefined, { token, at: (now + 86400) * 1000 })).status, 403);
+});
+test('www redirects only navigation to the canonical HTTPS host; alternate-host writes and bypasses stay closed', async t => {
+  const h = await productionFixture(); t.after(() => h.sql.close());
+  const env = { ...h.env, DB: new Proxy({}, { get() { throw Error('No storage access is allowed for alias or rejected hosts.'); } }) };
+  for (const path of ['/', '/shop', '/studio', '/studio/api/manage/snapshot', '/api/manage/export', '/orders/example?view=status']) {
+    const r = await worker.fetch(new Request('https://www.rise-and-roost.com' + path), env, {});
+    assert.equal(r.status, 308); assert.equal(r.headers.get('Location'), 'https://rise-and-roost.com' + path); assert.equal(await r.text(), '');
+  }
+  const denied = await worker.fetch(new Request('https://www.rise-and-roost.com/studio/api/manage/product', { method: 'POST', body: '{}' }), env, {});
+  assert.equal(denied.status, 403);
+  for (const origin of ['http://rise-and-roost.com', 'https://www.rise-and-roost.com:8443', 'https://rise-roost-website-production.example.workers.dev', 'https://rise-and-roost.com.attacker.test']) assert.equal((await worker.fetch(new Request(origin + '/studio/api/manage/snapshot', { headers: { 'Cf-Access-Jwt-Assertion': h.ownerA } }), env, {})).status, 503);
+  assert.equal((await worker.fetch(new Request('https://www.rise-and-roost.com/studio'), { ...env, PRODUCTION_RELEASE_APPROVED: 'false' }, {})).status, 503);
 });
 test('both owners get distinct stable audited identities; removing an owner blocks their next request', async t => {
   const h = await productionFixture(); t.after(() => h.sql.close());

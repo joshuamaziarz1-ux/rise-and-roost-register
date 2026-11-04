@@ -1,5 +1,11 @@
-/* The existing farmhouse stylesheet remains unchanged. This affects receipts
-   only when the customer uses the browser's print / save PDF dialog. */
+/* Payment controls inherit the approved farmhouse theme and typography. */
+.payment-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr)); gap: .65rem; margin: 1rem 0; }
+.payment-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .5rem; padding: .75rem .45rem; border: 1px solid #dce2d2; border-radius: var(--button-radius, 6px); color: var(--ink); background: var(--surface); text-align: center; text-decoration: none; }
+.payment-tile:hover { border-color: var(--green); }
+.payment-tile:focus-visible { outline: 3px solid var(--green); outline-offset: 3px; }
+.payment-tile[aria-disabled="true"] { opacity: .6; cursor: wait; }
+.payment-tile > span { font-size: .8em; }
+.payment-qr { display: block; width: 100%; max-width: 120px; height: auto; background: #fff; }
 @media print {
   @page { margin: 20mm; }
   #notice, .demo-bar, .site-header, .skip-link { display: none !important; }

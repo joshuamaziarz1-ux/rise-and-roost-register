@@ -9,9 +9,17 @@ const publicApi = (path, method) => method === 'GET' && (['/api/site', '/api/com
 // All production owner traffic lives below /studio, so one Access application
 // protects the page AND its APIs. Unprotected legacy owner URLs are closed.
 export async function productionFetch(request, env, now = Date.now()) {
-  const config = productionConfiguration(env, request);
+  const url = new URL(request.url), alias = url.origin === 'https://www.rise-and-roost.com';
+  const canonical = new URL(url); canonical.hostname = 'rise-and-roost.com';
+  const config = productionConfiguration(env, alias ? new Request(canonical) : request);
   if (!config) return response('Production launch is blocked pending individual owner accounts and launch review.', 503);
-  const url = new URL(request.url), privatePath = url.pathname === '/studio' || url.pathname.startsWith('/studio/');
+  if (alias) {
+    // Never accept a cross-host write or forward owner credentials/data. Public
+    // navigation reaches the canonical host, where Access/JWT checks still run.
+    if (!['GET', 'HEAD'].includes(request.method)) return response('Use the main Rise & Roost website before submitting changes.', 403);
+    return new Response(null, { status: 308, headers: { Location: canonical.href, 'Cache-Control': 'no-store' } });
+  }
+  const privatePath = url.pathname === '/studio' || url.pathname.startsWith('/studio/');
   let owner;
   if (privatePath) {
     owner = await productionOwner(request, config, now);
