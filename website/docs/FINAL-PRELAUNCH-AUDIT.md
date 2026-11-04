@@ -1,5 +1,7 @@
 # Rise & Roost final pre-launch audit — November 2, 2026
 
+**Latest update:** The owner approved an empty production catalog and confirmed the pickup address. Production now contains one business workspace and one identity marker, with zero products/orders/sales/customer activity. R2 backups are postponed by owner decision. [The current launch report](FAST-PRODUCTION-LAUNCH.md) supersedes older provisioning, initialization and mandatory-R2 launch gates below; earlier test evidence remains historical. Hosted individual owner authentication and explicit launch approvals are still required.
+
 **BLOCKED: not ready for public launch.** This audit does not approve launch. The original audit performed no merge, official-domain deployment, DNS/nameserver/custom-route change, production provisioning, existing data deletion/reset, real checkout activation or protected-system change. The November 2 follow-up below adds only the expressly authorized empty production schema. The approved design is preserved.
 
 [Machine-readable verification](prelaunch-audit/verification.json) accompanies this report. The private record-classification assessment is intentionally excluded from Git and public PR artifacts.

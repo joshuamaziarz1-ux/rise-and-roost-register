@@ -30,7 +30,7 @@ export async function start(root, initial, newAccessKey) {
   const paymentsVersion = () => data.management.settings?.paymentsVersion || 0;
   const paymentFields = provider => { const p = data.management.settings?.payments?.[provider] || {}; return { provider, url: p.url || '', enabled: p.enabled === true, businessConfirmed: p.businessConfirmed === true }; };
   const formChanged = () => editing && (editing.type === 'payment-settings' ? editing.paymentsVersion !== paymentsVersion() : editing.revision !== data.revision || editing.ledgerVersion !== data.ledgerVersion);
-  const request = (path, body) => apiRequest(path, body, { workspaceId: workspace });
+  const request = (path, body) => apiRequest((initial.productionOwnerAccess ? '/studio' : '') + path, body, { workspaceId: workspace });
   const stamp = at => at ? customerTimestamp(at) : 'Not recorded';
   const marked = () => { if (editing && ['product', 'calendar', 'content', 'payment-settings'].includes(editing.type)) try { sessionStorage.setItem(storageKey, JSON.stringify(editing)); } catch {} };
   const f = (label, object, key, options = {}) => {
@@ -103,7 +103,7 @@ export async function start(root, initial, newAccessKey) {
         }
       }
       if (wasReauth || !root.querySelector('.management') || rerender && !editing && !root.querySelector('.ms-main input[type=search]:focus')) render(); else chrome();
-    } catch (e) { connected = false; error = e.message; if (e.status === 401 || initial.previewDirectAccess && [403, 503].includes(e.status)) { reauth = true; render(); } else chrome(); }
+    } catch (e) { connected = false; error = e.message; if (e.status === 401 || (initial.previewDirectAccess || initial.productionOwnerAccess) && [403, 503].includes(e.status)) { reauth = true; render(); } else chrome(); }
     finally { checking = false; }
   }
   function chrome() {
@@ -279,7 +279,7 @@ export async function start(root, initial, newAccessKey) {
         h('div', { class: 'ms-actions' }, button('Edit product', () => editProduct(p), { class: 'ms-primary' }), button('Duplicate', () => editProduct(p, true), { class: 'ms-secondary' }))))), !products.length ? empty('No products in this view.') : null);
   }
   function editProduct(product, duplicate = false) {
-    const p = product ? clone(product) : { id: 'product-' + id(), name: '', description: '', price: 0, stock: 10, capacity: 10, category: '', channel: 'preorder', active: true, images: [{ src: '/assets/bread.svg', alt: '' }], variants: [{ id: 'standard', name: 'Standard', extra: 0 }], inventoryMode: 'physical' };
+    const p = product ? clone(product) : { id: 'product-' + id(), name: '', description: '', price: 0, stock: 10, capacity: 10, category: '', channel: 'preorder', active: true, images: [{ src: '/assets/bread.svg', alt: '', x: 50, y: 50 }], variants: [{ id: 'standard', name: 'Standard', extra: 0 }], inventoryMode: 'physical' };
     if (duplicate) { p.id = 'product-' + id(); p.name += ' copy'; }
     p.archived = !!p.archived; p.soldOut = !!p.soldOut; p.lowStockThreshold ??= 3;
     p.inventoryMode ||= 'legacy';
@@ -358,7 +358,7 @@ export async function start(root, initial, newAccessKey) {
         button('Preview saved draft', async () => {
           try { const r = await request('/api/preview', { revision: data.revision }); root.querySelector('#ms-content-preview')?.replaceChildren(h('iframe', { src: r.path, title: 'Saved website content preview' })); }
           catch (e) { error = e.message; chrome(); }
-        }, { class: 'ms-secondary' }), button('Publish website content', () => { if (confirm('Publish this saved wording and photo draft to the isolated preview website? Products and pickup schedules keep their latest live values.')) send('publish', { revision: data.revision }); }, { class: 'ms-primary' }), h('div', { id: 'ms-content-preview' })),
+        }, { class: 'ms-secondary' }), button('Publish website content', () => { if (confirm(data.productionOwnerAccess ? 'Publish this saved wording and photo draft? Products and pickup schedules keep their latest live values.' : 'Publish this saved wording and photo draft to the isolated preview website? Products and pickup schedules keep their latest live values.')) send('publish', { revision: data.revision }); }, { class: 'ms-primary' }), h('div', { id: 'ms-content-preview' })),
       panel('Revision history', data.versions.map(v => h('div', { class: 'ms-audit' }, h('strong', {}, v.label), h('span', {}, stamp(v.at)), button('Restore wording & images', () => { if (confirm('Restore wording and images from this revision? Current products, stock, prices, and pickup schedules will stay intact.')) send('restore-content', { revision: data.revision, versionId: v.id }); }, { class: 'ms-secondary' })))));
   }
   function settings() {
@@ -366,7 +366,7 @@ export async function start(root, initial, newAccessKey) {
     const business = data.management.settings || { calendar: defaultCalendar(), payments: {} };
     const preferences = clone(data.management.notifications.preferences);
     return h('div', {}, h('h1', {}, 'Settings'), menu('Payments', 'Settings/Payments'),
-      data.previewPinAccess ? panel('Studio access', h('p', {}, 'This device is remembered for up to 30 days. Use Lock Studio whenever you want the PIN required again on this device.'), h('p', {}, 'This shared testing PIN is temporary. Individual owner accounts can replace it before launch.')) : data.previewDirectAccess ? panel('Testing access', h('p', {}, 'Cloudflare Access remembers this browser. No separate Studio sign-in is needed.'), h('p', {}, 'Approved tester: ' + data.previewTesterEmail), h('p', {}, 'Testing session ends ' + stamp(data.previewAccessExpiresAt) + '. Re-verification is needed after expiry, logout, or clearing cookies.'), h('a', { href: '/cdn-cgi/access/logout', class: 'ms-secondary' }, 'Sign out of testing access')) : panel('Owner access', h('p', {}, 'Current sign-in: secure workspace access. Individual Descope owner accounts are not connected yet. The existing authentication has not been replaced.'), h('p', {}, 'Both owner accounts must be tested and approved before activation. Do not share private access keys in chat.'),
+      data.productionOwnerAccess ? panel('Owner access', h('p', {}, 'Signed in as ' + data.owner + '.'), h('p', {}, 'Use your own Cloudflare Access sign-in on each device. Contact the other owner or account administrator for account recovery.'), h('p', {}, 'Session ends ' + stamp(data.sessionExpiresAt) + '.')) : data.previewPinAccess ? panel('Studio access', h('p', {}, 'This device is remembered for up to 30 days. Use Lock Studio whenever you want the PIN required again on this device.'), h('p', {}, 'This shared testing PIN is temporary. Individual owner accounts can replace it before launch.')) : data.previewDirectAccess ? panel('Testing access', h('p', {}, 'Cloudflare Access remembers this browser. No separate Studio sign-in is needed.'), h('p', {}, 'Approved tester: ' + data.previewTesterEmail), h('p', {}, 'Testing session ends ' + stamp(data.previewAccessExpiresAt) + '. Re-verification is needed after expiry, logout, or clearing cookies.'), h('a', { href: '/cdn-cgi/access/logout', class: 'ms-secondary' }, 'Sign out of testing access')) : panel('Owner access', h('p', {}, 'Current sign-in: secure workspace access. Individual Descope owner accounts are not connected yet. The existing authentication has not been replaced.'), h('p', {}, 'Both owner accounts must be tested and approved before activation. Do not share private access keys in chat.'),
         h('a', { href: data.studioPath, class: 'ms-secondary' }, 'Studio link for this saved website'),
         field('Connection code from your other device', code, v => code = v, { maxlength: 20, autocomplete: 'off' }), button('Review device connection', async () => {
           try { const r = await request('/api/device-review', { code }); if (confirm('Approve the browser showing this exact code for this saved website? Only approve a request you started.')) { await request('/api/device-approve', { code, requestId: r.requestId, confirmed: true }); notify('Device request approved. Finish connecting on that device.'); } }
@@ -381,7 +381,7 @@ export async function start(root, initial, newAccessKey) {
         button('Save alert preferences', () => send('notifications', { preferences }), { class: 'ms-primary' })),
       panel('Install on iPhone', h('p', {}, 'In Safari, open Share → Add to Home Screen. Private business data is fetched securely while online and is not stored in an offline service-worker cache.')),
       panel('Audit history', data.management.audit.slice(0, 60).map(a => h('div', { class: 'ms-audit' }, h('strong', {}, a.action || a.kind), h('span', {}, stamp(a.at)), h('small', {}, a.actor?.name || 'Owner')))),
-      !data.previewDirectAccess ? button('Sign out', async () => { if (editing && !confirm('Sign out and discard the unsaved form?')) return; try { await request('/api/logout', {}); disposed = true; sessionStorage.removeItem(storageKey); location.reload(); } catch (e) { error = e.message; chrome(); } }, { class: 'ms-secondary' }) : null);
+      data.productionOwnerAccess ? h('a', { href: '/cdn-cgi/access/logout', class: 'ms-secondary' }, 'Sign out') : !data.previewDirectAccess ? button('Sign out', async () => { if (editing && !confirm('Sign out and discard the unsaved form?')) return; try { await request('/api/logout', {}); disposed = true; sessionStorage.removeItem(storageKey); location.reload(); } catch (e) { error = e.message; chrome(); } }, { class: 'ms-secondary' }) : null);
   }
   async function testPaymentLink(provider) {
     const popup = window.open('about:blank', '_blank'); if (popup) popup.opener = null;
@@ -393,7 +393,7 @@ export async function start(root, initial, newAccessKey) {
   function payments() {
     const saved = data.management.settings?.payments || {}, active = configuredPayments(data.management.settings);
     return h('div', {}, button('← Settings', () => go('Settings'), { class: 'ms-text' }), h('h1', {}, 'Payments'),
-      panel('Customer ordering', h('p', { role: 'status' }, Object.keys(active).length ? 'Ready — an enabled payment link has an owner-confirmed test.' : 'Ordering paused — save, enable and test at least one payment link.'), h('p', {}, 'Studio stays available while payment links are being set up. Payments are always verified manually by Danielle.')),
+      panel('Customer ordering', h('p', { role: 'status' }, data.productionOwnerAccess && (!data.checkoutEnabled || data.published.orderingPaused) ? 'Ordering remains paused. Payment links can be prepared before launch approval.' : Object.keys(active).length ? 'Ready — an enabled payment link has an owner-confirmed test.' : 'Ordering paused — save, enable and test at least one payment link.'), h('p', {}, 'Studio stays available while payment links are being set up. Payments are always verified manually by Danielle.')),
       Object.entries(providers).map(([provider,label]) => {
         const p = saved[provider] || {}, ready = !!active[provider], test = p.pendingTest;
         return panel(label, pill(!p.url ? 'Not configured' : !p.enabled ? 'Disabled' : ready ? 'Ready' : 'Test required'),
@@ -493,7 +493,7 @@ export async function start(root, initial, newAccessKey) {
       h('aside', { class: 'ms-sidebar' }, h('a', { href: initial.studioPath, class: 'ms-brand' }, h('img', { src: '/assets/logo.webp', alt: 'Rise & Roost' }), h('span', {}, 'Rise & Roost', h('small', {}, 'Website Studio'))),
         h('nav', { 'aria-label': 'Studio navigation' }, primary.filter(v => v !== 'More').map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view === 'Settings/Payments' ? 'page' : undefined })), h('details', { open: true }, h('summary', {}, 'More'), secondary.map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view === 'Settings/Payments' ? 'page' : undefined })))), h('a', { href: initial.publishedPath, target: '_blank', rel: 'noopener', class: 'ms-secondary' }, 'View website')),
       h('div', { class: 'ms-workspace' }, h('header', { class: 'ms-top' }, h('div', { class: 'ms-mobile-brand' }, h('img', { src: '/assets/logo.webp', alt: '' }), h('strong', {}, 'Rise & Roost', h('small', {}, 'Website Studio'))),
-        h('span', { id: 'management-connection', role: 'status', class: connected ? '' : 'offline' }, connected ? 'Connected' : 'Offline / reconnecting'), button('Check connection', () => refresh(), { class: 'ms-text' }), initial.previewPinAccess ? button('Lock Studio', lockStudio, { class: 'ms-text' }) : null, initial.previewDirectAccess ? h('a', { id: 'management-reopen', href: initial.studioPath, target: '_blank', rel: 'noopener', class: 'ms-text', hidden: connected }, 'Reopen Studio') : null, pending && !busy ? button('Resolve previous save', cancel, { class: 'ms-text' }) : null),
+        h('span', { id: 'management-connection', role: 'status', class: connected ? '' : 'offline' }, connected ? 'Connected' : 'Offline / reconnecting'), button('Check connection', () => refresh(), { class: 'ms-text' }), initial.previewPinAccess ? button('Lock Studio', lockStudio, { class: 'ms-text' }) : null, initial.previewDirectAccess || initial.productionOwnerAccess ? h('a', { id: 'management-reopen', href: initial.studioPath, target: '_blank', rel: 'noopener', class: 'ms-text', hidden: connected }, 'Reopen Studio') : null, pending && !busy ? button('Resolve previous save', cancel, { class: 'ms-text' }) : null),
         h('div', { id: 'management-error', role: 'alert', class: 'ms-error', hidden: !error }, error),
         h('main', { id: 'main-content', class: 'ms-main' }, credentials(), page)),
       h('nav', { class: 'ms-bottom', 'aria-label': 'Primary Studio navigation' }, primary.map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'More' && (secondary.includes(view) || view === 'Settings/Payments') ? 'page' : undefined })))));

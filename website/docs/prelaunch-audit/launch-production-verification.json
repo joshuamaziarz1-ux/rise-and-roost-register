@@ -1,0 +1,78 @@
+{
+  "databaseId": "889a4b96-cabd-43d1-ad45-79f65b0052b0",
+  "workspaceId": "5c6b64c991570cc03df650282e1a5a90bf72283c1de5f542",
+  "rows": {
+    "workspaces": 1,
+    "deployment_identity": 1,
+    "sessions": 0,
+    "previews": 0,
+    "assets": 0,
+    "limits": 0,
+    "device_links": 0,
+    "roost_members": 0,
+    "roost_credentials": 0,
+    "roost_sessions": 0,
+    "roost_challenges": 0,
+    "customer_comments": 0
+  },
+  "products": 0,
+  "orders": 0,
+  "verifiedSales": 0,
+  "paymentDestinations": 0,
+  "orderingPaused": true,
+  "documentSha256": "783bd4c93d8d4d08828aa1c8511736e779e0ede8d89e03b33e2c805ceb109bc9",
+  "initializationWrites": 2,
+  "previewOrBetaWrites": 0,
+  "deployed": false,
+  "checkedAt": "2026-11-02T21:58:52.149079+00:00",
+  "branch": "codex/production-launch-readiness",
+  "schemaTables": 12,
+  "schemaIndexes": 2,
+  "pickupAddressConfirmed": true,
+  "productionOwnerAuthImplemented": true,
+  "hostedOwnerAuthenticationConfigured": false,
+  "cloudflareAccessInspectionStatus": 403,
+  "productionReleaseApproved": false,
+  "realCheckoutEnabled": false,
+  "r2BackupsPostponedByOwner": true,
+  "timeTravelBookmarkRetrievedAfterInitialization": true,
+  "hostedRestorePerformed": false,
+  "backendTestsPassed": 159,
+  "actualLocalProductionWorkerdD1": "passed",
+  "productionDryRun": "passed",
+  "localDesktopBrowser": "passed",
+  "localIphoneWebKit": "passed with Playwright 1.64.1",
+  "dedicatedCI": "pending",
+  "merges": 0,
+  "deployments": 0,
+  "dnsChanges": 0,
+  "emptyCatalogProductUploadSaveAndArchive": {
+    "desktop": "passed",
+    "iphoneWebKit": "passed"
+  },
+  "localProductionBrowserTests": {
+    "passed": 4,
+    "failed": 0,
+    "profiles": [
+      "desktop Chromium",
+      "iPhone-sized WebKit"
+    ],
+    "playwright": "1.64.1"
+  },
+  "previousWebKitDefect": {
+    "version": "Playwright 1.56.1",
+    "reproducedWithoutApplicationCode": true,
+    "minimalReproductionPassesCurrentEngine": true,
+    "applicationWorkaroundAdded": false
+  },
+  "previousCIRegression": {
+    "runId": 41533726854,
+    "sourceCommit": "1180e1b886820a11e71b2f78b35d491cf166cbfb",
+    "testJob": "passed",
+    "backend": 159,
+    "browser": 120,
+    "commerce": 8,
+    "productionJob": "failed on previous WebKit engine; superseded by current-toolchain checks"
+  },
+  "dependencyAdvisories": 0
+}

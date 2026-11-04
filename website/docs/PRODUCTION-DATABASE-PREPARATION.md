@@ -1,5 +1,7 @@
 # Production database preparation — November 2, 2026
 
+**Latest update:** The owner approved an empty production catalog and confirmed the pickup address. Production now contains one business workspace and one identity marker, with zero products/orders/sales/customer activity. R2 backups are postponed by owner decision. [The current launch report](FAST-PRODUCTION-LAUNCH.md) supersedes older provisioning, initialization and mandatory-R2 launch gates below; earlier test evidence remains historical. Hosted individual owner authentication and explicit launch approvals are still required.
+
 **Prepared, not launched.** The owner-created `rise-roost-production-db` now has its empty application schema. No Worker was deployed, no checkout enabled, no branch merged and no DNS/domain changed. Preview and beta received no writes.
 
 ## Verified configuration and schema

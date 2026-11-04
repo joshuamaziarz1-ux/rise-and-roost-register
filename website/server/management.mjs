@@ -106,7 +106,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
           orderCount: ledger.orders.filter(o => o.customer?.memberId === m.id).length,
           benefits: (ledger.management?.benefits || []).filter(b => b.memberId === m.id) })), comments,
         audit: (m.audit || []).slice(0, 500), benefits: m.benefits || [],
-        ownerAccounts: { provider: 'Descope', configured: false, activationRequiresApproval: true },
+        ownerAccounts: actor.authentication === 'cloudflare_access' && actor.role === 'owner' ? { provider: 'Cloudflare Access', configured: true } : { provider: 'Descope', configured: false, activationRequiresApproval: true },
         notifications: { externalEnabled: false, preferences: m.notificationPreferences || { orders: true, payments: true, stock: true, pickups: true, comments: true, errors: true } },
         limits: { orderCount: ledger.orders.length, orderLimit: 300, memberDirectoryLimit: 500 },
         attention: {
@@ -327,9 +327,9 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     o.verifications ||= []; o.verifications.push({ id: opaque(), at, amount: o.total, actor, method: input.method, evidence });
     delete o.paymentCorrectedAt;
     o.verification = { method: input.method, evidence, at, author: actor.name, actorId: actor.id };
-    o.paidReceipt = { number: 'BETA-PAID-' + o.id.slice(0, 16).toUpperCase() + (o.verifications.length > 1 ? '-' + o.verifications.length : ''), orderNumber: o.orderNumber,
+    o.paidReceipt = { number: (o.environment === 'production' ? 'RR-PAID-' : 'BETA-PAID-') + o.id.slice(0, 16).toUpperCase() + (o.verifications.length > 1 ? '-' + o.verifications.length : ''), orderNumber: o.orderNumber,
       issuedAt: at, paidAt: at, total: o.total, currency: 'USD', lines: clone(o.lines),
-      verification: 'An authorized owner checked an independent payment record', merchant: o.merchant || { name: published.business.name }, beta: true, websiteProcessedPayment: false };
+      verification: 'An authorized owner checked an independent payment record', merchant: o.merchant || { name: published.business.name }, beta: o.environment !== 'production', websiteProcessedPayment: false };
     o.version = (o.version || 1) + 1; description = 'Independent payment verified; receipt issued';
     o.audit.push({ action: description, author: actor.name, at }); enqueue(o, 'verified', at, opaque); result = { orderId: o.id };
   } else if (path === '/api/manage/payment-correction') {

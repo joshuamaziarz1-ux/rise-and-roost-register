@@ -1,0 +1,83 @@
+{
+  "checkedAt": "2026-11-04T16:01:50.970022+00:00",
+  "status": "BLOCKED: hosted Cloudflare authorization/configuration and acceptance unverified",
+  "branch": "codex/production-launch-readiness",
+  "baseCommit": "c4c4cb4f3966fb6cef64cba001df1bd0de3614b5",
+  "localTests": {
+    "backend": {
+      "passed": 163,
+      "failed": 0
+    },
+    "productionBrowser": {
+      "passed": 6,
+      "failed": 0,
+      "profiles": [
+        "desktop Chromium",
+        "iPhone-sized WebKit"
+      ],
+      "actualRenderedQrDecodedToSavedDestinations": true,
+      "providerHandoff": "synthetic intercepted pages; no real money"
+    },
+    "productionDryRun": "passed",
+    "productionWorkerGuard": "passed",
+    "actualLocalWorkerdD1CommerceAndAuthorization": "passed",
+    "dependencyAdvisories": 0
+  },
+  "independentCI": "pending current PR #14 checks; never counted as passed while running",
+  "remoteInspection": {
+    "configuredTokenVerificationHttpStatus": 401,
+    "cloudflareErrorCode": 1000,
+    "cloudflareError": "Invalid API Token",
+    "freshProductionD1InspectionHttpStatus": 403,
+    "ownerAccessApplication": "reported created by owner; cannot independently inspect",
+    "ownerIdentitiesProvided": true,
+    "ownersPreparedPrivately": 2,
+    "reportedSessionHours": 24,
+    "issuerAndAudience": "still required",
+    "reportedDnsSslStatus": "active DNS and Universal SSL; Full SSL mode; unverified by agent"
+  },
+  "productionLastVerified": {
+    "date": "2026-11-02",
+    "databaseId": "889a4b96-cabd-43d1-ad45-79f65b0052b0",
+    "tableCounts": {
+      "workspaces": 1,
+      "deployment_identity": 1,
+      "sessions": 0,
+      "previews": 0,
+      "assets": 0,
+      "limits": 0,
+      "device_links": 0,
+      "roost_members": 0,
+      "roost_credentials": 0,
+      "roost_sessions": 0,
+      "roost_challenges": 0,
+      "customer_comments": 0
+    },
+    "products": 0,
+    "orders": 0,
+    "verifiedSales": 0,
+    "currentRemoteCounts": "unverified; no reset or reinitialization performed"
+  },
+  "mutations": {
+    "remoteBusinessWrites": 0,
+    "previewOrBetaWrites": 0,
+    "workerDeployments": 0,
+    "customDomainOrDnsChanges": 0,
+    "merges": 0,
+    "realCheckoutActivation": false
+  },
+  "recovery": {
+    "independentR2Backups": "postponed and disabled",
+    "documentedD1Retention": "7 days Workers Free / 30 days Workers Paid; account plan not verified",
+    "priorActualProductionLogicalRestore": "all records/schema matched; source unchanged; SQLite integrity ok",
+    "hostedTimeTravelRestorePerformed": false,
+    "officialSqlDownload": "not verified; previous provider-hosted download failed"
+  },
+  "sourceFilesSha256": {
+    "public/tracking.mjs": "50426c64d34225df929717e68d5568b522f093894937feff92a23e1ffaf77fc2",
+    "public/tracking.css": "64a9f30fb8b9291645ec43af531817d4bccb72f6db36ede77bafadee53ca5238",
+    "public/payment-tiles.mjs": "106ddbb5fa07c34e79264b4980b4c1b349f7f9d43e3548a4442bce8437514c8f",
+    "public/vendor/qrcode-generator.mjs": "ea91d7118a5395289170da848b7c6758b996163bfbccf312591ab65a4911b7c0",
+    "server/production-runtime.mjs": "6ca52a3e92078b740e5293fec43f25c78a741eb2701040f12cf956ac1da6a131"
+  }
+}

@@ -5,10 +5,10 @@ import { createCustomerExperience } from "./customer.mjs";
 import { pickupLocation } from "./pickup-location.mjs";
 
 const root = document.querySelector("#app");
-if (
+if (!location.pathname.startsWith('/studio/preview/') && (
   location.pathname === "/studio" ||
   location.pathname.startsWith("/studio/")
-) {
+)) {
   import("./studio.mjs")
     .then((m) => m.start(root))
     .catch((e) => notify(e.message, true));
@@ -27,19 +27,19 @@ if (
     notificationsEnabled = false,
     checkoutEmail = "",
     emailOptIn = false;
-  let commerceEnabled = false, policyAccepted = false, paymentDestinations = {}, checkoutPaymentMethod = '';
+  let commerceEnabled = false, policyAccepted = false, paymentDestinations = {}, checkoutPaymentMethod = '', productionMode = false, checkoutEnabled = true;
   let experience = false, customer, customerWorkspace = "", checkoutMode = "guest";
   let checkoutProfile = { name: "", email: "", phone: "" };
   const editing = new URLSearchParams(location.search).has("studio-preview");
   let previewDocumentReceived = false;
   const match = location.pathname.match(
-    /^\/(demo|preview)\/([a-f0-9]{48})(.*)$/,
+    /^\/(demo|preview|studio\/preview)\/([a-f0-9]{48})(.*)$/,
   );
   if (match) {
     prefix = "/" + match[1] + "/" + match[2];
     path = match[3] || "/";
     workspace = match[1] === "demo" ? match[2] : "";
-    isPreview = match[1] === "preview";
+    isPreview = match[1].endsWith("preview");
   } else path = location.pathname;
   let cart;
   try {
@@ -582,7 +582,7 @@ if (
       {
         class: "primary-link",
         type: experience ? "submit" : "button",
-        disabled: !chosen || !lines.length || isPreview || editing || commerceEnabled && total > 0 && !paymentDestinations[checkoutPaymentMethod],
+        disabled: !checkoutEnabled || !chosen || !lines.length || isPreview || editing || commerceEnabled && total > 0 && !paymentDestinations[checkoutPaymentMethod],
       },
     );
     return h(
@@ -750,7 +750,7 @@ if (
     site.append(
       h(
         "div",
-        { class: "demo-bar" },
+        { class: "demo-bar", hidden: productionMode && !isPreview },
         isPreview
           ? "UNPUBLISHED PREVIEW · Read only · Simulation disabled"
           : experience ? "Private review · Test orders only · No payments" : "WEBSITE BETA · Sample products · No real payments",
@@ -858,7 +858,8 @@ if (
     );
     // Keep the mandatory beta notice outside the editable/scoped theme.
     const betaNotice = site.querySelector(".demo-bar");
-    root.replaceChildren(betaNotice, site);
+    if (productionMode && !isPreview) { betaNotice?.remove(); root.replaceChildren(site); }
+    else root.replaceChildren(betaNotice, site);
   }
   let loadSequence = 0;
   function ensureCustomer() {
@@ -870,7 +871,7 @@ if (
     }
   }
   const siteEndpoint = () => isPreview
-    ? "/api/preview/" + match[2]
+    ? (match[1] === 'studio/preview' ? '/studio' : '') + "/api/preview/" + match[2]
     : "/api/site" + (prefix.startsWith("/demo/") ? "?workspace=" + workspace : "");
   async function load(force = true) {
     const sequence = ++loadSequence;
@@ -888,6 +889,8 @@ if (
       return;
     }
     doc = result.document;
+    productionMode = result.productionMode === true;
+    checkoutEnabled = result.checkoutEnabled !== false;
     experience = !!result.customerExperienceEnabled;
     commerceEnabled = !!result.commerceEnabled;
     paymentDestinations = result.paymentDestinations || {};
