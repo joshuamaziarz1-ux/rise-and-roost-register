@@ -54,7 +54,9 @@ If a valid dedicated launch token already exists, use it; do not rotate credenti
 4. Select **Continue to summary → Create Token**.
 5. In this task's secure Cloud environment settings, replace the existing secret named **`CLOUDFLARE_API_TOKEN`**. Keep the existing account-ID setting. **Do not paste the token into chat, source code, screenshots or PR comments.** No terminal commands are needed. The current environment tooling can inspect readiness but cannot replace your secret for you.
 
-### 2. Provide the two non-secret Access identifiers
+### 2. Only if the Access identifiers cannot be read automatically
+
+With a valid token and the Access read permissions above, I can retrieve these values myself. **Skip this manual-copy step when that works.** If you prefer not to grant Access read permission, or Cloudflare still restricts it, provide the two identifiers as follows:
 
 1. In Cloudflare, open **Zero Trust → Access controls → Applications**.
 2. Select **Edit** on **Rise & Roost Website Studio**.
