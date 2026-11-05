@@ -514,7 +514,9 @@ if (!location.pathname.startsWith('/studio/preview/') && (
       calendarNow() >= localInstant(p.cutoffDate, p.cutoffTime) || calendarNow() >= localInstant(p.date, p.start) || p.capacity === 0;
     const eligiblePickups = doc.pickups.filter(p => !pickupClosed(p));
     if (automaticCalendar && !eligiblePickups.some(p => p.id === cart.pickupId)) {
-      cart.pickupId = eligiblePickups[0]?.id || ''; cart.requestId = crypto.randomUUID(); saveCart();
+      // An earlier checkout response may have been lost. Keep its retry ID so
+      // advancing availability cannot create a second order automatically.
+      cart.pickupId = eligiblePickups[0]?.id || ''; saveCart();
     }
     const select = h(
       "select",

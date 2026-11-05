@@ -7,5 +7,5 @@ export default {
   webServer: undefined,
   reporter: [['list']],
   outputDir: './qa-results/phase3-traces',
-  projects: base.projects.filter(project => ['desktop-chromium', 'iphone-webkit'].includes(project.name)),
+  projects: base.projects,
 };

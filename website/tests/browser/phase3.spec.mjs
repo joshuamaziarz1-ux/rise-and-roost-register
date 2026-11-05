@@ -262,11 +262,13 @@ test.describe('Phase 3 selling and pickup controls', () => {
     await card(page, current.published.products[0].name).getByRole('button', { name: 'Add ' + current.published.products[0].name + ' to basket', exact: true }).click();
     await page.getByRole('link', { name: /^Basket/ }).first().click();
     await expect(page.locator('#pickup-select')).toHaveValue(first.id);
+    const retryId = await page.evaluate(() => JSON.parse(localStorage.getItem('rr-beta-cart:')).requestId);
     serverNow += 2000;
     await page.clock.runFor(2000);
     await expect(page.locator('#pickup-select option[value="' + first.id + '"]')).toHaveCount(0);
     const expected = availableDocument(current.published, { orders: [] }, { managed: true, now: serverNow }).pickups[0];
     await expect(page.locator('#pickup-select')).toHaveValue(expected.id);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('rr-beta-cart:')).requestId)).toBe(retryId);
   });
 
   test('a basket with two preorder products chooses a date with enough capacity for both', async ({ page }) => {

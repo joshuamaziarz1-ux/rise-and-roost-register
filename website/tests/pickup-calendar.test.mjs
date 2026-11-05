@@ -139,6 +139,17 @@ test('HTTP server rejects a forged late pickup despite fresh or stale browser da
   assert.equal((await h.snapshot()).orders.length, 1);
 });
 
+test('a checkout retry after automatic rollover recovers the saved order without duplicating or moving it', async t => {
+  const h = await fixture(t), requestId = crypto.randomUUID(), boundary = localInstant('2026-11-02', '12:00');
+  const accepted = await h.order('recurring-2026-11-04', boundary - 1, { requestId });
+  assert.equal(accepted.status, 201);
+  const recovered = await h.order('recurring-2026-11-05', boundary + 1, { requestId });
+  assert.equal(recovered.status, 200);
+  assert.equal(recovered.data.id, accepted.data.id);
+  assert.deepEqual(recovered.data.pickup, accepted.data.pickup);
+  assert.equal((await h.snapshot()).orders.length, 1);
+});
+
 test('skip, reopen and special dates persist without creating weekly records or changing orders', async t => {
   const h = await fixture(t), original = (await h.order()).data;
   let s = await h.snapshot(), p = s.management.pickups.find(p => p.id === original.pickup.id);
