@@ -104,7 +104,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     const products = doc.products.map(p => ({ ...p, booked: bookedUnits(ledger, p.id), available: Math.max(0, p.stock - bookedUnits(ledger, p.id)), availableToOrder: remaining.get(p.id) || 0 }));
     const contentOnly = document => { const d = clone(document); delete d.products; delete d.pickups; delete d.pickupSchedule; delete d.orderingPaused; delete d.freshAnnouncement; return d; };
     return { ...ownerResult(source), hasContentDraft: canonical(contentOnly(JSON.parse(source.draft_json))) !== canonical(contentOnly(doc)), orders: ownerResult(source).orders.map(o => ({ ...o, businessDate: businessDay(o.at), attention: orderAttention(o, now) })), ledgerVersion: source.ledger_version, actor, layoutLocked: true, now: at,
-      management: { pickups: calendarPickups(doc, now, ledger), pickupSchedule: pickupSchedule(doc), paymentReadiness: paymentReadiness(m.settings), settings: m.settings || { calendar: defaultCalendar(), payments: {} }, reports: financialReport(ledger.orders, range), today, products,
+      management: { pickups: calendarPickups(doc, now, ledger, { includeHistory: true }), pickupSchedule: pickupSchedule(doc), paymentReadiness: paymentReadiness(m.settings), settings: m.settings || { calendar: defaultCalendar(), payments: {} }, reports: financialReport(ledger.orders, range), today, products,
         members: members.map(m => ({ id: m.id, profile: JSON.parse(m.profile_json), createdAt: m.created_at,
           orderCount: ledger.orders.filter(o => o.customer?.memberId === m.id).length,
           benefits: (ledger.management?.benefits || []).filter(b => b.memberId === m.id) })), comments,
@@ -308,13 +308,16 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     const schedule = pickupSchedule(published);
     if (path === '/api/manage/calendar-date') {
       if (!input.pickup || typeof input.pickup !== 'object') bad('Choose a pickup date.');
-      const p = clone(input.pickup), effective = calendarPickups(published, now, ledger);
+      const p = clone(input.pickup), effective = calendarPickups(published, now, ledger, { includeHistory: true });
       if (!identifier(p.id)) bad('Choose a valid pickup identifier.');
       try { localInstant(p.date, p.start); localInstant(p.date, p.end); }
       catch { bad('Choose a valid pickup date and time.'); }
       const existing = effective.find(v => v.id === p.id);
       if (existing && p.date !== existing.date) bad('Close this date and add a special pickup to change its date. Existing commitments are kept.', 409);
       if (!existing && (p.id.startsWith('recurring-') || published.pickups.some(v => v.date === p.date && !v.closed) || effective.some(v => v.date === p.date && !v.closed))) bad('This pickup date already exists. Edit its capacity or close it instead.', 409);
+      // A newly added Studio date is an intentional special pickup, even unnamed.
+      // Editing a legacy window alone must not silently promote it.
+      if (!existing || existing.special === true || typeof existing.event === 'string' && existing.event.trim()) p.special = true;
       Object.assign(p, orderingDeadline(p.date)); delete p.automatic; delete p.productionRemaining;
       if (existing && !published.pickups.some(v => v.id === existing.id)) published.pickups.push({ ...existing });
       input.pickups = published.pickups.filter(v => v.id !== p.id).concat(p);
@@ -358,7 +361,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     }
     for (const d of [draft, published]) { d.pickupSchedule = clone(schedule); d.pickups = clone(next); d.orderingPaused = input.paused === true; }
     const stored = JSON.parse(row.published_json);
-    const previous = [...stored.pickups, ...calendarPickups(stored, now, ledger).filter(p => !stored.pickups.some(v => v.id === p.id))];
+    const previous = [...stored.pickups, ...calendarPickups(stored, now, ledger, { includeHistory: true }).filter(p => !stored.pickups.some(v => v.id === p.id))];
     const changes = next.filter(p => canonical(p) !== canonical(previous.find(v => v.id === p.id))).map(p => ({ id: p.id, before: previous.find(v => v.id === p.id) || null, after: clone(p) }));
     m.audit.unshift({ id: opaque(), kind: 'pickup-calendar-history', at, actor, changes });
     changedDocument = true; result = { affectedOrders: affected.reduce((n, a) => n + a.count, 0), preservedPickups: next.filter(p => p.closed).map(p => p.id) }; description = 'Pickup calendar saved; existing order commitments and past pickup history retained';
@@ -436,7 +439,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     const reason = text(input.reason || '', 500, 'the status reason', correction || target === 'canceled');
     if (correction && reason.length < 5) bad('Give a correction reason of at least five characters.');
     if (o.status === 'canceled' && target !== 'canceled') {
-      const pickups = calendarPickups(published, now, ledger);
+      const pickups = calendarPickups(published, now, ledger, { includeHistory: true });
       const pickup = pickups.find(p => p.id === o.pickupId);
       if (!pickup || pickup.closed) bad('This canceled order cannot be reopened into a closed or removed pickup.');
       if (!holdsInventory(o)) {

@@ -19,6 +19,41 @@ const basket = (doc, pickupId, quantities = [1]) => {
   return { pickupId, lines, total: lines.reduce((n, l) => n + l.qty * l.unitPrice, 0) };
 };
 const visible = (doc, at, orders = []) => availableDocument(doc, { orders }, { managed: true, now: at });
+// Sanitized legacy Tue/Fri starter structure: date IDs, next-day 6 PM cutoffs,
+// no event/special designation, and no customer or production business data.
+const legacyPickups = JSON.parse(readFileSync(new URL('./fixtures/legacy-pickup-calendar.json', import.meta.url), 'utf8'));
+
+test('production legacy Tue/Fri calendar rolls Thursday evening to Wednesday without changing records or bookings', () => {
+  const doc = document(); delete doc.pickupSchedule; doc.pickups = structuredClone(legacyPickups);
+  const legacy = doc.pickups[1], at = localInstant('2026-11-05', '18:00');
+  const ledger = { orders: [{ id: 'synthetic-existing-order', pickupId: legacy.id, pickup: structuredClone(legacy), originalPickup: structuredClone(legacy), status: 'pending', lines: [] }] };
+  const before = JSON.stringify({ doc, ledger });
+  const calendar = calendarPickups(doc, at, ledger).filter(p => !p.closed && localInstant(p.cutoffDate, p.cutoffTime) > at);
+  assert.equal(calendar[0].date, '2026-11-11');
+  assert.ok(calendar.length >= 24);
+  assert.ok(calendar.every(p => [3, 4, 5].includes(new Date(p.date + 'T12:00:00Z').getUTCDay())));
+  assert.equal(visible(doc, at, ledger.orders).pickups[0].date, '2026-11-11');
+  assert.throws(() => quote(doc, ledger, basket(doc, legacy.id), at, { recurring: true }), /closed|deadline/);
+  assert.deepEqual(calendarPickups(doc, at, ledger, { includeHistory: true }).find(p => p.id === legacy.id), legacy);
+  const past = localInstant('2026-11-18', '18:00');
+  assert.deepEqual(calendarPickups(doc, past, ledger, { includeHistory: true }).find(p => p.id === legacy.id), legacy);
+  assert.equal(JSON.stringify({ doc, ledger }), before);
+});
+
+test('only explicit special flags or named events preserve nonregular availability, with strict noon deadlines', () => {
+  for (const designation of [{ special: true }, { event: 'Owner-designated market pickup' }]) {
+    const doc = document(); doc.pickups = structuredClone(legacyPickups);
+    Object.assign(doc.pickups[1], designation);
+    const cutoff = localInstant('2026-11-08', '12:00'), id = doc.pickups[1].id;
+    assert.ok(visible(doc, cutoff - 1).pickups.some(p => p.id === id));
+    assert.equal(quote(doc, { orders: [] }, basket(doc, id), cutoff - 1, { recurring: true }).pickup.cutoffDate, '2026-11-08');
+    assert.ok(!visible(doc, cutoff).pickups.some(p => p.id === id));
+    assert.throws(() => quote(doc, { orders: [] }, basket(doc, id), cutoff, { recurring: true }), /deadline/);
+  }
+  const doc = document(); doc.pickups = structuredClone(legacyPickups);
+  Object.assign(doc.pickups[1], { special: false, event: '  ' });
+  assert.ok(!visible(doc, monday).pickups.some(p => p.id === doc.pickups[1].id));
+});
 
 for (const [date, cutoff] of [['2026-11-04', '2026-11-02'], ['2026-11-05', '2026-11-03'], ['2026-11-06', '2026-11-04']]) {
   test(`${date}: server permits one millisecond before noon and rejects exact noon and after`, () => {
@@ -60,7 +95,7 @@ test('Indiana spring and fall DST use local noon two calendar days before regula
     ['2027-03-16', '2027-03-14T16:00:00Z'], ['2027-03-17', '2027-03-15T16:00:00Z'],
     ['2026-11-03', '2026-11-01T17:00:00Z'], ['2026-11-04', '2026-11-02T17:00:00Z'],
   ]) {
-    const doc = document(), p = { id: 'special', date: pickup, start: '15:00', end: '18:00', capacity: 3, ...orderingDeadline(pickup) };
+    const doc = document(), p = { id: 'special', special: true, date: pickup, start: '15:00', end: '18:00', capacity: 3, ...orderingDeadline(pickup) };
     doc.pickups = [p]; const cutoff = Date.parse(cutoffUTC);
     assert.equal(localInstant(p.cutoffDate, p.cutoffTime), cutoff);
     assert.ok(visible(doc, cutoff - 1).pickups.some(p => p.id === 'special'));
@@ -131,6 +166,24 @@ async function fixture(t) {
   return { sql, doc, call, snapshot, change, order };
 }
 
+test('legacy API reads retain owner history but exclude Tuesday from customer availability and direct reservations', async t => {
+  const h = await fixture(t), doc = h.doc; delete doc.pickupSchedule;
+  doc.pickups = structuredClone(legacyPickups);
+  h.sql.prepare('UPDATE workspaces SET published_json=?,draft_json=?').run(JSON.stringify(doc), JSON.stringify(doc));
+  const before = h.sql.prepare('SELECT published_json,draft_json,ledger_json FROM workspaces').get();
+  const at = localInstant('2026-11-05', '18:00');
+  const site = await h.call('/api/site', undefined, at, true);
+  assert.equal(site.data.document.pickups[0].date, '2026-11-11');
+  assert.equal((await h.order('pickup-2026-11-10', at)).status, 409);
+  const owner = await h.snapshot(at);
+  assert.deepEqual(owner.management.pickups.find(p => p.id === 'pickup-2026-11-10'), doc.pickups[1]);
+  assert.deepEqual(h.sql.prepare('SELECT published_json,draft_json,ledger_json FROM workspaces').get(), before);
+  const edited = await h.change({ ...doc.pickups[1], capacity: 4 });
+  assert.equal(edited.status, 200, edited.data.error);
+  assert.notEqual(edited.data.published.pickups.find(p => p.id === 'pickup-2026-11-10').special, true);
+  assert.equal((await h.order('pickup-2026-11-10', at)).status, 409);
+});
+
 test('HTTP server rejects a forged late pickup despite fresh or stale browser data', async t => {
   const h = await fixture(t), boundary = localInstant('2026-11-02', '12:00');
   assert.equal((await h.order('recurring-2026-11-04', boundary - 1)).status, 201);
@@ -164,10 +217,21 @@ test('skip, reopen and special dates persist without creating weekly records or 
   assert.equal((await h.order()).status, 201);
   const special = { ...p, id: 'special-saturday', date: '2026-11-07', event: 'Saturday market', capacity: 1, closed: false };
   assert.equal((await h.change(special)).status, 200);
+  assert.equal((await h.snapshot()).published.pickups.find(p => p.id === special.id).special, true);
   const publicSite = (await h.call('/api/site', undefined, monday, true)).data.document;
   assert.equal(publicSite.pickups.find(p => p.id === special.id).cutoffDate, '2026-11-05');
   assert.equal(publicSite.pickups.find(p => p.id === special.id).cutoffTime, '12:00');
   assert.equal((await h.change({ ...special, id: 'duplicate' })).status, 409);
+});
+
+test('Studio saves an unnamed special date explicitly and keeps it eligible after a reload', async t => {
+  const h = await fixture(t);
+  const pickup = { id: 'owner-added-saturday', date: '2026-11-07', start: '15:00', end: '18:00', capacity: 2, closed: false, event: '' };
+  const saved = await h.change(pickup);
+  assert.equal(saved.status, 200, saved.data.error);
+  assert.equal((await h.snapshot()).published.pickups.find(p => p.id === pickup.id).special, true);
+  assert.ok((await h.call('/api/site', undefined, monday, true)).data.document.pickups.some(p => p.id === pickup.id));
+  assert.equal((await h.order(pickup.id)).status, 201);
 });
 
 test('capacity exceptions, stale editors, idempotency and competing reservations remain atomic', async t => {

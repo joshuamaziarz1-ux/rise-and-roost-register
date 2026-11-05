@@ -1,6 +1,6 @@
 import { requestedPickupLabel, providers, defaultCalendar, paymentDestination, configuredPayments } from './commerce.mjs';
 import { h, button, field, request as apiRequest, notify } from './dom.mjs';
-import { clone, money, pickupLabel, orderByLabel, customerTimestamp, customerTime, localInstant } from './model.mjs';
+import { clone, money, pickupLabel, orderByLabel, customerTimestamp, customerTime, localInstant, isOrderingPickup } from './model.mjs';
 import { paymentLabels, fulfillmentLabels } from './orders.mjs';
 import { sellingMethod, inventoryMode } from './selling.mjs';
 
@@ -319,7 +319,7 @@ export async function start(root, initial, newAccessKey) {
     const totals = new Map(); for (const o of orders) for (const l of o.lines) { const k = l.productId + ':' + l.variantId; const v = totals.get(k) || { name: l.name, variant: l.variant, qty: 0 }; v.qty += l.qty; totals.set(k, v); }
     const card = p => {
       const associated = pickupOrders(p), future = futurePickup(p);
-      return h('article', { class: 'ms-panel' }, h('div', { class: 'ms-row' }, h('strong', {}, pickupLabel(p)), pill(!future ? 'Past pickup' : p.closed ? 'Closed to new orders' : localInstant(p.cutoffDate, p.cutoffTime) <= Date.parse(data.now) ? 'Ordering deadline passed' : p.event || 'Open')), h('p', {}, 'Order by ' + orderByLabel(p)), h('p', {}, p.capacity + ' order limit'),
+      return h('article', { class: 'ms-panel' }, h('div', { class: 'ms-row' }, h('strong', {}, pickupLabel(p)), pill(!future ? 'Past pickup' : p.closed ? 'Closed to new orders' : !isOrderingPickup(p) ? 'Legacy date — existing orders only' : localInstant(p.cutoffDate, p.cutoffTime) <= Date.parse(data.now) ? 'Ordering deadline passed' : p.event || 'Open')), h('p', {}, 'Order by ' + orderByLabel(p)), h('p', {}, p.capacity + ' order limit'),
         p.event ? h('p', {}, p.event) : null,
         associated.length ? h('p', { class: 'ms-note' }, associated.length + ' scheduled order' + (associated.length === 1 ? '' : 's') + '. Saved customer commitments are kept.') : null,
         h('div', { class: 'ms-actions' }, future ? button('Edit pickup', () => editPickup(p), { class: 'ms-secondary' }) : null, button('Copy', () => editPickup(p, true), { class: 'ms-secondary' }), future && (!p.closed || !associated.length) ? button('Skip / close date', () => removePickup(p), { class: 'ms-secondary', disabled: busy }) : null, button('Pickup & baking lists', () => { selection = p.date; render(); }, { class: 'ms-secondary' })),
@@ -449,8 +449,8 @@ export async function start(root, initial, newAccessKey) {
         method !== 'preorder' || dualLimits ? f(method === 'in-store' ? 'How many are in the store?' : dualLimits ? 'How many are available in total?' : 'How many are available?', v, 'available', { type: 'number', min: 0, max: 10000 }) : null,
         h('p', { class: 'ms-note' }, 'Existing orders are already reserved. A quantity of zero shows Sold Out and keeps the product visible.'),
         method === 'preorder' ? panel('Which pickup dates are available?',
-          data.management.pickups.filter(p => futurePickup(p) && !p.closed && localInstant(p.cutoffDate, p.cutoffTime) > Date.parse(data.now)).map(pickup => h('p', {}, pickupLabel(pickup))),
-          !data.management.pickups.some(p => futurePickup(p) && !p.closed && localInstant(p.cutoffDate, p.cutoffTime) > Date.parse(data.now)) ? h('p', {}, 'No open pickup dates. Review closures and capacity in Calendar.') : null,
+          data.management.pickups.filter(p => futurePickup(p) && isOrderingPickup(p) && !p.closed && localInstant(p.cutoffDate, p.cutoffTime) > Date.parse(data.now)).map(pickup => h('p', {}, pickupLabel(pickup))),
+          !data.management.pickups.some(p => futurePickup(p) && isOrderingPickup(p) && !p.closed && localInstant(p.cutoffDate, p.cutoffTime) > Date.parse(data.now)) ? h('p', {}, 'No open pickup dates. Review closures and capacity in Calendar.') : null,
           h('p', {}, 'Pickup dates repeat automatically. Use Calendar for closures, special dates and quantity limits.'), button('Open pickup calendar', () => go('Calendar'), { class: 'ms-secondary' })) : null,
         hiddenProduct(p) ? h('p', { class: 'ms-warning' }, 'This product is hidden. Save changes, then use Show Product to display it again.') : null,
         p.images.map((photo, index) => h('div', { class: 'ms-photo' }, h('img', { src: photo.src, alt: photo.alt || p.name }), f('Photo description ' + (index + 1), photo, 'alt'), h('label', { class: 'ms-secondary' }, 'Replace photo', h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', disabled: busy, onchange: event => upload(event.target.files[0], src => photo.src = src) })))),

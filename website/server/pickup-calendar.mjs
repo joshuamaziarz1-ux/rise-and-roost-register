@@ -1,4 +1,4 @@
-import { ZONE, localInstant, clone } from '../public/model.mjs';
+import { ZONE, localInstant, clone, isOrderingPickup } from '../public/model.mjs';
 
 const dateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: ZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
 export function storeDay(now) {
@@ -24,13 +24,13 @@ export function pickupSchedule(document) {
   };
 }
 
-export function calendarPickups(document, now = Date.now(), ledger = { orders: [] }) {
+export function calendarPickups(document, now = Date.now(), ledger = { orders: [] }, { includeHistory = false } = {}) {
   const pickups = clone(document.pickups), schedule = pickupSchedule(document), today = storeDay(now);
   const dates = new Set(pickups.map(p => p.date));
   // Nine calendar weeks guarantee at least eight weeks beyond the first cutoff.
   for (let i = 0; i <= 63; i++) {
     const date = addCalendarDays(today, i);
-    if (![3, 4, 5].includes(new Date(date + 'T12:00:00Z').getUTCDay()) || dates.has(date)) continue;
+    if (!isOrderingPickup({ date }) || dates.has(date)) continue;
     pickups.push({ id: 'recurring-' + date, date, ...clone(schedule), dailyCapacity: schedule.capacity, ...orderingDeadline(date), closed: false, automatic: true });
     dates.add(date);
   }
@@ -44,11 +44,13 @@ export function calendarPickups(document, now = Date.now(), ledger = { orders: [
     }
   }
   for (const pickup of pickups) {
-    if (localInstant(pickup.date, pickup.end) <= now) continue;
+    if (!isOrderingPickup(pickup) || localInstant(pickup.date, pickup.end) <= now) continue;
     const deadline = orderingDeadline(pickup.date);
     // The confirmed policy applies to every future date, including legacy and
     // special windows. Stored history and existing order snapshots stay intact.
     Object.assign(pickup, deadline);
   }
-  return pickups.sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start) || a.id.localeCompare(b.id));
+  // Keep stored windows and order snapshots intact. Only the owner/history view
+  // includes unmarked legacy nonregular dates; customer reads and quotes do not.
+  return pickups.filter(p => includeHistory || isOrderingPickup(p)).sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start) || a.id.localeCompare(b.id));
 }

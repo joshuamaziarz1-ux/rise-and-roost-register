@@ -1,4 +1,7 @@
 export const ZONE = "America/Indiana/Indianapolis";
+// Existing named events are explicit exceptions. An ID or an ordinary stored
+// window alone does not designate a special pickup (legacy defaults were Tue/Fri).
+export const isOrderingPickup = pickup => [3, 4, 5].includes(new Date(pickup.date + 'T12:00:00Z').getUTCDay()) || pickup.special === true || typeof pickup.event === 'string' && pickup.event.trim().length > 0;
 export const clone = (value) => JSON.parse(JSON.stringify(value));
 export const money = (cents) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
