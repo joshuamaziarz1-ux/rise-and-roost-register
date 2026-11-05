@@ -14,6 +14,20 @@ export const security = {
 };
 export default {
   async fetch(request, env, ctx) {
+    // Enforce production transport before launch gates, auth, assets or storage.
+    const url = new URL(request.url);
+    if (env.DEPLOYMENT_ENVIRONMENT === 'production' && url.protocol === 'http:') {
+      url.protocol = 'https:';
+      return Response.redirect(url.href, 308);
+    }
+    // Reserve the disclosure endpoint instead of serving the SPA's homepage.
+    // A real RFC 9116 contact file requires an owner-approved, monitored contact.
+    if (url.pathname === '/.well-known/security.txt') {
+      return new Response(request.method === 'HEAD' ? null : 'Security contact file is not configured.\n', {
+        status: 404,
+        headers: { ...security, 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+      });
+    }
     if (env.DEPLOYMENT_ENVIRONMENT === 'production') {
       const result = await productionFetch(request, env);
       const response = new Response(result.body, result);
