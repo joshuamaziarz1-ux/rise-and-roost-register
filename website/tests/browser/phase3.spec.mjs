@@ -225,7 +225,7 @@ test.describe('Phase 3 selling and pickup controls', () => {
     expect(publicSite.document.pickups.some(p => p.id === order.pickupId)).toBe(false);
     await noOverflow(page);
     await mkdir('qa-results/phase3', { recursive: true });
-    await page.screenshot({ path: `qa-results/phase3/calendar-${info.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `qa-results/phase3/calendar-${info.project.name}.png`, fullPage: true, scale: 'css' });
 
     await page.getByRole('button', { name: 'Add special pickup', exact: true }).click();
     const special = new Date(Date.now() + 30 * 86400000);

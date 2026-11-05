@@ -207,3 +207,16 @@ test('automatic schedule configuration rejects invalid hours and limits', () => 
     const doc = document(); Object.assign(doc.pickupSchedule, change); assert.throws(() => validateDocument(doc));
   }
 });
+
+test('calendar audits compare actual stored history and include only changed date exceptions', async t => {
+  const h = await fixture(t), doc = h.doc;
+  doc.pickups = [{ id: 'legacy-cutoff', date: '2026-11-04', start: '15:00', end: '18:00', cutoffDate: '2026-11-02', cutoffTime: '09:00', capacity: 3 }];
+  h.sql.prepare('UPDATE workspaces SET published_json=?,draft_json=?').run(JSON.stringify(doc), JSON.stringify(doc));
+  const s = await h.snapshot(), p = s.management.pickups.find(p => p.id === 'recurring-2026-11-05');
+  const saved = await h.change({ ...p, capacity: 1 });
+  assert.equal(saved.status, 200, saved.data.error);
+  assert.deepEqual(saved.data.published.pickups.find(p => p.id === 'legacy-cutoff'), doc.pickups[0]);
+  const audit = saved.data.management.audit.find(a => a.kind === 'pickup-calendar-history');
+  assert.deepEqual(audit.changes.map(p => p.id), [p.id]);
+  assert.equal(audit.changes[0].before.capacity, 3); assert.equal(audit.changes[0].after.capacity, 1);
+});

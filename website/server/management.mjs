@@ -357,7 +357,8 @@ export async function managementApi({ request, db, now, row, actor, input, path,
       windows.add(key);
     }
     for (const d of [draft, published]) { d.pickupSchedule = clone(schedule); d.pickups = clone(next); d.orderingPaused = input.paused === true; }
-    const previous = calendarPickups(JSON.parse(row.published_json), now, ledger);
+    const stored = JSON.parse(row.published_json);
+    const previous = [...stored.pickups, ...calendarPickups(stored, now, ledger).filter(p => !stored.pickups.some(v => v.id === p.id))];
     const changes = next.filter(p => canonical(p) !== canonical(previous.find(v => v.id === p.id))).map(p => ({ id: p.id, before: previous.find(v => v.id === p.id) || null, after: clone(p) }));
     m.audit.unshift({ id: opaque(), kind: 'pickup-calendar-history', at, actor, changes });
     changedDocument = true; result = { affectedOrders: affected.reduce((n, a) => n + a.count, 0), preservedPickups: next.filter(p => p.closed).map(p => p.id) }; description = 'Pickup calendar saved; existing order commitments and past pickup history retained';

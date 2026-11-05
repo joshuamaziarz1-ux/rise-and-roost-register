@@ -8,7 +8,7 @@ test.describe('Rise & Roost management Studio', () => {
   test.skip(!!process.env.RR_BETA_BASE_URL, 'Never target the original beta with management tests.');
   let fixture;
   test.beforeEach(async ({ page }) => {
-    if (!hosted) { fixture = await primaryFixture({ experience: true, management: true, port: 4189, hostname: 'localhost' }); return; }
+    if (!hosted) { fixture = await primaryFixture({ experience: true, management: true, port: Number(process.env.RR_MANAGEMENT_PORT || 4189), hostname: 'localhost' }); return; }
     const response = await page.request.post(hosted+'/api/workspaces', { headers: { Origin: hosted }, data: {} });
     expect(response.status()).toBe(201); const site = await response.json();
     expect(site.isPrimary).toBe(false); expect(site.studioManagementEnabled).toBe(true);
@@ -138,7 +138,7 @@ test.describe('Rise & Roost management Studio', () => {
       await nav(page, 'Home').click(); await expect(page.locator('.ms-sales')).toContainText('$9.00');
       await page.screenshot({ path: `qa-results/management/verified-sales-${info.project.name}.png`, fullPage: true });
       await nav(page, 'Calendar').click(); await expect(page.getByRole('button', { name: 'Print pickup & production lists', exact: true })).toBeVisible();
-      await page.screenshot({ path: `qa-results/management/calendar-${info.project.name}.png`, fullPage: true });
+      await page.screenshot({ path: `qa-results/management/calendar-${info.project.name}.png`, fullPage: true, scale: 'css' });
     } finally { await customers.close(); }
   });
 
