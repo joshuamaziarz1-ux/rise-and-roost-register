@@ -1,0 +1,279 @@
+{
+  "verifiedAt": "2026-11-05T19:58:57.767460+00:00",
+  "sourceCommit": "143b719ad03847fa7111eefe442a382fcf32bebf",
+  "workerVersion": "b18c3d75-f84d-4d8c-aad1-be5704c61552",
+  "deploymentId": "e1505cc7-5e99-4cb8-99ac-ce3a0f97e7e3",
+  "trafficPercentage": 100,
+  "rollbackVersion": "5bf5f229-8f34-4935-8699-4c6a6d78d055",
+  "build": {
+    "sourceCommit": "143b719ad03847fa7111eefe442a382fcf32bebf",
+    "applicationModulesMatched": [
+      "public/model.mjs",
+      "public/commerce.mjs",
+      "public/orders.mjs",
+      "server/orders.mjs",
+      "server/roost.mjs",
+      "public/access.mjs",
+      "server/management-backup.mjs",
+      "public/selling.mjs",
+      "server/pickup-calendar.mjs",
+      "server/management.mjs",
+      "server/preview-access.mjs",
+      "server/production-preparation.mjs",
+      "server/production-access.mjs",
+      "server/service.mjs",
+      "server/notifications.mjs",
+      "server/studio-pin.mjs",
+      "server/production-runtime.mjs",
+      "server/worker.mjs"
+    ],
+    "workerSha256": "c07ccc2c07f034f8ae363e43e5835de28eea8d1e34a5255db155b5e31d783911",
+    "sourceMapSha256": "4c4684eeccd2daeb37ecdfd281ecb1e0a2ea2948b171943acb27bf9144676df9",
+    "assets": [
+      {
+        "path": "access.mjs",
+        "bytes": 602,
+        "sha256": "c6153a6bfd06617891fdb69260e5a99f8bab98b4a7e846f29314f9386b3586a1"
+      },
+      {
+        "path": "app.mjs",
+        "bytes": 42665,
+        "sha256": "7c698e6769c346bbeb6fd1aac4f8253fde07ea1d53c4dd12b355cd39093a8ad6"
+      },
+      {
+        "path": "assets/bread.svg",
+        "bytes": 621,
+        "sha256": "379ac3f00a5e07ff79d27bdaee3357bd81673c31c5858b46a24384794a0ab5ac"
+      },
+      {
+        "path": "assets/eggs.svg",
+        "bytes": 932,
+        "sha256": "1cca67a7694c66670383e165cdad6a6243606144cb10ebf225baa74b6fc54069"
+      },
+      {
+        "path": "assets/logo.webp",
+        "bytes": 10768,
+        "sha256": "3839cffddc606af6497756d0b7fb4b993032723ba576537393ba352357627479"
+      },
+      {
+        "path": "assets/rolls.svg",
+        "bytes": 1673,
+        "sha256": "4e00b3a7f24e411b4ccb061b8301ef64d2a2a6bcc4e59299d2dd34b974d304dc"
+      },
+      {
+        "path": "commerce.mjs",
+        "bytes": 5716,
+        "sha256": "e896aaef48acf1664017db6f1bfe817d7b07e12b6c01d1b84c3418195262d60e"
+      },
+      {
+        "path": "customer.css",
+        "bytes": 10395,
+        "sha256": "9d5edae0e8c1f6e54fb4151f09b2a233baa57330974b7d3d4fe4bd83f24249a1"
+      },
+      {
+        "path": "customer.mjs",
+        "bytes": 15109,
+        "sha256": "5c13189e7c00ad994e3a867df9c1d4e76dae0878973ff7f62e42d37a2ea6da39"
+      },
+      {
+        "path": "dom.mjs",
+        "bytes": 3409,
+        "sha256": "75197c0534b563833e7715a7d01b574b2ce139e12f68c50f6e9fe05322d42431"
+      },
+      {
+        "path": "index.html",
+        "bytes": 785,
+        "sha256": "411529554859bc0494808bfedf82804773fca996a146c3c115dae9fccf478224"
+      },
+      {
+        "path": "management.css",
+        "bytes": 10911,
+        "sha256": "a805ff346fce224f7c0bd724ee25d12dc0dc85f8562ffe48562efc0c569fb7bd"
+      },
+      {
+        "path": "management.mjs",
+        "bytes": 76715,
+        "sha256": "8baf50438b0741708c2bcf994f094011295f05e82f152696f1bce1231f0243ad"
+      },
+      {
+        "path": "model.mjs",
+        "bytes": 13007,
+        "sha256": "198c3ba0b79e4055d3ba40c56ea02d1ede4cccb887ecc668fa88d4fafd891dad"
+      },
+      {
+        "path": "orders.mjs",
+        "bytes": 1416,
+        "sha256": "5b8ae1c0485a46b41ff49d83e850ecdaae00302e115e8a6a6a7e780dd24f1d14"
+      },
+      {
+        "path": "payment-tiles.mjs",
+        "bytes": 2693,
+        "sha256": "106ddbb5fa07c34e79264b4980b4c1b349f7f9d43e3548a4442bce8437514c8f"
+      },
+      {
+        "path": "pickup-location.mjs",
+        "bytes": 1020,
+        "sha256": "04ecbabfeb5864c421bb1a2b90d417cfcbe3449d3149b6230965533f88f8ea46"
+      },
+      {
+        "path": "selling.mjs",
+        "bytes": 1066,
+        "sha256": "e782841cb65983d695a0e12098b1753154a4fa5dbe2e887a88a85bc161f84d20"
+      },
+      {
+        "path": "studio-pin.mjs",
+        "bytes": 2593,
+        "sha256": "8fe7eff05ba749e5ba7219b52d49911c6265cc0d593c13706bbefcc708f72f18"
+      },
+      {
+        "path": "studio.mjs",
+        "bytes": 63279,
+        "sha256": "c19d8bfb755c4dd50f02e668c785e49a95a1054e5f1ed729b0d1f39b63579788"
+      },
+      {
+        "path": "studio.webmanifest",
+        "bytes": 334,
+        "sha256": "605ea39db7181d34a3f6b0433f96f4221a3f99646d4a882a3505360d314ac75e"
+      },
+      {
+        "path": "style.css",
+        "bytes": 23331,
+        "sha256": "455ac597f26853854ec8ba0cf3dfe63600a0f55017ac73bed685c188e2b37fe4"
+      },
+      {
+        "path": "tracking.css",
+        "bytes": 1259,
+        "sha256": "64a9f30fb8b9291645ec43af531817d4bccb72f6db36ede77bafadee53ca5238"
+      },
+      {
+        "path": "tracking.mjs",
+        "bytes": 19922,
+        "sha256": "50426c64d34225df929717e68d5568b522f093894937feff92a23e1ffaf77fc2"
+      },
+      {
+        "path": "vendor/README.md",
+        "bytes": 1404,
+        "sha256": "aa8cf2a80d546594115c998d914500efe8c7dc123a85e413b332ee2bd6400654"
+      },
+      {
+        "path": "vendor/qrcode-generator.mjs",
+        "bytes": 51907,
+        "sha256": "ea91d7118a5395289170da848b7c6758b996163bfbccf312591ab65a4911b7c0"
+      }
+    ]
+  },
+  "uploadedSourceMapSha256": "539d96211743c298b8333bdfc6c33b92138bcf0e57845af9de84b4e30bc9737f",
+  "sourceMapNote": "Wrangler rewrote file/source paths; all embedded source contents, mappings and remaining fields match the local map. Worker JavaScript bytes match exactly.",
+  "calendarReadOnlyVerification": {
+    "sourceCommit": "143b719ad03847fa7111eefe442a382fcf32bebf",
+    "actualProductionDocumentReadOnly": true,
+    "thursdayEveningFirstDate": "2026-11-11",
+    "unmarkedLegacyWindowsExcluded": 2,
+    "legacyWindowsRetainedInHistory": true,
+    "upcomingEligibleWindows": 26,
+    "rangeFirst": "2026-11-11",
+    "rangeLast": "2027-01-07",
+    "orderingPaused": true,
+    "sourceDocumentAndLedgerUnchanged": true
+  },
+  "liveChecks": {
+    "routes": [
+      {
+        "path": "/",
+        "status": 200,
+        "hsts": "max-age=31536000"
+      },
+      {
+        "path": "/shop",
+        "status": 200,
+        "hsts": "max-age=31536000"
+      },
+      {
+        "path": "/basket",
+        "status": 200,
+        "hsts": "max-age=31536000"
+      },
+      {
+        "path": "/api/site",
+        "status": 200,
+        "hsts": "max-age=31536000"
+      },
+      {
+        "path": "/studio",
+        "status": 302,
+        "hsts": null
+      },
+      {
+        "path": "/studio/api/manage/snapshot",
+        "status": 302,
+        "hsts": null
+      },
+      {
+        "path": "/api/manage/snapshot",
+        "status": 404,
+        "hsts": "max-age=31536000"
+      },
+      {
+        "path": "/api/studio",
+        "status": 404,
+        "hsts": "max-age=31536000"
+      },
+      {
+        "path": "/.well-known/security.txt",
+        "status": 404,
+        "hsts": "max-age=31536000"
+      },
+      {
+        "url": "http://rise-and-roost.com/shop?phase3=verify",
+        "status": 308,
+        "redirectVerified": true
+      },
+      {
+        "url": "http://www.rise-and-roost.com/studio",
+        "status": 308,
+        "redirectVerified": true
+      },
+      {
+        "url": "https://www.rise-and-roost.com/shop",
+        "status": 308,
+        "redirectVerified": true
+      }
+    ],
+    "matchingLiveAssetHashes": 22,
+    "matchingNormalizedHtml": true,
+    "protectedAssetChallenges": [
+      "studio-pin.mjs",
+      "studio.mjs",
+      "studio.webmanifest"
+    ],
+    "completeManifestAssetCount": 26,
+    "checkoutDisabled": true,
+    "orderingPaused": true
+  },
+  "preservation": {
+    "correctedPhase3Active": true,
+    "databaseFingerprintsIdentical": true,
+    "tablesUnchanged": 12,
+    "configurationSecurityAndRoutesUnchanged": true,
+    "checkoutDisabled": true,
+    "orderingPaused": true
+  },
+  "tests": {
+    "backendPassed": 210,
+    "backendFailures": 0,
+    "focusedBrowserPassed": 25,
+    "browserFailures": 0,
+    "actualLocalWorkerD1Smoke": "passed",
+    "realProductionTestOrders": 0,
+    "realProductionTestPayments": 0
+  },
+  "oldDeploymentReportUnchangedSha256": "85fc3b4c5c0af0377c10cf6be60acc4118726e2538dcb2ed82273ab9fe8e5619",
+  "sourceFilesInFix": [
+    "website/public/management.mjs",
+    "website/public/model.mjs",
+    "website/server/management.mjs",
+    "website/server/pickup-calendar.mjs",
+    "website/tests/fixtures/legacy-pickup-calendar.json",
+    "website/tests/pickup-calendar.test.mjs"
+  ]
+}
