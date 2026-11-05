@@ -2,6 +2,7 @@ import { requestedPickupLabel, providers, defaultCalendar, paymentDestination, c
 import { h, button, field, request as apiRequest, notify } from './dom.mjs';
 import { clone, money, pickupLabel, orderByLabel, customerTimestamp, customerTime, localInstant, isOrderingPickup } from './model.mjs';
 import { paymentLabels, fulfillmentLabels } from './orders.mjs';
+import { createHelpGuide } from './help.mjs';
 import { sellingMethod, inventoryMode } from './selling.mjs';
 
 const primary = ['Home', 'Orders', 'Products', 'Calendar', 'More'];
@@ -40,10 +41,13 @@ export async function start(root, initial, newAccessKey) {
     bindings.set(input, () => set(options.type === 'checkbox' ? input.checked : input.value)); return node;
   };
   const check = (label, object, key) => f(label, object, key, { type: 'checkbox' });
+  const helpGuide = createHelpGuide(() => go('Settings'));
   function go(next, selected = '', nextFilter = 'all') {
     if (editing && !confirm('Leave this form? The latest unfinished product, calendar, content, announcement or payment link form is kept in this tab until you save, cancel, or replace it with another form.')) return;
+    const focusHelpHeading = next === 'Settings/Help' || view === 'Settings/Help';
     editing = null; error = ''; selection = selected; filter = nextFilter; search = ''; view = next;
     history.replaceState({}, '', initial.studioPath + '#' + encodeURIComponent(next)); render(); window.scrollTo(0, 0);
+    if (focusHelpHeading) { const heading = root.querySelector('.ms-main h1'); heading?.setAttribute('tabindex', '-1'); heading?.focus(); }
   }
   function edit(type, values) { editing = { type, values: clone(values), original: clone(values), revision: data.revision, ledgerVersion: data.ledgerVersion }; editing.paymentsVersion = paymentsVersion(); error = ''; marked(); render(); }
   const merge = (base, local, remote) => {
@@ -103,7 +107,7 @@ export async function start(root, initial, newAccessKey) {
           }
         }
       }
-      if (wasReauth || !root.querySelector('.management') || rerender && !editing && !root.querySelector('.ms-main input[type=search]:focus')) render(); else chrome();
+      if (wasReauth || !root.querySelector('.management') || rerender && !editing && !root.querySelector('.ms-main input[type=search]:focus') && !(view === 'Settings/Help' && root.querySelector('.ms-help')?.contains(document.activeElement))) render(); else chrome();
     } catch (e) { connected = false; error = e.message; if (e.status === 401 || (initial.previewDirectAccess || initial.productionOwnerAccess) && [403, 503].includes(e.status)) { reauth = true; render(); } else chrome(); }
     finally { checking = false; }
   }
@@ -394,7 +398,7 @@ export async function start(root, initial, newAccessKey) {
     let code = '';
     const business = data.management.settings || { calendar: defaultCalendar(), payments: {} };
     const preferences = clone(data.management.notifications.preferences);
-    return h('div', {}, h('h1', {}, 'Settings'), menu('Payments', 'Settings/Payments'),
+    return h('div', {}, h('h1', {}, 'Settings'), menu('Payments', 'Settings/Payments'), menu('Studio Help Guide', 'Settings/Help'),
       data.productionOwnerAccess ? panel('Owner access', h('p', {}, 'Signed in as ' + data.owner + '.'), h('p', {}, 'Use your own Cloudflare Access sign-in on each device. Contact the other owner or account administrator for account recovery.'), h('p', {}, 'Session ends ' + stamp(data.sessionExpiresAt) + '.')) : data.previewPinAccess ? panel('Studio access', h('p', {}, 'This device is remembered for up to 30 days. Use Lock Studio whenever you want the PIN required again on this device.'), h('p', {}, 'This shared testing PIN is temporary. Individual owner accounts can replace it before launch.')) : data.previewDirectAccess ? panel('Testing access', h('p', {}, 'Cloudflare Access remembers this browser. No separate Studio sign-in is needed.'), h('p', {}, 'Approved tester: ' + data.previewTesterEmail), h('p', {}, 'Testing session ends ' + stamp(data.previewAccessExpiresAt) + '. Re-verification is needed after expiry, logout, or clearing cookies.'), h('a', { href: '/cdn-cgi/access/logout', class: 'ms-secondary' }, 'Sign out of testing access')) : panel('Owner access', h('p', {}, 'Current sign-in: secure workspace access. Individual Descope owner accounts are not connected yet. The existing authentication has not been replaced.'), h('p', {}, 'Both owner accounts must be tested and approved before activation. Do not share private access keys in chat.'),
         h('a', { href: data.studioPath, class: 'ms-secondary' }, 'Studio link for this saved website'),
         field('Connection code from your other device', code, v => code = v, { maxlength: 20, autocomplete: 'off' }), button('Review device connection', async () => {
@@ -518,15 +522,15 @@ export async function start(root, initial, newAccessKey) {
   function render() {
     if (reauth) { root.replaceChildren(h('main', { class: 'ms-loading' }, h('h1', {}, initial.previewPinAccess ? 'Studio is locked' : initial.previewDirectAccess ? 'Testing access needs verification' : 'Sign-in required'), h('p', {}, initial.previewPinAccess ? 'Enter your owner PIN in another tab, then check the connection here. Your unsaved form is kept here.' : initial.previewDirectAccess ? 'Reopen Studio in another tab to verify your Cloudflare Access session. Your unsaved form is kept here.' : 'Your unsaved form is kept in this tab. Sign in to this exact website in a new tab, then check the connection.'), h('a', { href: initial.studioPath, target: '_blank', rel: 'noopener' }, initial.previewPinAccess ? 'Unlock Studio' : initial.previewDirectAccess ? 'Reopen Website Studio' : 'Sign in to this website'), button('Check connection', () => refresh()))); return; }
     if (!data.management) { root.replaceChildren(h('main', { class: 'ms-loading' }, 'Opening Rise & Roost Website Studio…')); return; }
-    const page = editing ? editForm() : view === 'Home' ? home() : view === 'Orders' ? orders() : view === 'Products' ? products() : view === 'Calendar' ? calendar() : view === 'The Roost' ? members() : view === 'Website Content' ? content() : view === 'Customer Comments' ? comments() : view === 'Sales Reports' ? reports() : view === 'Settings/Payments' ? payments() : view === 'Settings' ? settings() : h('div', {}, h('h1', {}, 'More'), secondary.map(label => menu(label, label)));
+    const page = editing ? editForm() : view === 'Home' ? home() : view === 'Orders' ? orders() : view === 'Products' ? products() : view === 'Calendar' ? calendar() : view === 'The Roost' ? members() : view === 'Website Content' ? content() : view === 'Customer Comments' ? comments() : view === 'Sales Reports' ? reports() : view === 'Settings/Help' ? helpGuide() : view === 'Settings/Payments' ? payments() : view === 'Settings' ? settings() : h('div', {}, h('h1', {}, 'More'), secondary.map(label => menu(label, label)));
     root.replaceChildren(h('div', { class: 'management' },
       h('aside', { class: 'ms-sidebar' }, h('a', { href: initial.studioPath, class: 'ms-brand' }, h('img', { src: '/assets/logo.webp', alt: 'Rise & Roost' }), h('span', {}, 'Rise & Roost', h('small', {}, 'Website Studio'))),
-        h('nav', { 'aria-label': 'Studio navigation' }, primary.filter(v => v !== 'More').map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view === 'Settings/Payments' ? 'page' : undefined })), h('details', { open: true }, h('summary', {}, 'More'), secondary.map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view === 'Settings/Payments' ? 'page' : undefined })))), h('a', { href: initial.publishedPath, target: '_blank', rel: 'noopener', class: 'ms-secondary' }, 'View website')),
+        h('nav', { 'aria-label': 'Studio navigation' }, primary.filter(v => v !== 'More').map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view.startsWith('Settings/') ? 'page' : undefined })), h('details', { open: true }, h('summary', {}, 'More'), secondary.map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view.startsWith('Settings/') ? 'page' : undefined })))), h('a', { href: initial.publishedPath, target: '_blank', rel: 'noopener', class: 'ms-secondary' }, 'View website')),
       h('div', { class: 'ms-workspace' }, h('header', { class: 'ms-top' }, h('div', { class: 'ms-mobile-brand' }, h('img', { src: '/assets/logo.webp', alt: '' }), h('strong', {}, 'Rise & Roost', h('small', {}, 'Website Studio'))),
         h('span', { id: 'management-connection', role: 'status', class: connected ? '' : 'offline' }, connected ? 'Connected' : 'Offline / reconnecting'), button('Check connection', () => refresh(), { class: 'ms-text' }), initial.previewPinAccess ? button('Lock Studio', lockStudio, { class: 'ms-text' }) : null, initial.previewDirectAccess || initial.productionOwnerAccess ? h('a', { id: 'management-reopen', href: initial.studioPath, target: '_blank', rel: 'noopener', class: 'ms-text', hidden: connected }, 'Reopen Studio') : null, pending && !busy ? button('Resolve previous save', cancel, { class: 'ms-text' }) : null),
         h('div', { id: 'management-error', role: 'alert', class: 'ms-error', hidden: !error }, error),
         h('main', { id: 'main-content', class: 'ms-main' }, credentials(), page)),
-      h('nav', { class: 'ms-bottom', 'aria-label': 'Primary Studio navigation' }, primary.map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'More' && (secondary.includes(view) || view === 'Settings/Payments') ? 'page' : undefined })))));
+      h('nav', { class: 'ms-bottom', 'aria-label': 'Primary Studio navigation' }, primary.map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'More' && (secondary.includes(view) || view.startsWith('Settings/')) ? 'page' : undefined })))));
     if (busy) for (const control of root.querySelectorAll('button,input,select,textarea')) control.disabled = true;
   }
   window.addEventListener('beforeunload', event => { if (editing || pending) { event.preventDefault(); event.returnValue = ''; } });
@@ -534,7 +538,7 @@ export async function start(root, initial, newAccessKey) {
   window.addEventListener('online', () => refresh());
   window.addEventListener('focus', () => refresh());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) void refresh(); });
-  try { const target = decodeURIComponent(location.hash.slice(1)); if ([...primary, ...secondary, 'Settings/Payments'].includes(target)) view = target; } catch {}
+  try { const target = decodeURIComponent(location.hash.slice(1)); if ([...primary, ...secondary, 'Settings/Payments', 'Settings/Help'].includes(target)) view = target; } catch {}
   try { const saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null'); if (saved?.type && ['product', 'calendar', 'content', 'payment-settings', 'fresh-announcement'].includes(saved.type)) { editing = saved; view = { product: 'Products', calendar: 'Calendar', content: 'Website Content', 'payment-settings': 'Settings/Payments', 'fresh-announcement': 'Products' }[saved.type]; } } catch {}
   try { const saved = JSON.parse(sessionStorage.getItem(pendingKey) || 'null'); if (/^[a-f0-9-]{32,48}$/.test(saved?.id || '')) pending = { id: saved.id, form: editing }; } catch {}
   render(); await refresh();

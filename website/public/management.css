@@ -124,3 +124,14 @@
   .management .ms-panel { border:0; padding:0; break-inside:avoid; }
   .management .ms-main:has(.ms-print-list) > div > :not(:last-child) { display:none; }
 }
+
+/* Settings-only owner manual; existing pages retain their styles. */
+.ms-help { max-width: 920px; margin-inline: auto; }
+.ms-help-category > summary { cursor: pointer; font-weight: 700; font-size: 1.1rem; padding: .5rem 0; }
+.ms-help-topic { border-top: 1px solid var(--border, #ddd5c9); padding: .8rem 0; overflow-wrap: anywhere; }
+.ms-help-topic h3 { line-height: 1.45; }
+.ms-help-topic p, .ms-help-topic li { line-height: 1.7; max-width: 72ch; }
+.ms-help-topic li + li { margin-top: .55rem; }
+.ms-help :is(summary, button, input):focus-visible { outline: 3px solid #83613e; outline-offset: 3px; }
+@media (max-width: 600px) { .ms-help-category { padding: 1rem; } .ms-help-topic ol { padding-left: 1.4rem; } }
+.ms-help [hidden] { display: none !important; }
