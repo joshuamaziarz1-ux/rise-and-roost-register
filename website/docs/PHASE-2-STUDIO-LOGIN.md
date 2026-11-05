@@ -53,7 +53,21 @@ Rollback is an application-only traffic switch to the verified baseline version 
 
 ## Production result
 
-Deployment and post-deployment verification are pending at this commit. The final result will record the assigned version, binding/configuration comparisons, live acceptance, and before/after D1 fingerprints.
+Deployed successfully on **November 5, 2026, at 9:52 a.m. EST**.
+
+- Worker version: `5bf5f229-8f34-4935-8699-4c6a6d78d055`, confirmed at **100% traffic**.
+- Deployment ID: `57b0d6ba-dd66-4ce1-b9e5-5e473ac6ff28`.
+- Application source commit: `0e1db86ddec07d1e055b82334552b87a1f37f517`.
+- The inactive candidate's downloaded code matched the frozen artifact before activation. The active code matched that same hash after deployment.
+- Candidate and active comparisons preserve all **16 bindings**, both owner identities, D1 identity, Access issuer/audience, runtime/compatibility settings, existing assets/routing, and handlers. Access application/policies, domains, routes, DNS, `workers.dev`/preview settings, TLS mode, and Always Use HTTPS compare unchanged. No security-setting change was required or made.
+- HTTPS homepage, shop, basket, and `/api/site` returned **200** with HSTS. Checkout remains disabled and ordering paused.
+- Anonymous `/studio`, `/studio.mjs`, `/studio/api/studio`, and `/studio/api/manage/snapshot` still return **302 Cloudflare Access challenges**. Protected site/export API routes also challenge requests carrying synthetic forged assertions. Legacy `/api/manage/snapshot` and `/api/studio` return **404**.
+- HTTP `/`, `/api/site`, and a nonexistent path return **308**; `/studio` retains the existing **301**. Redirect checks on both apex and `www` preserve their hostname, path, repeated parameters, encoded values, and empty parameters. HTTPS `security.txt` retains its plain-text **404**.
+- Fourteen core live checks and eleven additional redirect/unauthorized-route checks passed after deployment.
+- **Production D1 was not modified.** Read-only schema/content fingerprints and row counts for **all 12 application tables** match the baseline exactly before upload, before activation, and after deployment. Every SELECT response reports zero rows written and no database change. No migration, reset, reseed, restore, payment action, or production business-data write occurred.
+- The only production mutation requests were one inactive Worker version upload and one traffic activation. No rollback was needed; the verified Phase 1 version remains the prepared application-only rollback target.
+
+The environment's default Python user agent received a pre-existing Cloudflare bot rejection on public pages. Normal verified HTTPS requests with the curl user agent succeeded; no Cloudflare setting or TLS verification was changed to perform these checks. Physical devices and Danielle's authenticated production session were not used.
 
 ## Danielle's verification
 
