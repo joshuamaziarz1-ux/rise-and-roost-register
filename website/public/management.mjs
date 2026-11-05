@@ -2,6 +2,7 @@ import { requestedPickupLabel, providers, defaultCalendar, paymentDestination, c
 import { h, button, field, request as apiRequest, notify } from './dom.mjs';
 import { clone, money, pickupLabel, orderByLabel, customerTimestamp, customerTime, localInstant } from './model.mjs';
 import { paymentLabels, fulfillmentLabels } from './orders.mjs';
+import { sellingMethod, inventoryMode } from './selling.mjs';
 
 const primary = ['Home', 'Orders', 'Products', 'Calendar', 'More'];
 const secondary = ['The Roost', 'Website Content', 'Customer Comments', 'Sales Reports', 'Settings'];
@@ -32,7 +33,7 @@ export async function start(root, initial, newAccessKey) {
   const formChanged = () => editing && (editing.type === 'payment-settings' ? editing.paymentsVersion !== paymentsVersion() : editing.revision !== data.revision || editing.ledgerVersion !== data.ledgerVersion);
   const request = (path, body) => apiRequest((initial.productionOwnerAccess ? '/studio' : '') + path, body, { workspaceId: workspace });
   const stamp = at => at ? customerTimestamp(at) : 'Not recorded';
-  const marked = () => { if (editing && ['product', 'calendar', 'content', 'payment-settings'].includes(editing.type)) try { sessionStorage.setItem(storageKey, JSON.stringify(editing)); } catch {} };
+  const marked = () => { if (editing && ['product', 'calendar', 'content', 'payment-settings', 'fresh-announcement'].includes(editing.type)) try { sessionStorage.setItem(storageKey, JSON.stringify(editing)); } catch {} };
   const f = (label, object, key, options = {}) => {
     const set = v => { object[key] = options.type === 'number' ? Number(v) : v; marked(); };
     const node = field(label, object[key] ?? '', set, options), input = node.querySelector('input,textarea,select');
@@ -40,7 +41,7 @@ export async function start(root, initial, newAccessKey) {
   };
   const check = (label, object, key) => f(label, object, key, { type: 'checkbox' });
   function go(next, selected = '', nextFilter = 'all') {
-    if (editing && !confirm('Leave this form? The latest unfinished product, calendar, content or payment link form is kept in this tab until you save, cancel, or replace it with another form.')) return;
+    if (editing && !confirm('Leave this form? The latest unfinished product, calendar, content, announcement or payment link form is kept in this tab until you save, cancel, or replace it with another form.')) return;
     editing = null; error = ''; selection = selected; filter = nextFilter; search = ''; view = next;
     history.replaceState({}, '', initial.studioPath + '#' + encodeURIComponent(next)); render(); window.scrollTo(0, 0);
   }
@@ -61,7 +62,7 @@ export async function start(root, initial, newAccessKey) {
       if (!current) { error = 'This product no longer exists. Save it as a new product instead.'; chrome(); return; }
       const remote = { ...v, product: { ...current, inventoryMode: current.inventoryMode || 'legacy', archived: !!current.archived, soldOut: !!current.soldOut, lowStockThreshold: current.lowStockThreshold ?? 3 }, dollars: (current.price / 100).toFixed(2), available: current.available };
       e.values = merge(e.original || v, v, remote); e.original = clone(remote);
-    } else if (e.type === 'content') { e.values = merge(e.original || v, v, data.draft); e.original = clone(data.draft); }
+    } else if (e.type === 'fresh-announcement') { const remote = { announcement: data.published.freshAnnouncement || '' }; e.values = merge(e.original || v, v, remote); e.original = clone(remote); } else if (e.type === 'content') { e.values = merge(e.original || v, v, data.draft); e.original = clone(data.draft); }
     else if (e.type === 'calendar') {
       const current = data.published.pickups.find(p => p.id === v.pickup.id);
       if (current) { const remote = { ...v, pickup: current }; e.values = merge(e.original || v, v, remote); e.original = clone(remote); }
@@ -70,7 +71,7 @@ export async function start(root, initial, newAccessKey) {
   }
   async function cancel() {
     if (busy) return;
-    const discardDraft = ['product', 'calendar', 'content', 'payment-settings'].includes(editing?.type) || ['product', 'calendar', 'content', 'payment-settings'].includes(pending?.form?.type);
+    const discardDraft = ['product', 'calendar', 'content', 'payment-settings', 'fresh-announcement'].includes(editing?.type) || ['product', 'calendar', 'content', 'payment-settings', 'fresh-announcement'].includes(pending?.form?.type);
     if (pending) {
       busy = true; error = ''; render();
       try {
@@ -97,7 +98,7 @@ export async function start(root, initial, newAccessKey) {
         if (status.found && pending === resolving && !busy) {
           data = await request('/api/manage/snapshot?' + q);
           if (pending === resolving && !busy) {
-            pending = null; if (editing === resolving.form) { if (['product', 'calendar', 'content', 'payment-settings'].includes(editing?.type)) sessionStorage.removeItem(storageKey); editing = null; }
+            pending = null; if (editing === resolving.form) { if (['product', 'calendar', 'content', 'payment-settings', 'fresh-announcement'].includes(editing?.type)) sessionStorage.removeItem(storageKey); editing = null; }
             error = ''; sessionStorage.removeItem(pendingKey); notify(status.result?.abandoned ? 'The previous request was canceled.' : 'The server confirms your previous save.');
           }
         }
@@ -123,7 +124,7 @@ export async function start(root, initial, newAccessKey) {
       const result = await request('/api/manage/' + path, { ...payload, operationId: pending.id });
       if (!result.management || result.id !== workspace || result.result === undefined && result.duplicate !== true) throw new Error('The server did not confirm this save. Your fields are kept; check the connection before retrying.');
       data = result;
-      pending = null; sessionStorage.removeItem(pendingKey); if (!keepForm) { if (['product', 'calendar', 'content', 'payment-settings'].includes(editing?.type)) sessionStorage.removeItem(storageKey); editing = null; }
+      pending = null; sessionStorage.removeItem(pendingKey); if (!keepForm) { if (['product', 'calendar', 'content', 'payment-settings', 'fresh-announcement'].includes(editing?.type)) sessionStorage.removeItem(storageKey); editing = null; }
       connected = true; notify(successMessage); return result;
     } catch (e) {
       error = e.message; if (e.status && e.status < 500 && !(initial.previewDirectAccess && e.status === 403)) { pending = null; sessionStorage.removeItem(pendingKey); }
@@ -183,7 +184,7 @@ export async function start(root, initial, newAccessKey) {
         pref.pickups && a.upcoming ? menu('Prepare upcoming pickups', 'Orders', a.upcoming, 'upcoming') : null,
         pref.comments && a.comments ? menu('Read new comments', 'Customer Comments', a.comments, 'pending') : null,
         !Object.values(a).some(Boolean) ? empty('You’re all caught up.') : ![['payments', 'payments'], ['orders', 'newOrders'], ['stock', 'lowStock'], ['pickups', 'upcoming'], ['comments', 'comments']].some(([key, count]) => pref[key] && a[count]) ? empty('Your summary cards show current activity. Attention alerts are off in Settings.') : null),
-      menu('Open the pickup calendar & production lists', 'Calendar'));
+      freshAnnouncementPanel(), menu('Open the pickup calendar & production lists', 'Calendar'));
   }
   function orders() {
     if (selection && !/^\d{4}-\d{2}-\d{2}$/.test(selection)) return orderDetail(data.orders.find(o => o.id === selection));
@@ -268,22 +269,33 @@ export async function start(root, initial, newAccessKey) {
     for (const o of data.orders) rows.push([o.orderNumber, stamp(o.at), o.customer?.name, o.customer?.email, o.customer?.phone, pickupLabel(o.pickup), o.total, o.paymentStatus, o.status, o.paymentVerifiedAt ? stamp(o.paymentVerifiedAt) : '', (o.refunds || []).reduce((n, r) => n + r.amount, 0)]);
     download('rise-roost-orders.csv', csv(rows), 'text/csv');
   }
+  const methodLabels = { online: 'Online Ordering', preorder: 'Preorder', 'in-store': 'In-Store Only' };
+  const hiddenProduct = p => p.archived || !p.active;
+  function freshAnnouncementPanel() {
+    return panel('Fresh at The Roost!', h('p', {}, data.published.freshAnnouncement || 'No daily announcement is displayed.'),
+      button('Edit daily announcement', () => edit('fresh-announcement', { announcement: data.published.freshAnnouncement || '' }), { class: 'ms-secondary' }));
+  }
+  async function setProductVisibility(p, hidden) {
+    if (!confirm(hidden ? 'Hide ' + p.name + ' from the website? Existing orders, product details and photos will be kept.' : 'Show ' + p.name + ' on the website again? Its selling method and saved quantities will apply.')) return;
+    return send('product-visibility', { id: p.id, hidden, confirmed: true, revision: data.revision, ledgerVersion: data.ledgerVersion }, { successMessage: hidden ? 'Product hidden. Existing orders are kept.' : 'Product is visible again.' });
+  }
   function products() {
-    const products = data.management.products.filter(p => (filter !== 'archived' ? !p.archived : p.archived) && (filter !== 'low' || p.inventoryMode !== 'production' && p.available <= (p.lowStockThreshold ?? 3)));
+    const products = data.management.products.filter(p => (filter === 'hidden' ? hiddenProduct(p) : !hiddenProduct(p)) && (filter !== 'low' || inventoryMode(p) !== 'production' && p.available <= (p.lowStockThreshold ?? 3)));
     return h('div', {}, h('div', { class: 'ms-heading' }, h('h1', {}, 'Products'), button('Add product', () => editProduct(), { class: 'ms-primary' })),
-      h('div', { class: 'ms-chips' }, button('Active', () => { filter = 'all'; render(); }, { 'aria-pressed': filter === 'all' }), button('Low stock', () => { filter = 'low'; render(); }, { 'aria-pressed': filter === 'low' }), button('Archived', () => { filter = 'archived'; render(); }, { 'aria-pressed': filter === 'archived' })),
+      h('div', { class: 'ms-chips' }, button('Active', () => { filter = 'all'; render(); }, { 'aria-pressed': filter === 'all' }), button('Low stock', () => { filter = 'low'; render(); }, { 'aria-pressed': filter === 'low' }), button('Hidden', () => { filter = 'hidden'; render(); }, { 'aria-pressed': filter === 'hidden' })),
       h('div', { class: 'ms-product-grid' }, products.map(p => h('article', { class: 'ms-panel ms-product' },
         h('img', { src: p.images[0]?.src, alt: p.images[0]?.alt || p.name }),
-        h('h2', {}, p.name), h('div', { class: 'ms-row' }, h('strong', {}, money(p.price)), pill(p.archived ? 'Archived' : p.soldOut ? 'Sold Out' : !p.active ? 'Hidden' : 'Visible')),
-        h('p', {}, p.inventoryMode === 'production' ? 'Made to order · ' + p.capacity + ' default units per pickup' : p.available + ' available'),
-        h('div', { class: 'ms-actions' }, button('Edit product', () => editProduct(p), { class: 'ms-primary' }), button('Duplicate', () => editProduct(p, true), { class: 'ms-secondary' }))))), !products.length ? empty('No products in this view.') : null);
+        h('h2', {}, p.name), h('div', { class: 'ms-row' }, h('strong', {}, money(p.price)), pill(hiddenProduct(p) ? 'Hidden' : p.soldOut || (sellingMethod(p) === 'preorder' ? (p.availableToOrder ?? p.capacity) <= 0 : p.available <= 0) ? 'Sold Out' : 'Visible')),
+        h('p', {}, methodLabels[sellingMethod(p)]), h('p', {}, sellingMethod(p) === 'preorder' ? p.capacity + ' can be made for each pickup date' : p.available + (sellingMethod(p) === 'in-store' ? ' in the store' : ' available')),
+        h('div', { class: 'ms-actions' }, button('Edit product', () => editProduct(p), { class: 'ms-primary' }), button('Duplicate', () => editProduct(p, true), { class: 'ms-secondary' }), button(hiddenProduct(p) ? 'Show Product' : 'Hide Product', () => setProductVisibility(p, !hiddenProduct(p)), { class: 'ms-secondary', disabled: busy }))))), !products.length ? empty('No products in this view.') : null,
+      freshAnnouncementPanel());
   }
   function editProduct(product, duplicate = false) {
-    const p = product ? clone(product) : { id: 'product-' + id(), name: '', description: '', price: 0, stock: 10, capacity: 10, category: '', channel: 'preorder', active: true, images: [{ src: '/assets/bread.svg', alt: '', x: 50, y: 50 }], variants: [{ id: 'standard', name: 'Standard', extra: 0 }], inventoryMode: 'physical' };
-    if (duplicate) { p.id = 'product-' + id(); p.name += ' copy'; }
+    const p = product ? clone(product) : { id: 'product-' + id(), name: '', description: '', price: 0, stock: 10, capacity: 10, category: '', channel: 'preorder', active: true, images: [{ src: '/assets/bread.svg', alt: '', x: 50, y: 50 }], variants: [{ id: 'standard', name: 'Standard', extra: 0 }], inventoryMode: 'physical', sellingMethod: 'online' };
+    if (duplicate) { p.id = 'product-' + id(); p.name += ' copy'; p.archived = false; p.active = true; }
     p.archived = !!p.archived; p.soldOut = !!p.soldOut; p.lowStockThreshold ??= 3;
     p.inventoryMode ||= 'legacy';
-    edit('product', { product: p, dollars: (p.price / 100).toFixed(2), available: duplicate ? 0 : product?.available ?? p.stock, reason: '' });
+    edit('product', { product: p, dollars: (p.price / 100).toFixed(2), available: duplicate ? 0 : product?.available ?? p.stock });
   }
   function clockField(label, object, key) {
     const [hour, minute] = String(object[key] || '15:00').split(':').map(Number);
@@ -294,19 +306,33 @@ export async function start(root, initial, newAccessKey) {
       field(label + ' minute', String(minutes).padStart(2, '0'), v => { minutes = +v; write(); }, { choices: Array.from({ length: 60 }, (_, i) => ({ value: String(i).padStart(2, '0'), label: String(i).padStart(2, '0') })) }),
       field(label + ' AM/PM', meridiem, v => { meridiem = v; write(); }, { choices: ['AM', 'PM'] }));
   }
+  function pickupOrders(p) { return data.orders.filter(o => o.pickupId === p.id || o.pickup?.id === p.id || o.originalPickup?.id === p.id); }
+  const futurePickup = p => localInstant(p.date, p.end) > Date.parse(data.now);
+  async function removePickup(p) {
+    const count = pickupOrders(p).length;
+    if (!confirm(count ? 'Remove this pickup from new ordering? ' + count + ' existing order' + (count === 1 ? '' : 's') + ' will keep the original pickup details. Contact each customer through Orders if a new arrangement is needed.' : 'Remove this future pickup date?')) return;
+    return send('calendar', { revision: data.revision, ledgerVersion: data.ledgerVersion, pickups: data.published.pickups.filter(v => v.id !== p.id), paused: !!data.published.orderingPaused, confirmExistingOrders: count > 0 });
+  }
   function calendar() {
-    const date = selection || data.management.today.range.start, list = data.published.pickups.slice().sort((a, b) => a.date.localeCompare(b.date));
+    const date = selection || data.management.today.range.start, list = data.published.pickups.slice().sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
     const orders = data.orders.filter(o => o.pickup.date === date && !o.resolution && !['canceled', 'picked-up'].includes(o.status));
     const totals = new Map(); for (const o of orders) for (const l of o.lines) { const k = l.productId + ':' + l.variantId; const v = totals.get(k) || { name: l.name, variant: l.variant, qty: 0 }; v.qty += l.qty; totals.set(k, v); }
+    const card = p => {
+      const associated = pickupOrders(p), future = futurePickup(p);
+      return h('article', { class: 'ms-panel' }, h('div', { class: 'ms-row' }, h('strong', {}, pickupLabel(p)), pill(!future ? 'Past pickup' : p.closed ? 'Closed to new orders' : p.event || 'Open')), h('p', {}, 'Order by ' + orderByLabel(p)), h('p', {}, p.capacity + ' order limit'),
+        associated.length ? h('p', { class: 'ms-note' }, associated.length + ' scheduled order' + (associated.length === 1 ? '' : 's') + '. Saved customer commitments are kept.') : null,
+        h('div', { class: 'ms-actions' }, future ? button('Edit pickup', () => editPickup(p), { class: 'ms-secondary' }) : null, button('Copy', () => editPickup(p, true), { class: 'ms-secondary' }), future && (!p.closed || !associated.length) ? button('Remove pickup', () => removePickup(p), { class: 'ms-secondary', disabled: busy }) : null, button('Pickup & baking lists', () => { selection = p.date; render(); }, { class: 'ms-secondary' })),
+        associated.length ? h('details', {}, h('summary', {}, 'View scheduled orders'), associated.map(o => button([h('strong', {}, o.orderNumber), h('span', {}, o.customer?.name || 'Guest customer'), h('span', {}, pickupLabel(o.pickup)), pill(fulfillmentLabels[o.status])], () => go('Orders', o.id), { class: 'ms-menu' }))) : null);
+    };
     return h('div', {}, h('div', { class: 'ms-heading' }, h('h1', {}, 'Calendar'), button('Add pickup', () => editPickup(), { class: 'ms-primary' })),
       h('div', { class: 'ms-actions' }, button('Set recurring days', () => edit('recurrence', { start: date, end: date, weekdays: [], startTime: '15:00', endTime: '18:00', cutoffTime: '18:00', deadlineDays: 1, capacity: 24 }), { class: 'ms-secondary' }),
-        button(data.published.orderingPaused ? 'Resume ordering' : 'Pause new ordering', () => { if (confirm(data.published.orderingPaused ? 'Resume new website orders?' : 'Pause new website orders? Existing confirmed orders will stay intact.')) send('calendar', { revision: data.revision, pickups: data.published.pickups, paused: !data.published.orderingPaused, confirmExistingOrders: true }); }, { class: 'ms-secondary' })),
+        button(data.published.orderingPaused ? 'Resume ordering' : 'Pause new ordering', () => { if (confirm(data.published.orderingPaused ? 'Resume new website orders?' : 'Pause new website orders? Existing confirmed orders will stay intact.')) send('calendar', { revision: data.revision, ledgerVersion: data.ledgerVersion, pickups: data.published.pickups, paused: !data.published.orderingPaused, confirmExistingOrders: true }); }, { class: 'ms-secondary' })),
       data.published.orderingPaused ? h('p', { role: 'status', class: 'ms-warning' }, 'New ordering is paused. Existing orders are protected.') : null,
-      h('div', { class: 'ms-calendar-list' }, list.map(p => h('article', { class: 'ms-panel' }, h('div', { class: 'ms-row' }, h('strong', {}, pickupLabel(p)), pill(p.closed ? 'Blocked' : p.event || 'Open')), h('p', {}, 'Order by ' + orderByLabel(p)), h('p', {}, p.capacity + ' order limit'),
-        h('div', { class: 'ms-actions' }, button('Edit pickup', () => editPickup(p), { class: 'ms-secondary' }), button('Copy', () => editPickup(p, true), { class: 'ms-secondary' }), button('Pickup & baking lists', () => { selection = p.date; render(); }, { class: 'ms-secondary' }))))),
+      h('div', { class: 'ms-calendar-list' }, list.filter(futurePickup).map(card)), !list.some(futurePickup) ? empty('No future pickup dates. Add a pickup when you’re ready.') : null,
+      list.some(p => !futurePickup(p)) ? h('details', { class: 'ms-panel' }, h('summary', {}, 'Past pickup dates'), list.filter(p => !futurePickup(p)).map(card)) : null,
       panel('Pickup & production lists', field('List date', date, v => { selection = v; render(); }, { type: 'date' }),
         h('div', { class: 'ms-print-list' }, h('h3', {}, date), h('h3', {}, 'Production totals'), [...totals.values()].map(v => h('p', {}, v.qty + ' × ' + v.name + ' · ' + v.variant)),
-          h('h3', {}, 'Pickup list'), orders.map(o => h('div', { class: 'ms-audit' }, h('strong', {}, o.customer?.name || 'Guest'), h('span', {}, o.orderNumber + ' · ' + pickupLabel(o.pickup)), h('span', {}, o.lines.map(l => l.qty + ' × ' + l.name + ' (' + l.variant + ')').join(', ')))),
+          h('h3', {}, 'Pickup list'), orders.map(o => h('div', { class: 'ms-audit' }, h('strong', {}, o.customer?.name || 'Guest'), button(o.orderNumber, () => go('Orders', o.id), { class: 'ms-text' }), h('span', {}, pickupLabel(o.pickup)), h('span', {}, o.lines.map(l => l.qty + ' × ' + l.name + ' (' + l.variant + ')').join(', ')))),
         !orders.length ? empty('No outstanding pickups on this day.') : null,
         button('Print pickup & production lists', () => window.print(), { class: 'ms-primary' }))));
   }
@@ -412,24 +438,37 @@ export async function start(root, initial, newAccessKey) {
   function editForm() {
     const e = editing, v = e.values;
     if (e.type === 'product') {
-      const p = v.product;
+      const p = v.product, method = sellingMethod(p), dualLimits = inventoryMode(p) === 'legacy';
+      const setMethod = value => { p.sellingMethod = value; p.inventoryMode = value === 'preorder' ? 'production' : 'physical'; p.channel = value === 'in-store' ? 'store' : 'preorder'; p.soldOut = false; marked(); render(); };
       return form(p.name ? 'Edit product' : 'Add product', [f('Product name', p, 'name', { required: true, maxlength: 120 }), f('Price ($)', v, 'dollars', { type: 'number', min: 0, max: 10000, step: '.01', required: true }),
-        field('Inventory model', p.inventoryMode, value => { p.inventoryMode = value; marked(); render(); }, { choices: [{ value: 'physical', label: 'Physical stock' }, { value: 'production', label: 'Preorder production' }, { value: 'legacy', label: 'Keep existing stock + capacity' }] }),
-        p.inventoryMode !== 'production' ? f('Available units (after existing orders)', v, 'available', { type: 'number', min: 0, max: 10000 }) : null,
-        p.inventoryMode !== 'physical' ? f('Default production limit per pickup', p, 'capacity', { type: 'number', min: 0, max: 10000 }) : null,
-        check('Sold Out', p, 'soldOut'), check('Visible on the website', p, 'active'), check('Archived (keeps order history)', p, 'archived'),
+        field('Selling method', method, setMethod, { choices: Object.entries(methodLabels).map(([value, label]) => ({ value, label })) }),
+        method === 'preorder' ? f(dualLimits ? 'How many can I make per pickup?' : 'How many can I make?', p, 'capacity', { type: 'number', min: 0, max: 10000 }) : null,
+        method !== 'preorder' || dualLimits ? f(method === 'in-store' ? 'How many are in the store?' : dualLimits ? 'How many are available in total?' : 'How many are available?', v, 'available', { type: 'number', min: 0, max: 10000 }) : null,
+        h('p', { class: 'ms-note' }, 'Existing orders are already reserved. A quantity of zero shows Sold Out and keeps the product visible.'),
+        method === 'preorder' ? panel('Which pickup dates are available?',
+          data.published.pickups.filter(p => futurePickup(p) && !p.closed && localInstant(p.cutoffDate, p.cutoffTime) > Date.parse(data.now)).map(pickup => h('p', {}, pickupLabel(pickup))),
+          !data.published.pickups.some(p => futurePickup(p) && !p.closed && localInstant(p.cutoffDate, p.cutoffTime) > Date.parse(data.now)) ? h('p', {}, 'No open future pickup dates. Add dates in Calendar before customers can preorder.') : null,
+          h('p', {}, 'Manage pickup dates and order deadlines in Calendar. Each date can have its own quantity limit.'), button('Open pickup calendar', () => go('Calendar'), { class: 'ms-secondary' })) : null,
+        hiddenProduct(p) ? h('p', { class: 'ms-warning' }, 'This product is hidden. Save changes, then use Show Product to display it again.') : null,
         p.images.map((photo, index) => h('div', { class: 'ms-photo' }, h('img', { src: photo.src, alt: photo.alt || p.name }), f('Photo description ' + (index + 1), photo, 'alt'), h('label', { class: 'ms-secondary' }, 'Replace photo', h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', disabled: busy, onchange: event => upload(event.target.files[0], src => photo.src = src) })))),
-        f('Description', p, 'description', { type: 'textarea', maxlength: 6000 }), f('Category', p, 'category', { maxlength: 100 }), f('Low-stock warning at', p, 'lowStockThreshold', { type: 'number', min: 0, max: 10000 }),
+        f('Description', p, 'description', { type: 'textarea', maxlength: 6000 }), f('Category', p, 'category', { maxlength: 100 }),
+        method !== 'preorder' ? f('Low-stock warning at', p, 'lowStockThreshold', { type: 'number', min: 0, max: 10000 }) : null,
         h('h3', {}, 'Varieties'), p.variants.map((variant, i) => h('div', { class: 'ms-two' }, f('Variety ' + (i + 1), variant, 'name', { required: true }), field('Additional price ' + (i + 1) + ' ($)', (variant.extra / 100).toFixed(2), value => { variant.extra = price(value); marked(); }, { type: 'number', min: 0, max: 10000, step: '.01' }))),
-        button('Add variety', () => { p.variants.push({ id: 'variety-' + id(), name: '', extra: 0 }); marked(); render(); }, { class: 'ms-secondary' }), f('Reason for stock / price adjustment', v, 'reason', { maxlength: 500 }),
-      ], () => { if (p.archived && !e.original?.product.archived && !confirm('Archive this product? It will leave the storefront while historical orders and photos stay intact.')) return; p.price = price(v.dollars); return send('product', { revision: e.revision, ledgerVersion: e.ledgerVersion, product: p, available: p.inventoryMode === 'production' ? undefined : v.available, reason: v.reason, confirmArchive: p.archived }); }, 'Save product live');
+        button('Add variety', () => { p.variants.push({ id: 'variety-' + id(), name: '', extra: 0 }); marked(); render(); }, { class: 'ms-secondary' }),
+      ], () => { p.price = price(v.dollars); p.soldOut = false; return send('product', { revision: e.revision, ledgerVersion: e.ledgerVersion, product: p, available: method === 'preorder' && !dualLimits ? undefined : v.available, confirmArchive: p.archived }); }, 'Save product live');
     }
+    if (e.type === 'fresh-announcement') return form('Fresh at The Roost!', [
+      f('Daily announcement', v, 'announcement', { type: 'textarea', maxlength: 240, placeholder: 'Fresh cookies available today!' }),
+      h('p', { class: 'ms-note' }, 'Shown on the homepage and Shop. Leave it empty to remove the announcement.'),
+      button('Clear announcement', () => { v.announcement = ''; marked(); render(); }, { class: 'ms-secondary' }),
+    ], () => send('fresh-announcement', { announcement: v.announcement, revision: e.revision, ledgerVersion: e.ledgerVersion }), 'Save announcement live');
     if (e.type === 'calendar') {
-      const p = v.pickup; p.dailyCapacity ??= p.capacity;
-      return form('Pickup date', [f('Pickup date', p, 'date', { type: 'date', required: true }), clockField('Pickup start', p, 'start'), clockField('Pickup end', p, 'end'), f('Order-by date', p, 'cutoffDate', { type: 'date', required: true }), clockField('Order-by time', p, 'cutoffTime'), f('Pickup window order limit', p, 'capacity', { type: 'number', min: 0, max: 10000 }), f('Daily combined order limit', p, 'dailyCapacity', { type: 'number', min: 0, max: 10000 }), f('Special event name (optional)', p, 'event', { maxlength: 120 }), check('Block this pickup date', p, 'closed'),
-        h('h3', {}, 'Production limits for this date'), data.published.products.filter(p => !p.archived && p.inventoryMode === 'production').map(product => field(product.name + ' units', p.productionLimits[product.id] ?? product.capacity, value => { p.productionLimits[product.id] = +value; marked(); }, { type: 'number', min: 0, max: 10000 })),
-        check('I understand existing orders keep their original pickup details', v, 'confirmExistingOrders'),
-      ], () => { const pickups = clone(data.published.pickups), i = pickups.findIndex(n => n.id === p.id); if (i < 0) pickups.push(p); else pickups[i] = p; return send('calendar', { revision: e.revision, pickups, paused: !!data.published.orderingPaused, confirmExistingOrders: v.confirmExistingOrders }); }, 'Save pickup live');
+      const p = v.pickup, associated = pickupOrders(p); p.dailyCapacity ??= p.capacity;
+      return form('Pickup date', [associated.length ? h('div', { class: 'ms-warning', role: 'note' }, h('strong', {}, associated.length + ' existing order' + (associated.length === 1 ? '' : 's') + ' use this pickup.'), h('p', {}, 'Changes apply to new orders. Existing orders keep their original pickup details and pickup deadline. If the date or time changes, the original pickup closes to new orders and a new date is created. Contact customers through Orders to approve any new arrangement.'), associated.map(o => h('p', {}, o.orderNumber + ' · ' + (o.customer?.name || 'Guest customer') + ' · ' + pickupLabel(o.pickup)))) : null,
+        f('Pickup date', p, 'date', { type: 'date', min: data.management.today.range.start, required: true }), clockField('Pickup start', p, 'start'), clockField('Pickup end', p, 'end'), f('Order-by date', p, 'cutoffDate', { type: 'date', required: true }), clockField('Order-by time', p, 'cutoffTime'), f('Pickup window order limit', p, 'capacity', { type: 'number', min: 0, max: 10000 }), f('Daily combined order limit', p, 'dailyCapacity', { type: 'number', min: 0, max: 10000 }), f('Special event name (optional)', p, 'event', { maxlength: 120 }), check('Close this pickup to new orders', p, 'closed'),
+        h('h3', {}, 'How many can I make for this date?'), data.published.products.filter(p => !hiddenProduct(p) && sellingMethod(p) === 'preorder').map(product => field(product.name + ' units', p.productionLimits[product.id] ?? product.capacity, value => { p.productionLimits[product.id] = +value; marked(); }, { type: 'number', min: 0, max: 10000 })),
+        associated.length ? check('I understand existing orders keep their original pickup details', v, 'confirmExistingOrders') : null,
+      ], () => { const pickups = clone(data.published.pickups), i = pickups.findIndex(n => n.id === p.id); if (i < 0) pickups.push(p); else pickups[i] = p; return send('calendar', { revision: e.revision, ledgerVersion: e.ledgerVersion, pickups, paused: !!data.published.orderingPaused, confirmExistingOrders: v.confirmExistingOrders }); }, 'Save pickup live');
     }
     if (e.type === 'recurrence') {
       return form('Recurring pickup days', [f('First date', v, 'start', { type: 'date', required: true }), f('Repeat through', v, 'end', { type: 'date', required: true }), h('div', { class: 'ms-weekdays' }, ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((name, day) => field(name, v.weekdays.includes(day), value => { v.weekdays = value ? [...v.weekdays, day] : v.weekdays.filter(d => d !== day); }, { type: 'checkbox' }))), clockField('Pickup start', v, 'startTime'), clockField('Pickup end', v, 'endTime'), f('Order deadline days before pickup', v, 'deadlineDays', { type: 'number', min: 0, max: 30 }), clockField('Order-by time', v, 'cutoffTime'), f('Daily order limit', v, 'capacity', { type: 'number', min: 1, max: 10000 })], () => {
@@ -440,7 +479,7 @@ export async function start(root, initial, newAccessKey) {
           const date = new Date(n).toISOString().slice(0, 10);
           if (!pickups.some(p => p.date === date && p.start === v.startTime && p.end === v.endTime)) pickups.push({ id: 'pickup-' + id(), date, start: v.startTime, end: v.endTime, cutoffDate: new Date(n - v.deadlineDays * 86400000).toISOString().slice(0, 10), cutoffTime: v.cutoffTime, capacity: v.capacity, dailyCapacity: v.capacity, closed: false });
         }
-        return send('calendar', { revision: e.revision, pickups, paused: !!data.published.orderingPaused, confirmExistingOrders: true });
+        return send('calendar', { revision: e.revision, ledgerVersion: e.ledgerVersion, pickups, paused: !!data.published.orderingPaused, confirmExistingOrders: true });
       }, 'Save recurring pickups');
     }
     if (e.type === 'payment') return form('Verify payment', [h('p', {}, 'Open your payment account and check the customer name and full order total. Confirm below only after you have received the payment.'), f('Payment method', v, 'method', { choices: [...Object.entries(providers).map(([value,label]) => ({ value,label })), { value: 'external_record', label: 'Historical independent record' }] }), f('Transaction reference (optional)', v, 'evidence', { maxlength: 500 }), check('I checked an independent record for the full payment', v, 'independentlyVerified')], () => send('verify-payment', { id: v.orderId, orderVersion: v.orderVersion, method: v.method, evidence: v.evidence, independentlyVerified: v.independentlyVerified }), 'Confirm Verify Payment');
@@ -505,7 +544,7 @@ export async function start(root, initial, newAccessKey) {
   window.addEventListener('focus', () => refresh());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) void refresh(); });
   try { const target = decodeURIComponent(location.hash.slice(1)); if ([...primary, ...secondary, 'Settings/Payments'].includes(target)) view = target; } catch {}
-  try { const saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null'); if (saved?.type && ['product', 'calendar', 'content', 'payment-settings'].includes(saved.type)) { editing = saved; view = { product: 'Products', calendar: 'Calendar', content: 'Website Content', 'payment-settings': 'Settings/Payments' }[saved.type]; } } catch {}
+  try { const saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null'); if (saved?.type && ['product', 'calendar', 'content', 'payment-settings', 'fresh-announcement'].includes(saved.type)) { editing = saved; view = { product: 'Products', calendar: 'Calendar', content: 'Website Content', 'payment-settings': 'Settings/Payments', 'fresh-announcement': 'Products' }[saved.type]; } } catch {}
   try { const saved = JSON.parse(sessionStorage.getItem(pendingKey) || 'null'); if (/^[a-f0-9-]{32,48}$/.test(saved?.id || '')) pending = { id: saved.id, form: editing }; } catch {}
   render(); await refresh();
   setInterval(() => { if (!document.hidden && !busy && !disposed) void refresh(); }, 5000);

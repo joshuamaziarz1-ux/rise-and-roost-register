@@ -46,7 +46,8 @@ test.describe('Rise & Roost management Studio', () => {
       await nav(page, 'Products').click(); await productCard(page).getByRole('button', { name: 'Edit product', exact: true }).click();
       await page.getByLabel('Product name', { exact: true }).fill('Danielle’s management loaf');
       await page.getByLabel('Price ($)', { exact: true }).fill('12.50');
-      await page.getByLabel('Available units (after existing orders)', { exact: true }).fill('4');
+      await page.getByLabel('Selling method', { exact: true }).selectOption('online');
+      await page.getByLabel('How many are available?', { exact: true }).fill('4');
       await page.locator('input[type=file]').first().setInputFiles({ name: 'invalid.gif', mimeType: 'image/gif', buffer: Buffer.from('not an image') });
       await expect(page.getByRole('alert')).toContainText('JPG, PNG, or WebP');
       await expect(page.getByLabel('Product name', { exact: true })).toHaveValue('Danielle’s management loaf');

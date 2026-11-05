@@ -258,7 +258,7 @@ test("products, upload/crop, varieties, price, pickup cutoff, and simulated cart
   await expect(page.locator(".receipt")).toContainText("no payment collected");
   await expect(page.locator(".receipt")).toContainText("$23.00");
   await page.goto("/demo/" + id + "/product/bread");
-  await expect(page.getByRole("button", { name: "Sold out", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Sold Out", exact: true })).toBeDisabled();
 });
 
 test("Sold Out, in-store and hidden availability persist; failed saves recover without discarding edits", async ({ page, context }) => {
@@ -276,21 +276,22 @@ test("Sold Out, in-store and hidden availability persist; failed saves recover w
   await publish(page);
   const visitor = await context.newPage();
   await visitor.goto("/demo/" + id + "/shop");
-  await expect(visitor.locator(".product-card").filter({ hasText: "Slow Sunday sourdough" })).toContainText("Sold out");
+  await expect(visitor.locator(".product-card").filter({ hasText: "Slow Sunday sourdough" })).toContainText("Sold Out");
   await visitor.goto("/demo/" + id + "/product/bread");
-  await expect(visitor.getByRole("button", { name: "Sold out", exact: true })).toBeDisabled();
+  await expect(visitor.getByRole("button", { name: "Sold Out", exact: true })).toBeDisabled();
   await page.getByLabel("Total demo stock (0 = sold out)", { exact: true }).fill("2");
   await page.getByLabel("Maximum units per pickup", { exact: true }).fill("0");
   await save(page);
   await publish(page);
   await visitor.reload();
-  await expect(visitor.getByRole("button", { name: "Sold out", exact: true })).toBeDisabled();
+  await expect(visitor.getByRole("button", { name: "Sold Out", exact: true })).toBeDisabled();
   await page.getByLabel("Maximum units per pickup", { exact: true }).fill("2");
   await page.getByLabel("Sales channel", { exact: true }).selectOption("store");
   await save(page);
   await publish(page);
   await visitor.reload();
-  await expect(visitor.getByRole("button", { name: "In-store only", exact: true })).toBeDisabled();
+  await expect(visitor.locator('.availability-status')).toHaveText('Available in Store');
+  await expect(visitor.getByRole('button', { name: /Add.*basket/i })).toHaveCount(0);
   await page.getByLabel("Visible to customers", { exact: true }).uncheck();
   await save(page);
   await publish(page);

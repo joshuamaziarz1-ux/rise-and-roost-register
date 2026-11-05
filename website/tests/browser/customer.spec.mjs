@@ -54,7 +54,8 @@ test.describe('isolated customer experience', () => {
     await expect(choices.getByRole('link')).toHaveCount(3);
     await expect(choices.getByRole('link', { name: 'The Roost', exact: true })).toBeVisible();
     await expect(choices.getByRole('link', { name: 'Leave a Comment', exact: true })).toBeVisible();
-    await expect(page.locator('main .site-section')).toHaveCount(1);
+    await expect(page.locator('main .site-section')).toHaveCount(2);
+    await expect(page.getByRole('region', { name: 'Fresh at The Roost!' })).toBeVisible();
     await expect(page.locator('.product-card, .quick-add, .comment-form')).toHaveCount(0);
     await expect(page.locator('.site-header nav, .site-header .basket-link')).toHaveCount(0);
     await expect(page.locator('.art-label')).toHaveCount(0);

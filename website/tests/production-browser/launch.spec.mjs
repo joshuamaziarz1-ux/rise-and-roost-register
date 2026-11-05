@@ -139,14 +139,14 @@ test('Danielle can start with no products, upload a photo, save a product and re
     await expect(page.getByRole('heading', { name: 'Hi, Danielle!', exact: true })).toBeVisible(); await nav(page, 'Products').click();
     await expect(page.locator('.ms-main')).toContainText('No products in this view.'); await page.getByRole('button', { name: 'Add product', exact: true }).click();
     await page.getByLabel('Product name', { exact: true }).fill('Synthetic new product'); await page.getByLabel('Price ($)', { exact: true }).fill('8.50');
-    await page.getByLabel('Available units (after existing orders)', { exact: true }).fill('4');
+    await expect(page.getByLabel('Selling method', { exact: true })).toHaveValue('online');
+    await page.getByLabel('How many are available?', { exact: true }).fill('4');
     const png = await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = canvas.height = 16; canvas.getContext('2d').fillRect(0, 0, 16, 16); return canvas.toDataURL('image/png').split(',')[1]; });
     await page.locator('input[type=file]').first().setInputFiles({ name: 'synthetic-product.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
     await expect(page.locator('.ms-photo img')).toHaveAttribute('src', /^\/api\/assets\//);
     await page.getByRole('button', { name: 'Save product live', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Synthetic new product', exact: true })).toBeVisible();
     await page.reload(); await nav(page, 'Products').click(); await expect(page.getByRole('heading', { name: 'Synthetic new product', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Edit product', exact: true }).click(); await page.getByLabel('Archived (keeps order history)', { exact: true }).check();
-    page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Save product live', exact: true }).click();
+    page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Hide Product', exact: true }).click();
     await expect(page.locator('.ms-main')).toContainText('No products in this view.');
     expect((await f.snapshot()).published.products[0].archived).toBe(true);
     await page.goto(f.origin + '/shop'); await expect(page.getByRole('heading', { name: 'Synthetic new product', exact: true })).toHaveCount(0);
