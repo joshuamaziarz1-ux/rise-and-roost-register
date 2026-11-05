@@ -30,5 +30,8 @@ export async function productionBrowserFixture() {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = 'http://127.0.0.1:' + server.address().port;
-  return { ...h, origin, close: async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); h.sql.close(); } };
+  return { ...h, origin, setOwnerToken(owner, token) {
+    if (!['a', 'b'].includes(owner)) throw Error('Unknown synthetic owner.');
+    h[owner === 'a' ? 'ownerA' : 'ownerB'] = token;
+  }, close: async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); h.sql.close(); } };
 }

@@ -9,7 +9,8 @@ import { PRODUCTION_DATABASE_ID, PRODUCTION_WORKSPACE_ID } from '../server/produ
 const bundle = process.env.RR_PRODUCTION_WORKER_BUNDLE;
 if (!bundle) throw Error('Provide the local production dry-run bundle.');
 const authority = await accessAuthority(), origin = 'https://rise-and-roost.com';
-const token = await authority.mint({ expiresAt: Math.floor(Date.now() / 1000) + 3600 });
+const issuedAt = Math.floor(Date.now() / 1000);
+const token = await authority.mint({ issuedAt, notBefore: issuedAt, expiresAt: issuedAt + 730 * 3600 });
 const mf = new Miniflare(convertV4MiniflareOptions({ modules: true, modulesRoot: dirname(bundle), rootPath: dirname(bundle), scriptPath: bundle, compatibilityDate: '2025-10-01', cf: false, d1Databases: ['DB'],
   serviceBindings: { ASSETS: () => new Response('Synthetic production assets') },
   outboundService: request => {

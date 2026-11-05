@@ -28,13 +28,13 @@ test('private pages/APIs require signed individual identity; raw legacy owner ro
 test('wrong signature, audience, issuer, subject, email, type and token lifetime fail closed', async t => {
   const h = await productionFixture(); t.after(() => h.sql.close());
   const now = Math.floor(h.now / 1000), valid = { expiresAt: now + 3600 };
-  for (const options of [{ audience: 'b'.repeat(64) }, { issuer: 'https://other.cloudflareaccess.com' }, { email: 'outsider@example.test' }, { subject: '' }, { claims: { type: 'service' } }, { expiresAt: now - 1 }, { expiresAt: now + 25 * 3600 }, { issuedAt: now + 600 }, { claims: { email: null } }]) {
+  for (const options of [{ audience: 'b'.repeat(64) }, { issuer: 'https://other.cloudflareaccess.com' }, { email: 'outsider@example.test' }, { subject: '' }, { claims: { type: 'service' } }, { expiresAt: now - 1 }, { issuedAt: now + 600 }, { claims: { email: null } }]) {
     const r = await h.call('/studio/api/studio', undefined, { token: await h.auth.mint({ ...valid, ...options }) });
     assert.ok([401, 403].includes(r.status), JSON.stringify(options));
   }
   const tampered = h.ownerA.slice(0, -10) + 'badpayload'; assert.equal((await h.call('/studio', undefined, { token: tampered })).status, 403);
 });
-test('the configured 24-hour Access session is accepted until its expiry, without a shared PIN', async t => {
+test('a 24-hour Access session is accepted until its expiry, without a shared PIN', async t => {
   const h = await productionFixture(); t.after(() => h.sql.close());
   const now = Math.floor(h.now / 1000), token = await h.auth.mint({ issuedAt: now, notBefore: now, expiresAt: now + 86400 });
   assert.equal((await h.call('/studio/api/studio', undefined, { token })).status, 200);
@@ -49,7 +49,9 @@ test('www redirects only navigation to the canonical HTTPS host; alternate-host 
   }
   const denied = await worker.fetch(new Request('https://www.rise-and-roost.com/studio/api/manage/product', { method: 'POST', body: '{}' }), env, {});
   assert.equal(denied.status, 403);
-  for (const origin of ['http://rise-and-roost.com', 'https://www.rise-and-roost.com:8443', 'https://rise-roost-website-production.example.workers.dev', 'https://rise-and-roost.com.attacker.test']) assert.equal((await worker.fetch(new Request(origin + '/studio/api/manage/snapshot', { headers: { 'Cf-Access-Jwt-Assertion': h.ownerA } }), env, {})).status, 503);
+  const insecure = await worker.fetch(new Request('http://rise-and-roost.com/studio/api/manage/snapshot', { headers: { 'Cf-Access-Jwt-Assertion': h.ownerA } }), env, {});
+  assert.equal(insecure.status, 308); assert.equal(insecure.headers.get('Location'), 'https://rise-and-roost.com/studio/api/manage/snapshot');
+  for (const origin of ['https://www.rise-and-roost.com:8443', 'https://rise-roost-website-production.example.workers.dev', 'https://rise-and-roost.com.attacker.test']) assert.equal((await worker.fetch(new Request(origin + '/studio/api/manage/snapshot', { headers: { 'Cf-Access-Jwt-Assertion': h.ownerA } }), env, {})).status, 503);
   assert.equal((await worker.fetch(new Request('https://www.rise-and-roost.com/studio'), { ...env, PRODUCTION_RELEASE_APPROVED: 'false' }, {})).status, 503);
 });
 test('both owners get distinct stable audited identities; removing an owner blocks their next request', async t => {

@@ -2,6 +2,8 @@ import { createRemoteJWKSet, jwtVerify, customFetch } from 'jose';
 import { PRODUCTION_DATABASE_ID, PRODUCTION_WORKSPACE_ID } from './production-preparation.mjs';
 
 const contexts = new WeakSet(), resolvers = new Map();
+// Match the existing Studio Access application's 730h session ceiling.
+const accessSessionSeconds = 730 * 3600;
 export const isProductionContext = value => !!value && contexts.has(value);
 const validEmail = value => typeof value === 'string' && value.length <= 254 && /^[^\s@*]+@[^\s@*.]+(?:\.[^\s@*.]+)+$/.test(value);
 export function productionConfiguration(env, request) {
@@ -34,10 +36,12 @@ export async function productionOwner(request, config, now = Date.now()) {
   if (!token || token.length > 16384) return { status: 401 };
   try {
     const { payload } = await jwtVerify(token, keys(config.issuer), { algorithms: ['RS256'], issuer: config.issuer, audience: config.audience,
-      requiredClaims: ['exp', 'iat', 'sub', 'email', 'type'], maxTokenAge: '24h', currentDate: new Date(now), clockTolerance: 5 });
+      // Access sets each signed expiry; retain an age ceiling matching the
+      // existing application rather than rejecting its fresh 730h sessions.
+      requiredClaims: ['exp', 'iat', 'sub', 'email', 'type'], maxTokenAge: accessSessionSeconds, currentDate: new Date(now), clockTolerance: 5 });
     const owner = validEmail(payload.email) && config.owners.find(o => o.email.toLowerCase() === payload.email.toLowerCase());
     if (payload.type !== 'app' || !validEmail(payload.email) || !owner || typeof payload.sub !== 'string' || !payload.sub || payload.sub.length > 255 ||
-        !Number.isSafeInteger(payload.exp) || !Number.isSafeInteger(payload.iat) || payload.exp * 1000 <= now || payload.iat * 1000 > now + 5000 || payload.exp - payload.iat > 86400) return { status: 403 };
+        !Number.isSafeInteger(payload.exp) || !Number.isSafeInteger(payload.iat) || payload.exp * 1000 <= now || payload.iat * 1000 > now + 5000 || payload.exp <= payload.iat || payload.exp - payload.iat > accessSessionSeconds) return { status: 403 };
     const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(config.issuer + ':' + payload.sub)))].map(v => v.toString(16).padStart(2, '0')).join('');
     return { actor: Object.freeze({ id: 'production-owner:' + digest, name: owner.name.trim(), authentication: 'cloudflare_access', role: 'owner' }), expiresAt: payload.exp * 1000 };
   } catch (e) {
