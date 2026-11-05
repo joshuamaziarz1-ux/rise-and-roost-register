@@ -9,7 +9,7 @@ permissions:
   contents: read
 jobs:
   production-readiness:
-    if: github.head_ref == 'codex/production-launch-readiness'
+    if: github.head_ref == 'codex/production-launch-readiness' || github.head_ref == 'feature/phase-3-website-studio'
     runs-on: ubuntu-24.04
     container:
       image: mcr.microsoft.com/playwright:v1.64.1-noble

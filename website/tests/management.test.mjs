@@ -110,7 +110,7 @@ test('archiving keeps historical order snapshots and blocks future checkout', as
 });
 test('changing booked pickup dates requires confirmation and never moves historical orders', async () => {
   const h = await fixture(), o = (await h.order()).data; let s = await h.snapshot(), pickups = structuredClone(s.published.pickups);
-  pickups[0].date = pickups[1].date;
+  pickups[0].date = pickups[1].date; pickups[0].start = '18:01'; pickups[0].end = '19:00';
   assert.equal((await h.change('calendar', { pickups, paused: false })).status, 409);
   const r = await h.change('calendar', { pickups, paused: false, confirmExistingOrders: true }); assert.equal(r.status, 200);
   s = await h.snapshot(); assert.deepEqual(s.orders[0].pickup, o.pickup);

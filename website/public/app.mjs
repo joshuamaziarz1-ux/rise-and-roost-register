@@ -3,6 +3,7 @@ import { h, button, notify, request, guard } from "./dom.mjs";
 import { money, localInstant, pickupLabel, orderByLabel } from "./model.mjs";
 import { createCustomerExperience } from "./customer.mjs";
 import { pickupLocation } from "./pickup-location.mjs";
+import { sellingMethod } from './selling.mjs';
 
 const root = document.querySelector("#app");
 if (!location.pathname.startsWith('/studio/preview/') && (
@@ -28,6 +29,8 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     checkoutEmail = "",
     emailOptIn = false;
   let commerceEnabled = false, policyAccepted = false, paymentDestinations = {}, checkoutPaymentMethod = '', productionMode = false, checkoutEnabled = true;
+  let automaticCalendar = false, serverOffset = 0, calendarTimer;
+  const calendarNow = () => Date.now() + serverOffset;
   let experience = false, customer, customerWorkspace = "", checkoutMode = "guest";
   let checkoutProfile = { name: "", email: "", phone: "" };
   const editing = new URLSearchParams(location.search).has("studio-preview");
@@ -118,6 +121,10 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     render();
   });
   const add = (product, variant, qty = 1) => {
+    if (!visibleProduct(product) || sellingMethod(product) === 'in-store' || soldOut(product)) {
+      notify('This item is unavailable for online ordering.', true);
+      return;
+    }
     const prior = cart.lines.find(
       (l) => l.productId === product.id && l.variantId === variant.id,
     );
@@ -137,7 +144,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
           loading: "lazy",
           style: { objectPosition: `${photo.x ?? 50}% ${photo.y ?? 50}%` },
         })
-      : h("div", { class: "photo-empty" }, "Add your photo in Studio");
+      : h("div", { class: "photo-empty" }, "Photo coming soon");
   // Presentation-only cleanup of the known starter wording; saved documents stay intact.
   const customerCopy = text => !experience ? text : text
     .replace(" This is our editable starter story — make it yours.", "")
@@ -145,6 +152,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     .replace(" Sample product and price.", "");
   function card(p) {
     let selected = p.variants[0];
+    const inStore = sellingMethod(p) === 'in-store';
     const cardPrice = h("span", {}, money(p.price));
     return h(
       "article",
@@ -165,24 +173,35 @@ if (!location.pathname.startsWith('/studio/preview/') && (
         h(
           "small",
           {},
-          experience ? (soldOut(p) ? doc.ui.soldOut : p.category) : [p.category, availabilityLabel(p)].filter(Boolean).join(" · "),
+          inStore ? p.category : experience ? (soldOut(p) ? 'Sold Out' : p.category) : [p.category, availabilityLabel(p)].filter(Boolean).join(" · "),
         ),
         link("/product/" + p.id, h("h3", {}, p.name)),
+        inStore ? h('p', { class: 'fresh-description' }, customerCopy(p.description)) : null,
         h(
           "div",
           { class: "price-line" },
           cardPrice,
           link("/product/" + p.id, "↗", "round-link"),
         ),
-        experience ? h("div", { class: "quick-add" },
+        inStore ? h('p', { class: 'availability-status', 'data-availability': soldOut(p) ? 'sold-out' : 'in-store' }, availabilityLabel(p)) : experience ? h("div", { class: "quick-add" },
           p.variants.length > 1 ? h("select", { "aria-label": "Choose variety for " + p.name, onchange: e => { selected = p.variants.find(v => v.id === e.target.value); cardPrice.textContent = money(p.price + selected.extra); } }, p.variants.map(v => h("option", { value: v.id }, v.name + (v.extra ? " · +" + money(v.extra) : "")))) : null,
-          button(soldOut(p) ? doc.ui.soldOut : p.channel === "store" ? doc.ui.inStore : "Add to basket", () => add(p, selected), { class: "primary-link", disabled: soldOut(p) || p.channel === "store" || isPreview || editing, "aria-label": soldOut(p) ? p.name + " is sold out" : "Add " + p.name + " to basket" })) : null,
+          button(soldOut(p) ? 'Sold Out' : "Add to basket", () => add(p, selected), { class: "primary-link", disabled: soldOut(p) || isPreview || editing, "aria-label": soldOut(p) ? p.name + " is sold out" : "Add " + p.name + " to basket" })) : null,
       ),
     );
   }
-  const soldOut = (p) => p.stock === 0 || p.capacity === 0;
+  const visibleProduct = p => !!p && p.active === true && !p.archived && !p.hidden;
+  // Customer APIs already combine stock, per-date limits and reservations.
+  const soldOut = (p) => p.soldOut === true || p.stock === 0;
   const availabilityLabel = (p) =>
-    soldOut(p) ? doc.ui.soldOut : p.channel === "store" ? doc.ui.inStore : doc.ui.preorder;
+    soldOut(p) ? 'Sold Out' : sellingMethod(p) === 'in-store' ? 'Available in Store' : sellingMethod(p) === 'online' ? 'Available for Pickup' : doc.ui.preorder;
+  function freshSection() {
+    const products = doc.products.filter(p => visibleProduct(p) && sellingMethod(p) === 'in-store');
+    return h('section', { class: 'site-section fresh-section fresh-at-roost', 'aria-labelledby': 'fresh-roost-heading' },
+      h('div', { class: 'section-inner' },
+        h('div', { class: 'section-copy' }, h('h2', { id: 'fresh-roost-heading' }, 'Fresh at The Roost!'),
+          doc.freshAnnouncement?.trim() ? h('p', { class: 'fresh-announcement' }, doc.freshAnnouncement) : null),
+        products.length ? h('div', { class: 'product-grid' }, products.map(card)) : h('p', { class: 'fresh-empty' }, 'Check back soon for fresh finds at the farm stand.')));
+  }
   function renderSection(section, page) {
     if (section.hidden) return null;
     const s = h("section", {
@@ -231,7 +250,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
             { class: "hero-art" },
             h("img", {
               src: "/assets/bread.svg",
-              alt: "Sample bread illustration; upload your own photography in Studio",
+              alt: "Farmhouse bread illustration",
             }),
             !experience ? h("div", { class: "art-label" }, doc.ui.heroStamp || "SLOW MADE. SOUL FED.") : null,
             h(
@@ -259,7 +278,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
           h(
             "div",
             { class: "product-grid" },
-            doc.products.filter((p) => p.active).map(card),
+            doc.products.filter((p) => visibleProduct(p) && sellingMethod(p) !== 'in-store').map(card),
           ),
           !experience ? h("p", { class: "small-note" }, doc.ui.productNote) : null,
         ),
@@ -364,7 +383,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     return s;
   }
   function productDetail(id) {
-    const p = doc.products.find((p) => p.id === id && p.active);
+    const p = doc.products.find((p) => p.id === id && visibleProduct(p));
     if (!p)
       return h(
         "main",
@@ -389,17 +408,16 @@ if (!location.pathname.startsWith('/studio/preview/') && (
       },
       p.variants.map((v) => h("option", { value: v.id }, v.name)),
     );
-    const action = button(
+    const inStore = sellingMethod(p) === 'in-store';
+    const action = inStore ? h('p', { class: 'availability-status', 'data-availability': soldOut(p) ? 'sold-out' : 'in-store' }, availabilityLabel(p)) : button(
       soldOut(p)
-        ? doc.ui.soldOut
-        : p.channel === "store"
-          ? doc.ui.inStore
-          : doc.ui.add,
+        ? 'Sold Out'
+        : doc.ui.add,
       () => add(p, variant),
       {
         class: "primary-link",
         disabled:
-          soldOut(p) || p.channel === "store" || isPreview || editing,
+          soldOut(p) || isPreview || editing,
       },
     );
     return h(
@@ -437,9 +455,9 @@ if (!location.pathname.startsWith('/studio/preview/') && (
         h("h1", {}, p.name),
         h("p", {}, customerCopy(p.description)),
         price,
-        h("label", { class: "field" }, doc.ui.variety || "Variety", select),
+        !inStore ? h("label", { class: "field" }, doc.ui.variety || "Variety", select) : null,
         action,
-        h("p", { class: "small-note" }, doc.ui.policy),
+        !inStore ? h("p", { class: "small-note" }, doc.ui.policy) : null,
       ),
     );
   }
@@ -484,6 +502,22 @@ if (!location.pathname.startsWith('/studio/preview/') && (
       (n, l) => n + l.qty * (l.p.price + l.v.extra),
       0,
     );
+    const invalidBasket = cart.lines.length !== lines.length || lines.some(l =>
+      !visibleProduct(l.p) || sellingMethod(l.p) === 'in-store' || soldOut(l.p) ||
+      lines.filter(other => other.productId === l.productId).reduce((n, other) => n + other.qty, 0) > l.p.stock);
+    const blockedItems = cart.lines.filter(l => {
+      const p = doc.products.find(p => p.id === l.productId);
+      return !visibleProduct(p) || sellingMethod(p) === 'in-store' || soldOut(p) || !p.variants.some(v => v.id === l.variantId);
+    });
+    const pickupClosed = p => p.closed ||
+      cart.lines.some(line => p.productionRemaining?.[line.productId] !== undefined && p.productionRemaining[line.productId] < cart.lines.filter(l => l.productId === line.productId).reduce((n, l) => n + l.qty, 0)) ||
+      calendarNow() >= localInstant(p.cutoffDate, p.cutoffTime) || calendarNow() >= localInstant(p.date, p.start) || p.capacity === 0;
+    const eligiblePickups = doc.pickups.filter(p => !pickupClosed(p));
+    if (automaticCalendar && !eligiblePickups.some(p => p.id === cart.pickupId)) {
+      // An earlier checkout response may have been lost. Keep its retry ID so
+      // advancing availability cannot create a second order automatically.
+      cart.pickupId = eligiblePickups[0]?.id || ''; saveCart();
+    }
     const select = h(
       "select",
       {
@@ -497,12 +531,8 @@ if (!location.pathname.startsWith('/studio/preview/') && (
         },
       },
       h("option", { value: "" }, doc.ui.pickup),
-      doc.pickups.map((p) => {
-        const closed =
-          p.closed ||
-          cart.lines.some(line => p.productionRemaining?.[line.productId] !== undefined && p.productionRemaining[line.productId] < cart.lines.filter(l => l.productId === line.productId).reduce((n, l) => n + l.qty, 0)) ||
-          Date.now() >= localInstant(p.cutoffDate, p.cutoffTime) ||
-          p.capacity === 0;
+      (automaticCalendar ? eligiblePickups : doc.pickups.filter(p => calendarNow() < localInstant(p.date, p.start))).map((p) => {
+        const closed = pickupClosed(p);
         return h(
           "option",
           { value: p.id, selected: cart.pickupId === p.id, disabled: closed },
@@ -530,6 +560,8 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     const action = button(
       experience ? "Place preorder" : doc.ui.checkout,
       guard(async () => {
+        if (invalidBasket) throw new Error('Some items are no longer available for online ordering. Please update your basket before continuing.');
+        if (!checkoutEnabled || doc.orderingPaused || !chosen || pickupClosed(chosen)) throw new Error('Ordering is unavailable for this pickup. Please choose another available date.');
         if (commerceEnabled && total > 0 && !paymentDestinations[checkoutPaymentMethod]) throw new Error('Ordering is paused while payment options are being set up.');
         if (commerceEnabled && !policyAccepted) throw new Error("Please read and acknowledge the pickup policy.");
         if (emailOptIn && !emailInput.reportValidity()) return;
@@ -582,13 +614,19 @@ if (!location.pathname.startsWith('/studio/preview/') && (
       {
         class: "primary-link",
         type: experience ? "submit" : "button",
-        disabled: !checkoutEnabled || !chosen || !lines.length || isPreview || editing || commerceEnabled && total > 0 && !paymentDestinations[checkoutPaymentMethod],
+        disabled: !checkoutEnabled || doc.orderingPaused || !chosen || pickupClosed(chosen) || invalidBasket || !lines.length || isPreview || editing || commerceEnabled && total > 0 && !paymentDestinations[checkoutPaymentMethod],
       },
     );
     return h(
       "main",
       { class: "section-inner cart-page" },
       h("h1", {}, doc.ui.cart),
+      invalidBasket ? h('div', { class: 'basket-availability-warning', role: 'status' },
+        h('p', {}, 'Some items are no longer available for online ordering. Remove unavailable items or lower their quantities before continuing.'),
+        blockedItems.length ? button('Remove unavailable items', () => {
+          cart.lines = cart.lines.filter(l => !blockedItems.some(blocked => blocked.productId === l.productId && blocked.variantId === l.variantId));
+          cart.requestId = crypto.randomUUID(); saveCart(); render();
+        }, { class: 'text-button' }) : null) : null,
       experience && lines.length ? h("div", { class: "checkout-mode", "aria-label": "Checkout options" },
         button("Guest checkout", () => { checkoutMode = "guest"; render(); }, { class: checkoutMode === "guest" ? "active" : "", "aria-pressed": checkoutMode === "guest" }),
         customer?.member ? button("Use my Roost details", () => { checkoutMode = "member"; checkoutProfile = { ...customer.member.profile }; render(); }, { class: checkoutMode === "member" ? "active" : "", "aria-pressed": checkoutMode === "member" }) : link("/roost", "Already a member? Sign in"),
@@ -615,6 +653,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
                     "div",
                     {},
                     h("h3", {}, l.p.name),
+                    sellingMethod(l.p) === 'in-store' || soldOut(l.p) || !visibleProduct(l.p) ? h('p', { class: 'availability-status' }, sellingMethod(l.p) === 'in-store' ? 'Available in store only' : soldOut(l.p) ? 'Sold Out' : 'Unavailable') : null,
                     h("p", {}, l.v.name + " · " + money(l.p.price + l.v.extra)),
                     h(
                       "label",
@@ -717,11 +756,11 @@ if (!location.pathname.startsWith('/studio/preview/') && (
       const welcome = page.sections.find(s => s.type === "hero" && !s.hidden) || {
         type: "hero", id: "welcome", title: doc.business.story, body: "", padding: 72, fontSize: 72, align: "left",
       };
-      return renderSection(welcome, page);
+      return [renderSection(welcome, page), freshSection()];
     }
-    if (page.slug === "/shop") return h("section", { class: "section-inner shop-page", "aria-label": page.title },
+    if (page.slug === "/shop") return [h("section", { class: "section-inner shop-page", "aria-label": page.title },
       h("div", { class: "page-intro" }, h("h1", {}, page.title)),
-      h("div", { class: "product-grid" }, doc.products.filter(p => p.active).map(card)));
+      h("div", { class: "product-grid" }, doc.products.filter(p => visibleProduct(p) && sellingMethod(p) !== 'in-store').map(card))), freshSection()];
     return page.sections.map(s => renderSection(s, page));
   }
   function render() {
@@ -806,7 +845,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
           ? h(
               "main",
               { id: "main-content" },
-              experience ? customerPage(page) : page.sections.map(s => renderSection(s, page)),
+              experience ? customerPage(page) : [...page.sections.map(s => renderSection(s, page)), ...(['/', '/shop'].includes(page.slug) ? [freshSection()] : [])],
             )
           : h(
               "main",
@@ -880,15 +919,24 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     );
     if (sequence !== loadSequence) return;
     if (editing && previewDocumentReceived) return;
+    serverOffset = (result.serverNow || Date.now()) - Date.now();
     if (result.id === workspace && (result.revision < revision ||
       (result.revision === revision && result.availabilityRevision < availabilityRevision))) return;
     const changed = result.id !== workspace || result.revision !== revision;
-    if (!force && !changed && result.availabilityRevision === availabilityRevision) {
+    if (!force && !changed && result.availabilityRevision === availabilityRevision && JSON.stringify(result.document.pickups) === JSON.stringify(doc.pickups)) {
       if (experience && path === "/roost" && await customer.refresh(false)) render();
       if (experience && path === '/comments') await customer.refreshComments();
       return;
     }
     doc = result.document;
+    automaticCalendar = result.studioManagementEnabled === true;
+    clearTimeout(calendarTimer);
+    if (automaticCalendar) {
+      const next = Math.min(...doc.pickups.map(p => localInstant(p.cutoffDate, p.cutoffTime)).filter(at => at > calendarNow()));
+      if (Number.isFinite(next)) calendarTimer = setTimeout(() => {
+        render(); void load(true).catch(error => notify(error.message, true));
+      }, Math.min(2147483647, Math.max(1, next - calendarNow() + 1)));
+    }
     productionMode = result.productionMode === true;
     checkoutEnabled = result.checkoutEnabled !== false;
     experience = !!result.customerExperienceEnabled;

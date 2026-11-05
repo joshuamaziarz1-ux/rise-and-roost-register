@@ -1,4 +1,14 @@
 /* Customer experience additions inherit the approved farmhouse theme. */
+.fresh-at-roost { padding: 48px 0; background: var(--surface); }
+.fresh-at-roost .section-copy { margin-bottom: 28px; }
+.fresh-at-roost .section-copy h2 { margin: 0 0 16px; }
+.fresh-at-roost .fresh-announcement { max-width: 720px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.fresh-at-roost .fresh-description { font-size: 14px; line-height: 1.65; margin: 0 0 16px; overflow-wrap: anywhere; }
+.fresh-at-roost .fresh-empty { font-size: 14px; margin: 0; color: var(--muted); }
+.availability-status { font-size: 13px; font-weight: 600; color: var(--green); }
+.fresh-at-roost .availability-status { margin-top: auto; }
+.basket-availability-warning { padding: 16px 20px; border: 1px solid #c0b89f; border-radius: var(--radius); background: var(--surface); margin-bottom: 24px; }
+.basket-availability-warning p { margin: 0 0 8px; }
 .experience .site-header { position: sticky; top: 0; z-index: 20; background: var(--paper); min-height: 88px; }
 .experience .basket-link { min-height: 48px; padding: 10px 18px; background: var(--green); color: white; border-radius: var(--button-radius); font-size: 14px; font-weight: 600; }
 .experience .basket-count { background: #ffffff25; min-width: 25px; }

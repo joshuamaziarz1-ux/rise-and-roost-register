@@ -1,0 +1,324 @@
+{
+  "preparedAt": "2026-11-05T18:28:05.376671+00:00",
+  "status": "Implementation and verification complete; no production upload, deployment or D1 mutation",
+  "sourceBranch": "feature/phase-3-website-studio",
+  "sourceCommit": "548b7deb2712cd8163830ca96ab57684ae7d5a65",
+  "continuedFrom": "3d09b4fec33c84bb251b19808520cadbbc57d4dc",
+  "storeTimezone": "America/Indiana/Indianapolis",
+  "regularWeekdays": [
+    "Wednesday",
+    "Thursday",
+    "Friday"
+  ],
+  "noticeCalendarDays": 2,
+  "cutoffLocalTime": "12:00",
+  "horizonCalendarDays": 63,
+  "results": {
+    "backend": {
+      "passed": 206,
+      "failed": 0,
+      "skipped": 0
+    },
+    "schemaGuards": {
+      "passed": 7,
+      "failed": 0
+    },
+    "browser": {
+      "mainUniqueCasesVerified": 145,
+      "mainFullRunPassed": 143,
+      "mainCaptureFailuresCorrected": 2,
+      "correctedCases": [
+        "iphone-webkit \u203a tests/browser/management.spec.mjs \u203a Rise & Roost management Studio \u203a public order appears in Studio, verification changes financial totals, and pickup lists/status track separately",
+        "iphone-webkit \u203a tests/browser/phase3.spec.mjs \u203a Phase 3 selling and pickup controls \u203a automatic pickup capacity and closures preserve commitments; special dates follow noon deadlines"
+      ],
+      "focusedPhase3Passed": 25,
+      "captureRegressionPassed": 5,
+      "productionPassed": 10,
+      "commercePassed": 8,
+      "totalUniqueCasesVerified": 163,
+      "unresolvedFailures": 0,
+      "profiles": [
+        "desktop-chromium",
+        "desktop-webkit",
+        "iphone-webkit",
+        "android-chromium",
+        "tablet-chromium"
+      ]
+    },
+    "builds": {
+      "production": "passed --dry-run",
+      "classic": "passed --dry-run",
+      "experience": "passed --dry-run"
+    },
+    "localWorkerD1": {
+      "productionGuard": true,
+      "signed730HourOwner": true,
+      "generatedCalendar": true,
+      "atomicReservation": true,
+      "calendarExceptionPreservesOrder": true,
+      "manualPaymentsAndFulfillment": true,
+      "classicCompatibility": true,
+      "pinCommerceCompatibility": true,
+      "remoteWrites": 0
+    },
+    "runtimeDependencyVulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    }
+  },
+  "production": {
+    "uploads": 0,
+    "deployments": 0,
+    "d1Writes": 0,
+    "schemaChanges": 0,
+    "configurationChanges": 0,
+    "liveInspectionsInThisContinuation": false,
+    "phase2Login": "Danielle confirmed successful sign-in; no owner code/token requested"
+  },
+  "protectedFilesUnchangedFromBaseline": [
+    {
+      "path": "website/server/production-access.mjs",
+      "sha256": "72cabb1b6fd4d67895673d0354cb1d82309411e72764400e4c5fe1d4889543cb",
+      "matchesPhase3Baseline": true
+    },
+    {
+      "path": "website/server/production-runtime.mjs",
+      "sha256": "6ca52a3e92078b740e5293fec43f25c78a741eb2701040f12cf956ac1da6a131",
+      "matchesPhase3Baseline": true
+    },
+    {
+      "path": "website/server/worker.mjs",
+      "sha256": "778d34e02080c39738759568c7cff13d9c38f08ee109078ed2ce64283cbd68e2",
+      "matchesPhase3Baseline": true
+    },
+    {
+      "path": "website/server/studio-pin.mjs",
+      "sha256": "d9ccd529be44ccd48b28e107c63d24d19797ce65e8c058c8b73c81e636b60d8a",
+      "matchesPhase3Baseline": true
+    },
+    {
+      "path": "website/public/commerce.mjs",
+      "sha256": "e896aaef48acf1664017db6f1bfe817d7b07e12b6c01d1b84c3418195262d60e",
+      "matchesPhase3Baseline": true
+    },
+    {
+      "path": "website/public/selling.mjs",
+      "sha256": "e782841cb65983d695a0e12098b1753154a4fa5dbe2e887a88a85bc161f84d20",
+      "matchesPhase3Baseline": true
+    },
+    {
+      "path": "website/public/style.css",
+      "sha256": "455ac597f26853854ec8ba0cf3dfe63600a0f55017ac73bed685c188e2b37fe4",
+      "matchesPhase3Baseline": true
+    },
+    {
+      "path": "website/public/customer.css",
+      "sha256": "9d5edae0e8c1f6e54fb4151f09b2a233baa57330974b7d3d4fe4bd83f24249a1",
+      "matchesPhase3Baseline": true
+    },
+    {
+      "path": "website/public/management.css",
+      "sha256": "a805ff346fce224f7c0bd724ee25d12dc0dc85f8562ffe48562efc0c569fb7bd",
+      "matchesPhase3Baseline": true
+    },
+    {
+      "path": "website/production-schema.sql",
+      "sha256": "1354925d169b39908082d1f9380ba23141ac8cd168b26a3cf880094bed49dc5f",
+      "matchesPhase3Baseline": true
+    },
+    {
+      "path": "website/schema.sql",
+      "sha256": "da70895b212dc5c4f09cc6c51195c753f29693deaeb34ebf325ca4ef5323556e",
+      "matchesPhase3Baseline": true
+    },
+    {
+      "path": "website/wrangler.production.toml",
+      "sha256": "a64c8aa730a99560890ba789fdfa5f067951cfac077794ec19a1339a63b16208",
+      "matchesPhase3Baseline": true
+    },
+    {
+      "path": "website/wrangler.experience.toml",
+      "sha256": "85c2fd95f23334cf4d8ccbfa9b405bd476f8b8799086e2f6af630012832f15df",
+      "matchesPhase3Baseline": true
+    },
+    {
+      "path": "website/wrangler.toml",
+      "sha256": "b1af95b3e78d8e135a057ee9cdfcf0d3ae868cec99593d4af894f87a28154417",
+      "matchesPhase3Baseline": true
+    },
+    {
+      "path": ".github/workflows/website-beta.yml",
+      "sha256": "58a89418c3267bda689a9ec1c327f667edf13b6a8afcae8d896ad262e8e2f381",
+      "matchesPhase3Baseline": true
+    }
+  ],
+  "migrationsArtworkAndVendorAssetsUnchanged": true,
+  "implementationFiles": [
+    {
+      "path": "website/public/app.mjs",
+      "sha256": "7c698e6769c346bbeb6fd1aac4f8253fde07ea1d53c4dd12b355cd39093a8ad6"
+    },
+    {
+      "path": "website/public/management.mjs",
+      "sha256": "daaa831c1ff8d3a3e44012986effada71f35817be3d81d1dad63c2b6b47bdb16"
+    },
+    {
+      "path": "website/public/model.mjs",
+      "sha256": "58c49b7e422d8f63585877ee28274d6962049125aaa1de61c56dbd6644f61ded"
+    },
+    {
+      "path": "website/server/management.mjs",
+      "sha256": "08060a7c5afc205a8420c8e6fd27ecc306ca260537becaabed0af128aa6a83d1"
+    },
+    {
+      "path": "website/server/pickup-calendar.mjs",
+      "sha256": "2a6c555cf6777a1b1f56636bcf14a0e5fcbab97b4b356bd4d8de48504ffe1818"
+    },
+    {
+      "path": "website/server/service.mjs",
+      "sha256": "0eb8e3bc294e264ba2b93604ad840e2b0fdbf605a63eb06d0717acafa8dd9363"
+    }
+  ],
+  "productionBuild": {
+    "workerSha256": "c8271b9ca312c221ab99c6a5db98f0786211657bc2659be61459e62fe0ec68a6",
+    "sourceMapSha256": "f5033b3d574e91f38d2e4a0488c46c7d81ad94a03c57d74326c9c9c1bcd95d75",
+    "publicAssets": [
+      {
+        "path": "access.mjs",
+        "bytes": 602,
+        "sha256": "c6153a6bfd06617891fdb69260e5a99f8bab98b4a7e846f29314f9386b3586a1"
+      },
+      {
+        "path": "app.mjs",
+        "bytes": 42665,
+        "sha256": "7c698e6769c346bbeb6fd1aac4f8253fde07ea1d53c4dd12b355cd39093a8ad6"
+      },
+      {
+        "path": "assets/bread.svg",
+        "bytes": 621,
+        "sha256": "379ac3f00a5e07ff79d27bdaee3357bd81673c31c5858b46a24384794a0ab5ac"
+      },
+      {
+        "path": "assets/eggs.svg",
+        "bytes": 932,
+        "sha256": "1cca67a7694c66670383e165cdad6a6243606144cb10ebf225baa74b6fc54069"
+      },
+      {
+        "path": "assets/logo.webp",
+        "bytes": 10768,
+        "sha256": "3839cffddc606af6497756d0b7fb4b993032723ba576537393ba352357627479"
+      },
+      {
+        "path": "assets/rolls.svg",
+        "bytes": 1673,
+        "sha256": "4e00b3a7f24e411b4ccb061b8301ef64d2a2a6bcc4e59299d2dd34b974d304dc"
+      },
+      {
+        "path": "commerce.mjs",
+        "bytes": 5716,
+        "sha256": "e896aaef48acf1664017db6f1bfe817d7b07e12b6c01d1b84c3418195262d60e"
+      },
+      {
+        "path": "customer.css",
+        "bytes": 10395,
+        "sha256": "9d5edae0e8c1f6e54fb4151f09b2a233baa57330974b7d3d4fe4bd83f24249a1"
+      },
+      {
+        "path": "customer.mjs",
+        "bytes": 15109,
+        "sha256": "5c13189e7c00ad994e3a867df9c1d4e76dae0878973ff7f62e42d37a2ea6da39"
+      },
+      {
+        "path": "dom.mjs",
+        "bytes": 3409,
+        "sha256": "75197c0534b563833e7715a7d01b574b2ce139e12f68c50f6e9fe05322d42431"
+      },
+      {
+        "path": "index.html",
+        "bytes": 785,
+        "sha256": "411529554859bc0494808bfedf82804773fca996a146c3c115dae9fccf478224"
+      },
+      {
+        "path": "management.css",
+        "bytes": 10911,
+        "sha256": "a805ff346fce224f7c0bd724ee25d12dc0dc85f8562ffe48562efc0c569fb7bd"
+      },
+      {
+        "path": "management.mjs",
+        "bytes": 76587,
+        "sha256": "daaa831c1ff8d3a3e44012986effada71f35817be3d81d1dad63c2b6b47bdb16"
+      },
+      {
+        "path": "model.mjs",
+        "bytes": 12636,
+        "sha256": "58c49b7e422d8f63585877ee28274d6962049125aaa1de61c56dbd6644f61ded"
+      },
+      {
+        "path": "orders.mjs",
+        "bytes": 1416,
+        "sha256": "5b8ae1c0485a46b41ff49d83e850ecdaae00302e115e8a6a6a7e780dd24f1d14"
+      },
+      {
+        "path": "payment-tiles.mjs",
+        "bytes": 2693,
+        "sha256": "106ddbb5fa07c34e79264b4980b4c1b349f7f9d43e3548a4442bce8437514c8f"
+      },
+      {
+        "path": "pickup-location.mjs",
+        "bytes": 1020,
+        "sha256": "04ecbabfeb5864c421bb1a2b90d417cfcbe3449d3149b6230965533f88f8ea46"
+      },
+      {
+        "path": "selling.mjs",
+        "bytes": 1066,
+        "sha256": "e782841cb65983d695a0e12098b1753154a4fa5dbe2e887a88a85bc161f84d20"
+      },
+      {
+        "path": "studio-pin.mjs",
+        "bytes": 2593,
+        "sha256": "8fe7eff05ba749e5ba7219b52d49911c6265cc0d593c13706bbefcc708f72f18"
+      },
+      {
+        "path": "studio.mjs",
+        "bytes": 63279,
+        "sha256": "c19d8bfb755c4dd50f02e668c785e49a95a1054e5f1ed729b0d1f39b63579788"
+      },
+      {
+        "path": "studio.webmanifest",
+        "bytes": 334,
+        "sha256": "605ea39db7181d34a3f6b0433f96f4221a3f99646d4a882a3505360d314ac75e"
+      },
+      {
+        "path": "style.css",
+        "bytes": 23331,
+        "sha256": "455ac597f26853854ec8ba0cf3dfe63600a0f55017ac73bed685c188e2b37fe4"
+      },
+      {
+        "path": "tracking.css",
+        "bytes": 1259,
+        "sha256": "64a9f30fb8b9291645ec43af531817d4bccb72f6db36ede77bafadee53ca5238"
+      },
+      {
+        "path": "tracking.mjs",
+        "bytes": 19922,
+        "sha256": "50426c64d34225df929717e68d5568b522f093894937feff92a23e1ffaf77fc2"
+      },
+      {
+        "path": "vendor/README.md",
+        "bytes": 1404,
+        "sha256": "aa8cf2a80d546594115c998d914500efe8c7dc123a85e413b332ee2bd6400654"
+      },
+      {
+        "path": "vendor/qrcode-generator.mjs",
+        "bytes": 51907,
+        "sha256": "ea91d7118a5395289170da848b7c6758b996163bfbccf312591ab65a4911b7c0"
+      }
+    ]
+  },
+  "reportSha256": "27c5377dcf7b4cec15b0d9add1635bbbb5f1c73cacc696d1451174d0d29da025",
+  "note": "Main iPhone capture errors were export-size limits with a nine-week calendar. CSS-resolution captures passed the fresh five-profile capture and 25-case focused matrices. All cases are local and synthetic; no physical-device or hosted-mutation results are claimed."
+}

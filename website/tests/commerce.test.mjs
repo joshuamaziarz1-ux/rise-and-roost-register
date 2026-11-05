@@ -140,7 +140,8 @@ test('multiple pickup windows share daily production and optional combined order
   assert.equal((await h.change('calendar',{pickups:[first,second],paused:false})).status,200);
   const placed=await Promise.all([h.order({pickupId:first.id}),h.order({pickupId:second.id})]);assert.deepEqual(placed.map(r=>r.status).sort(),[201,409]);
   const available=(await h.call('/api/site',undefined,{guest:true})).data.document;
-  for(const pickup of available.pickups)assert.equal(pickup.productionRemaining[p.id],0);
+  for(const pickup of available.pickups.filter(pickup=>pickup.date===first.date))assert.equal(pickup.productionRemaining[p.id],0);
+  assert.ok(available.pickups.some(pickup=>pickup.date!==first.date&&pickup.productionRemaining[p.id]===1));
   s=await h.snapshot();p={...s.published.products[0],capacity:10};assert.equal((await h.change('product',{product:p})).status,200);
   assert.equal((await h.change('calendar',{pickups:[{...first,dailyCapacity:1},second],paused:false,confirmExistingOrders:true})).status,200);
   assert.equal((await h.order({pickupId:second.id})).status,409);

@@ -25,6 +25,7 @@ try {
   const schema = (await readFile(new URL('../production-schema.sql', import.meta.url), 'utf8')).split('\n').filter(line => !line.trim().startsWith('--')).join('\n');
   for (const statement of schema.split(';')) if (statement.trim()) await db.prepare(statement).run();
   const doc = seed(Date.now() + 7 * 86400000); doc.business.pickupAddress = { name: 'Synthetic farm', street: 'Synthetic street', city: 'Synthetic Indiana city' }; doc.products[0].stock = 1; doc.products[0].inventoryMode = 'physical';
+  doc.pickups = []; doc.pickupSchedule = { start: '15:00', end: '18:00', capacity: 1 };
   const serialized = JSON.stringify(doc);
   await db.prepare('INSERT INTO workspaces(id,owner_hash,draft_json,published_json,versions_json,created_at) VALUES(?,?,?,?,?,?)').bind(PRODUCTION_WORKSPACE_ID, 'disabled-legacy-owner', serialized, serialized, '[]', new Date().toISOString()).run();
   await db.prepare("INSERT INTO deployment_identity VALUES('main','production',?,?)").bind(PRODUCTION_DATABASE_ID, PRODUCTION_WORKSPACE_ID).run();
@@ -40,7 +41,9 @@ try {
   await mutation('payment-destination', { provider: 'paypal', url: 'https://paypal.me/SyntheticWorkerdBusiness', enabled: true, businessConfirmed: true });
   const test = await mutation('payment-test-start', { provider: 'paypal' });
   await mutation('payment-test-confirm', { provider: 'paypal', testId: test.result.testId, confirmed: true });
-  const p = doc.products[0], input = { workspaceId: PRODUCTION_WORKSPACE_ID, storefront: 'main', revision: 1, pickupId: doc.pickups[0].id, checkoutMode: 'guest', customerDetails: { name: 'Synthetic Workerd Guest' }, policyAccepted: true, policyVersion: '2026-11-01', total: p.price, lines: [{ productId: p.id, variantId: p.variants[0].id, qty: 1, unitPrice: p.price }] };
+  const site = await (await call('/api/site')).json();
+  assert.ok(site.document.pickups.length >= 24); assert.ok(site.document.pickups[0].id.startsWith('recurring-'));
+  const p = doc.products[0], input = { workspaceId: PRODUCTION_WORKSPACE_ID, storefront: 'main', revision: 1, pickupId: site.document.pickups[0].id, checkoutMode: 'guest', customerDetails: { name: 'Synthetic Workerd Guest' }, policyAccepted: true, policyVersion: '2026-11-01', total: p.price, lines: [{ productId: p.id, variantId: p.variants[0].id, qty: 1, unitPrice: p.price }] };
   const responses = await Promise.all([call('/api/orders', { ...input, requestId: crypto.randomUUID() }), call('/api/orders', { ...input, requestId: crypto.randomUUID() })]);
   assert.deepEqual(responses.map(r => r.status).sort(), [201, 409]);
   const order = await responses.find(r => r.status === 201).json(); assert.equal(order.simulated, false);
@@ -53,5 +56,9 @@ try {
   assert.equal(s.orders[0].verifications.length, 1);
   for (const status of ['preparing', 'ready']) s = await mutation('fulfillment', { id: order.id, orderVersion: s.orders[0].version, status });
   const tracked = await (await call(trackedPath, undefined, false, bearer)).json(); assert.equal(tracked.status, 'ready'); assert.equal(tracked.paymentStatus, 'verified');
-  console.log(JSON.stringify({ actualProductionWorkerdD1: true, individualSignedOwnerIdentity: true, privateApiAuthorization: true, manualPaymentVerification: true, duplicateVerificationPrevented: true, atomicInventoryRace: true, trackingAndFulfillment: true, remoteRequests: 0, remoteWrites: 0 }));
+  const pickup = s.management.pickups.find(p => p.id === order.pickup.id);
+  s = await mutation('calendar-date', { pickup: { ...pickup, closed: true }, confirmExistingOrders: true });
+  assert.deepEqual(s.orders[0].pickup, order.pickup);
+  assert.equal(s.published.pickups.length, 1); assert.equal(s.published.pickups[0].closed, true);
+  console.log(JSON.stringify({ actualProductionWorkerdD1: true, individualSignedOwnerIdentity: true, privateApiAuthorization: true, manualPaymentVerification: true, duplicateVerificationPrevented: true, atomicInventoryRace: true, trackingAndFulfillment: true, automaticCalendar: true, calendarExceptionPreservesOrder: true, remoteRequests: 0, remoteWrites: 0 }));
 } finally { await mf.dispose(); }

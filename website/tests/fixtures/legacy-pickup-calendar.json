@@ -1,0 +1,6 @@
+[
+  { "id": "pickup-2026-11-06", "date": "2026-11-06", "start": "15:00", "end": "18:00", "cutoffDate": "2026-11-05", "cutoffTime": "18:00", "capacity": 12, "closed": false },
+  { "id": "pickup-2026-11-10", "date": "2026-11-10", "start": "15:00", "end": "18:00", "cutoffDate": "2026-11-09", "cutoffTime": "18:00", "capacity": 12, "closed": false },
+  { "id": "pickup-2026-11-13", "date": "2026-11-13", "start": "15:00", "end": "18:00", "cutoffDate": "2026-11-12", "cutoffTime": "18:00", "capacity": 12, "closed": false },
+  { "id": "pickup-2026-11-17", "date": "2026-11-17", "start": "15:00", "end": "18:00", "cutoffDate": "2026-11-16", "cutoffTime": "18:00", "capacity": 12, "closed": false }
+]

@@ -1,0 +1,124 @@
+{
+  "preparedAt": "2026-11-05T16:56:01.319639+00:00",
+  "status": "Development complete; production release not authorized",
+  "sourceBranch": "feature/phase-3-website-studio",
+  "phase2Source": {
+    "activeVersion": "5bf5f229-8f34-4935-8699-4c6a6d78d055",
+    "phase2Commit": "0e1db86ddec07d1e055b82334552b87a1f37f517",
+    "applicationModulesCompared": 16,
+    "matchingModules": [
+      "public/model.mjs",
+      "public/commerce.mjs",
+      "public/orders.mjs",
+      "server/orders.mjs",
+      "server/roost.mjs",
+      "public/access.mjs",
+      "server/management-backup.mjs",
+      "server/management.mjs",
+      "server/preview-access.mjs",
+      "server/production-preparation.mjs",
+      "server/production-access.mjs",
+      "server/service.mjs",
+      "server/notifications.mjs",
+      "server/studio-pin.mjs",
+      "server/production-runtime.mjs",
+      "server/worker.mjs"
+    ],
+    "differences": [],
+    "bindingsCount": 16
+  },
+  "results": {
+    "backend": {
+      "passed": 189,
+      "failed": 0,
+      "skipped": 0,
+      "finalPhase3IntegrationSubsetPassed": 19
+    },
+    "schemaGuardTests": {
+      "passed": 7,
+      "failed": 0
+    },
+    "browser": {
+      "mainUniqueCasesPassed": 135,
+      "productionUniqueCasesPassed": 10,
+      "commerceUniqueCasesPassed": 8,
+      "totalUniqueCasesPassed": 153,
+      "profiles": [
+        "desktop-chromium",
+        "desktop-webkit",
+        "iphone-webkit",
+        "android-chromium",
+        "tablet-chromium"
+      ],
+      "initialMainPassed": 123,
+      "initialMainFailures": 12,
+      "correctedRerunPassed": 20,
+      "unresolvedFailures": 0,
+      "note": "Initial main runner retained old wording/selector assertions. Fresh rerun passed all 12 corrected failures plus final availability scenarios on all five profiles. Production photo/hide case passed on both profiles after updating its removed-control assertions."
+    },
+    "productionBuild": "passed (dry-run only)",
+    "actualLocalWorkerdD1": [
+      "production guard before storage",
+      "production signed 730-hour session, inventory race, manual payment and fulfillment",
+      "classic compatibility",
+      "PIN/commerce compatibility"
+    ],
+    "productionDependencyAudit": {
+      "knownVulnerabilities": 0
+    },
+    "anonymousLiveChecks": {
+      "passed": 21,
+      "failed": 0
+    }
+  },
+  "production": {
+    "activeVersion": "5bf5f229-8f34-4935-8699-4c6a6d78d055",
+    "trafficPercent": 100,
+    "workerUploadRequests": 0,
+    "assetUploadRequests": 0,
+    "deploymentRequests": 0,
+    "businessMutationRequests": 0,
+    "schemaChanges": false,
+    "migrationRequired": false,
+    "checkoutDisabled": true,
+    "orderingPaused": true,
+    "ownersRetained": 2,
+    "bindingsRetained": 16,
+    "accessSessionDuration": "730h",
+    "allTwelveTableFingerprintsUnchanged": true,
+    "schemaFingerprintUnchanged": true,
+    "allInspectionQueriesRowsWritten": 0,
+    "allConfigurationSnapshotsUnchanged": {
+      "d1-before": true,
+      "access-apps": true,
+      "studio-access-policies": true,
+      "domains": true,
+      "subdomain": true,
+      "dns": true,
+      "routes": true,
+      "ssl": true,
+      "always-https": true,
+      "settings": true,
+      "deployments": true
+    }
+  },
+  "applicationFileSHA256": {
+    "public/selling.mjs": "e782841cb65983d695a0e12098b1753154a4fa5dbe2e887a88a85bc161f84d20",
+    "public/app.mjs": "4f03f110c552b2f9190ddbde04fa7e8b6814065a9951fef8927cec333a4788b3",
+    "public/customer.css": "9d5edae0e8c1f6e54fb4151f09b2a233baa57330974b7d3d4fe4bd83f24249a1",
+    "public/management.mjs": "ade26b3697ef901e505df256638091fff3cccbc5c142d7764586e1a20917fc52",
+    "server/management.mjs": "c163f656ebdb7e7af1d69459213cc3c87e0985d413773e5861b4ca06dfa65d58",
+    "server/service.mjs": "9f22d4978a7ea37fb50118fde72fb3f4f7f53725590e92dc2ca606da8b63dfda"
+  },
+  "productionBundleSHA256": "d75859d035507ac1bfb0a58f6ce389398b7348cbbefc5dffb3e071935c0f28ff",
+  "remainingReleaseGates": [
+    "Danielle confirms her own actual deployed Phase 2 Studio login",
+    "Explicit Phase 3 production release authorization",
+    "Fresh configuration reconciliation immediately before any future upload/activation"
+  ],
+  "limitations": [
+    "Browser device profiles were used; no physical-device test",
+    "Danielle actual production login remains unconfirmed",
+    "Hosted mutation suites and live customer orders/payments were not run"
+  ]
+}
