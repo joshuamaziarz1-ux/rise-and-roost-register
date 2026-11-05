@@ -1,5 +1,7 @@
 # Phase 3 website and Studio release candidate
 
+**Final automatic calendar:** see [the current implementation and release report](PHASE-3-AUTOMATIC-CALENDAR.md). The verification numbers below record the earlier Phase 3 candidate; the linked report supersedes its calendar behavior and release gates.
+
 Prepared November 5, 2026 (America/New_York). **Development only: Phase 3 has not been uploaded, deployed, or activated.** Production remains on Phase 2 with checkout disabled and ordering paused.
 
 ## Source and production baseline
@@ -70,7 +72,7 @@ Coverage includes all three methods and switching, zero/restock, preorder exhaus
 
 Security regression coverage retains Phase 1 HTTP-to-HTTPS redirects/HSTS and Phase 2 RS256 signature, issuer, audience, owner identity, expiry and 730-hour session verification. Both synthetic owner identities are exercised with older-than-one-day sessions and distinct audit actors. Unauthorized, forged and cross-origin requests to the new management actions are denied; legacy unprotected owner URLs stay closed. Manual PayPal, Venmo and Cash App verification and New → Preparing → Ready fulfillment remain covered.
 
-Browser checks use desktop Chromium, desktop WebKit, iPhone-sized WebKit, Android-sized Chromium and tablet-sized Chromium. These are browser/device profiles, not physical-device certification. Screenshots include synthetic example products only. Danielle's actual production sign-in has not been performed or inferred from synthetic tests.
+Browser checks use desktop Chromium, desktop WebKit, iPhone-sized WebKit, Android-sized Chromium and tablet-sized Chromium. These are browser/device profiles, not physical-device certification. Screenshots include synthetic example products only. Danielle has personally confirmed that she successfully signed into the live Phase 2 Studio. This confirmation comes from the owner, independently of these synthetic tests.
 
 ## Production data and configuration
 
@@ -82,11 +84,11 @@ Read-only SELECT fingerprints cover all 12 application tables and their schema. 
 
 ## Safe release procedure and remaining gates
 
-1. Danielle signs into the **existing deployed Phase 2 Studio** herself and confirms Home, Products, Orders and Calendar load. Do not request her one-time code or authenticated token. This confirmation remains outstanding.
+1. **Phase 2 sign-in confirmation received:** Danielle has successfully signed into the existing live Studio. No code or authenticated token is needed from her. Use the final automatic-calendar report for the current release procedure.
 2. Obtain explicit Phase 3 production release authorization. This development request is not deployment authorization. Keep checkout disabled and ordering paused. No database migration approval is needed for this implementation; any later schema change requires its own review and authorization.
 3. Freeze the tested branch commit and build the production Worker and all static assets, including the new `selling.mjs`. Freshly read the active version, all 16 bindings and values, runtime/compatibility settings, asset routing, handlers, owner/Access configuration, custom domains/routes/DNS/TLS and read-only D1 fingerprints. Stop on unexplained drift. The checked-in `wrangler.production.toml` is a preparation profile and lacks actual owner configuration: **do not deploy directly from it**.
 4. After authorization, use the supported Cloudflare asset/version workflow to upload the full matching static asset set and an **inactive** Worker version. Preserve the actual production bindings and runtime settings. Phase 2's `keep_assets` shortcut alone is insufficient because Phase 3 adds and changes assets. Inspect and compare the inactive version before any traffic activation; do not let a deployment change Access, DNS, identities, D1 or checkout configuration.
 5. Activate only the reviewed candidate, repeat the anonymous HTTPS/redirect/Access/checkout-pause checks, verify unchanged D1 fingerprints and have Danielle check her authenticated Studio. Do not create live synthetic orders or payments.
 6. If application rollback is needed, verify concurrent configuration changes first, then switch traffic to the retained verified Phase 2 version. Preserve the database and all owner edits; a Worker rollback is not a database rollback.
 
-Phase 3 is a development-complete release candidate after its recorded checks pass. Production activation remains blocked by Danielle's real Phase 2 login confirmation and explicit Phase 3 release authorization.
+Phase 3 is a development-complete release candidate after its recorded checks pass. Danielle has confirmed real Phase 2 sign-in. Production activation still requires explicit Phase 3 release authorization; this task expressly excludes deployment.
