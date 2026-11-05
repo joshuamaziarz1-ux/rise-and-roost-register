@@ -1,5 +1,6 @@
 # Phase 3: final automatic pickup calendar
 
+**Deployment update:** the authorized production attempt was rolled back after a legacy-calendar compatibility blocker. See [PHASE-3-DEPLOYMENT-RESULTS.md](PHASE-3-DEPLOYMENT-RESULTS.md) for the current production state. Earlier verification/release-preparation statements below are historical.
 Prepared November 5, 2026, America/New_York. Branch: `feature/phase-3-website-studio`, continuing the completed Phase 3 candidate `3d09b4f`. Application implementation commits: `cae00ca`, `c321ffd` and `548b7deb2712cd8163830ca96ab57684ae7d5a65` (final application source).
 
 Danielle has confirmed successful sign-in to the live Phase 2 Studio. Phase 3 remains **undeployed**. This work makes no production D1 writes, schema changes, Worker uploads, traffic changes, Access changes, or changes to checkout activation.

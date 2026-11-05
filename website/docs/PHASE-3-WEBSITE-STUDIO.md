@@ -1,5 +1,6 @@
 # Phase 3 website and Studio release candidate
 
+**Deployment update:** the authorized production attempt was rolled back after a legacy-calendar compatibility blocker. See [PHASE-3-DEPLOYMENT-RESULTS.md](PHASE-3-DEPLOYMENT-RESULTS.md) for the current production state. Earlier verification/release-preparation statements below are historical.
 **Final automatic calendar:** see [the current implementation and release report](PHASE-3-AUTOMATIC-CALENDAR.md). The verification numbers below record the earlier Phase 3 candidate; the linked report supersedes its calendar behavior and release gates.
 
 Prepared November 5, 2026 (America/New_York). **Development only: Phase 3 has not been uploaded, deployed, or activated.** Production remains on Phase 2 with checkout disabled and ordering paused.
