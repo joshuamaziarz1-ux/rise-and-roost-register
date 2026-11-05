@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import { primaryFixture } from '../primary-fixture.mjs';
+import { availableDocument } from '../../server/service.mjs';
+import { localInstant } from '../../public/model.mjs';
 
 test.describe('Phase 3 selling and pickup controls', () => {
   test.skip(!!process.env.RR_BETA_BASE_URL || !!process.env.RR_MANAGEMENT_PREVIEW_URL,
@@ -190,7 +192,7 @@ test.describe('Phase 3 selling and pickup controls', () => {
     } finally { await visitors.close(); }
   });
 
-  test('pickup deadlines can change safely; existing commitments survive edits and removal', async ({ page }, info) => {
+  test('automatic pickup capacity and closures preserve commitments; special dates follow noon deadlines', async ({ page }, info) => {
     await owner(page);
     const order = await syntheticOrder(page);
     await page.reload();
@@ -201,19 +203,20 @@ test.describe('Phase 3 selling and pickup controls', () => {
     await expect(committed).toContainText('Synthetic Phase 3 visitor');
     await committed.getByRole('button', { name: 'Edit pickup', exact: true }).click();
     await expect(page.getByRole('note')).toContainText('1 existing order');
-    await page.getByLabel('Order-by time minute', { exact: true }).selectOption('15');
+    await page.getByLabel('Pickup window order limit', { exact: true }).fill('15');
     await page.getByRole('button', { name: 'Save pickup live', exact: true }).click();
     await expect(page.getByRole('alert')).toContainText('existing orders');
-    await expect(page.getByLabel('Order-by time minute', { exact: true })).toHaveValue('15');
+    await expect(page.getByLabel('Pickup window order limit', { exact: true })).toHaveValue('15');
     await page.getByLabel('I understand existing orders keep their original pickup details', { exact: true }).check();
     await page.getByRole('button', { name: 'Save pickup live', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Calendar', exact: true })).toBeVisible();
     let current = await snapshot(page);
-    expect(current.published.pickups.find(p => p.id === order.pickupId).cutoffTime.endsWith(':15')).toBe(true);
+    expect(current.published.pickups.find(p => p.id === order.pickupId).capacity).toBe(15);
+    expect(current.published.pickups.find(p => p.id === order.pickupId).cutoffTime).toBe('12:00');
     expect(current.orders.find(saved => saved.id === order.id).pickup).toEqual(order.pickup);
     expect(current.orders.find(saved => saved.id === order.id).pickupDeadline).toEqual(order.pickupDeadline);
     page.once('dialog', dialog => dialog.accept());
-    await committed.getByRole('button', { name: 'Remove pickup', exact: true }).click();
+    await committed.getByRole('button', { name: 'Skip / close date', exact: true }).click();
     await expect(committed).toContainText('Closed to new orders');
     current = await snapshot(page);
     expect(current.published.pickups.find(p => p.id === order.pickupId).closed).toBe(true);
@@ -224,19 +227,64 @@ test.describe('Phase 3 selling and pickup controls', () => {
     await mkdir('qa-results/phase3', { recursive: true });
     await page.screenshot({ path: `qa-results/phase3/calendar-${info.project.name}.png`, fullPage: true });
 
-    await page.getByRole('button', { name: 'Add pickup', exact: true }).click();
-    const newDay = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
-    const cutoff = new Date(Date.now() + 29 * 86400000).toISOString().slice(0, 10);
+    await page.getByRole('button', { name: 'Add special pickup', exact: true }).click();
+    const special = new Date(Date.now() + 30 * 86400000);
+    special.setUTCDate(special.getUTCDate() + (7 - special.getUTCDay()) % 7);
+    const newDay = special.toISOString().slice(0, 10);
     await page.getByLabel('Pickup date', { exact: true }).fill(newDay);
-    await page.getByLabel('Order-by date', { exact: true }).fill(cutoff);
     await page.getByLabel('Special event name (optional)', { exact: true }).fill('Synthetic future pickup');
     await page.getByRole('button', { name: 'Save pickup live', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Calendar', exact: true })).toBeVisible();
     const added = page.locator('.ms-calendar-list > article').filter({ hasText: 'Synthetic future pickup' });
     await expect(added).toBeVisible();
     page.once('dialog', dialog => dialog.accept());
-    await added.getByRole('button', { name: 'Remove pickup', exact: true }).click();
-    await expect(added).toHaveCount(0);
+    await added.getByRole('button', { name: 'Skip / close date', exact: true }).click();
+    await expect(added).toContainText('Closed to new orders');
     expect((await snapshot(page)).orders.find(saved => saved.id === order.id).lines).toEqual(order.lines);
+  });
+
+  test('a basket hides a pickup at noon and chooses the next date with unchanged server revisions and a skewed client clock', async ({ page }) => {
+    await owner(page);
+    const current = await snapshot(page);
+    const first = current.management.pickups.find(p => !p.closed && localInstant(p.cutoffDate, p.cutoffTime) > Date.now());
+    let serverNow = localInstant(first.cutoffDate, first.cutoffTime) - 1000;
+    // Replay actual server eligibility results at the boundary. The independent
+    // HTTP tests cover reservation rejection at the same exact instants.
+    await page.route('**/api/site', async route => {
+      const response = await route.fetch(), result = await response.json();
+      result.document = availableDocument(current.published, { orders: [] }, { managed: true, now: serverNow });
+      result.serverNow = serverNow;
+      await route.fulfill({ response, json: result });
+    });
+    await page.clock.install({ time: new Date(serverNow - 12 * 3600000 - 60000) });
+    await page.clock.pauseAt(new Date(serverNow - 12 * 3600000));
+    await page.goto(fixture.origin + '/shop');
+    await card(page, current.published.products[0].name).getByRole('button', { name: 'Add ' + current.published.products[0].name + ' to basket', exact: true }).click();
+    await page.getByRole('link', { name: /^Basket/ }).first().click();
+    await expect(page.locator('#pickup-select')).toHaveValue(first.id);
+    serverNow += 2000;
+    await page.clock.runFor(2000);
+    await expect(page.locator('#pickup-select option[value="' + first.id + '"]')).toHaveCount(0);
+    const expected = availableDocument(current.published, { orders: [] }, { managed: true, now: serverNow }).pickups[0];
+    await expect(page.locator('#pickup-select')).toHaveValue(expected.id);
+  });
+
+  test('a basket with two preorder products chooses a date with enough capacity for both', async ({ page }) => {
+    await owner(page);
+    let current = await snapshot(page);
+    for (const product of current.published.products.slice(0, 2)) {
+      await change(page, 'product', { product: { ...product, sellingMethod: 'preorder', capacity: 2, archived: false, soldOut: false } });
+    }
+    current = await snapshot(page);
+    const pickups = current.management.pickups.filter(p => !p.closed && localInstant(p.cutoffDate, p.cutoffTime) > Date.now());
+    const [bread, eggs] = current.published.products;
+    await change(page, 'calendar-date', { pickup: { ...pickups[0], productionLimits: { [bread.id]: 0 } } });
+    await change(page, 'calendar-date', { pickup: { ...pickups[1], productionLimits: { [eggs.id]: 0 } } });
+    await page.goto(fixture.origin + '/shop');
+    for (const product of [bread, eggs]) await card(page, product.name).getByRole('button', { name: 'Add ' + product.name + ' to basket', exact: true }).click();
+    await page.getByRole('link', { name: /^Basket/ }).first().click();
+    await expect(page.locator('#pickup-select')).toHaveValue(pickups[2].id);
+    await expect(page.locator('#pickup-select option[value="' + pickups[0].id + '"]')).toHaveCount(0);
+    await expect(page.locator('#pickup-select option[value="' + pickups[1].id + '"]')).toHaveCount(0);
   });
 });

@@ -5,10 +5,13 @@ export const money = (cents) =>
     cents / 100,
   );
 const timeFormatters = new Map();
+const instantCache = new Map();
 export function localInstant(date, time, zone = ZONE) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time))
     throw new Error("Use a valid date and time.");
   const target = date + "T" + time;
+  const cacheKey = zone + ':' + target;
+  if (instantCache.has(cacheKey)) return instantCache.get(cacheKey);
   if (!timeFormatters.has(zone))
     timeFormatters.set(
       zone,
@@ -41,6 +44,8 @@ export function localInstant(date, time, zone = ZONE) {
     throw new Error(
       "This local time is invalid or ambiguous because of daylight saving. Choose another time.",
     );
+  if (instantCache.size >= 2048) instantCache.clear();
+  instantCache.set(cacheKey, matches[0]);
   return matches[0];
 }
 export function safeLink(value) {
@@ -91,9 +96,9 @@ export function seed(now = Date.now()) {
   const pickups = [];
   for (let i = 2; pickups.length < 4; i++) {
     const date = new Date(Date.parse(today + "T12:00:00Z") + i * 86400000);
-    if (![2, 5].includes(date.getUTCDay())) continue;
+    if (![3, 4, 5].includes(date.getUTCDay())) continue;
     const day = date.toISOString().slice(0, 10),
-      cutoffDate = new Date(date.getTime() - 86400000)
+      cutoffDate = new Date(date.getTime() - 2 * 86400000)
         .toISOString()
         .slice(0, 10);
     pickups.push({
@@ -102,7 +107,7 @@ export function seed(now = Date.now()) {
       start: "15:00",
       end: "18:00",
       cutoffDate,
-      cutoffTime: "18:00",
+      cutoffTime: "12:00",
       capacity: 12,
       closed: false,
     });
@@ -294,7 +299,7 @@ export function seed(now = Date.now()) {
             items: [
               {
                 title: "When can I pick up?",
-                body: "Select an available pickup window in your basket. Tuesday and Friday are editable sample defaults.",
+                body: "Select an available Wednesday, Thursday, or Friday pickup. Order by noon two calendar days before pickup.",
               },
               {
                 title: "Is this a real order?",

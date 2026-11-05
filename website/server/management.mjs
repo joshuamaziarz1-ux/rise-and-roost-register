@@ -4,6 +4,7 @@ import { trackingPath } from '../public/orders.mjs';
 import { enqueue } from './orders.mjs';
 import { restoreBusinessBackup } from './management-backup.mjs';
 import { sellingMethod, inventoryMode, normalizeSellingMethod } from '../public/selling.mjs';
+import { calendarPickups, pickupSchedule, orderingDeadline } from './pickup-calendar.mjs';
 
 const bad = (message, status = 400) => { throw Object.assign(new Error(message), { status }); };
 const cents = (n, max = 1000000) => Number.isInteger(n) && n >= 0 && n <= max;
@@ -101,9 +102,9 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     const today = financialReport(ledger.orders, reportRange('today', now));
     const remaining = new Map(availableDocument(doc, ledger, { managed: true, now }).products.map(p => [p.id, p.stock]));
     const products = doc.products.map(p => ({ ...p, booked: bookedUnits(ledger, p.id), available: Math.max(0, p.stock - bookedUnits(ledger, p.id)), availableToOrder: remaining.get(p.id) || 0 }));
-    const contentOnly = document => { const d = clone(document); delete d.products; delete d.pickups; delete d.orderingPaused; delete d.freshAnnouncement; return d; };
+    const contentOnly = document => { const d = clone(document); delete d.products; delete d.pickups; delete d.pickupSchedule; delete d.orderingPaused; delete d.freshAnnouncement; return d; };
     return { ...ownerResult(source), hasContentDraft: canonical(contentOnly(JSON.parse(source.draft_json))) !== canonical(contentOnly(doc)), orders: ownerResult(source).orders.map(o => ({ ...o, businessDate: businessDay(o.at), attention: orderAttention(o, now) })), ledgerVersion: source.ledger_version, actor, layoutLocked: true, now: at,
-      management: { paymentReadiness: paymentReadiness(m.settings), settings: m.settings || { calendar: defaultCalendar(), payments: {} }, reports: financialReport(ledger.orders, range), today, products,
+      management: { pickups: calendarPickups(doc, now, ledger), pickupSchedule: pickupSchedule(doc), paymentReadiness: paymentReadiness(m.settings), settings: m.settings || { calendar: defaultCalendar(), payments: {} }, reports: financialReport(ledger.orders, range), today, products,
         members: members.map(m => ({ id: m.id, profile: JSON.parse(m.profile_json), createdAt: m.created_at,
           orderCount: ledger.orders.filter(o => o.customer?.memberId === m.id).length,
           benefits: (ledger.management?.benefits || []).filter(b => b.memberId === m.id) })), comments,
@@ -302,8 +303,29 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     draft.freshAnnouncement = announcement; published.freshAnnouncement = announcement;
     changedDocument = true; result = { announcement };
     description = announcement ? 'Fresh at The Roost announcement saved' : 'Fresh at The Roost announcement cleared';
-  } else if (path === '/api/manage/calendar') {
+  } else if (path === '/api/manage/calendar' || path === '/api/manage/calendar-date') {
     expectedDocument();
+    const schedule = pickupSchedule(published);
+    if (path === '/api/manage/calendar-date') {
+      if (!input.pickup || typeof input.pickup !== 'object') bad('Choose a pickup date.');
+      const p = clone(input.pickup), effective = calendarPickups(published, now, ledger);
+      if (!identifier(p.id)) bad('Choose a valid pickup identifier.');
+      try { localInstant(p.date, p.start); localInstant(p.date, p.end); }
+      catch { bad('Choose a valid pickup date and time.'); }
+      const existing = effective.find(v => v.id === p.id);
+      if (existing && p.date !== existing.date) bad('Close this date and add a special pickup to change its date. Existing commitments are kept.', 409);
+      if (!existing && (p.id.startsWith('recurring-') || published.pickups.some(v => v.date === p.date && !v.closed) || effective.some(v => v.date === p.date && !v.closed))) bad('This pickup date already exists. Edit its capacity or close it instead.', 409);
+      Object.assign(p, orderingDeadline(p.date)); delete p.automatic; delete p.productionRemaining;
+      if (existing && !published.pickups.some(v => v.id === existing.id)) published.pickups.push({ ...existing });
+      input.pickups = published.pickups.filter(v => v.id !== p.id).concat(p);
+      if (input.closeDate === true) {
+        for (const window of effective.filter(v => v.date === p.date)) {
+          if (!input.pickups.some(v => v.id === window.id)) input.pickups.push(clone(window));
+        }
+        input.pickups.filter(v => v.date === p.date).forEach(v => { v.closed = true; });
+      }
+      input.paused = published.orderingPaused;
+    }
     if (!Array.isArray(input.pickups)) bad('Choose pickup dates.');
     if (input.ledgerVersion !== undefined && input.ledgerVersion !== row.ledger_version) bad('An order or pickup date changed. Refresh and review the scheduled orders before saving.', 409);
     const next = clone(input.pickups), affected = [];
@@ -317,7 +339,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
         continue;
       }
       if (count && canonical(p) !== canonical(replacement)) affected.push({ id: p.id, count });
-      if (count && !replacement) next.push({ ...p, closed: true });
+      if (!replacement) next.push({ ...p, closed: true });
       else if (count && ['date', 'start', 'end'].some(k => replacement?.[k] !== p[k])) {
         replacement.id = 'pickup-' + opaque(); next.push({ ...p, closed: true });
       }
@@ -328,13 +350,22 @@ export async function managementApi({ request, db, now, row, actor, input, path,
       for (const [id, value] of Object.entries(p.productionLimits || {})) if (!published.products.some(v => v.id === id) || !cents(value, 10000)) bad('Check product-specific production limits.');
       if (p.event !== undefined) p.event = text(p.event, 120, 'the pickup event name');
     }
-    for (const d of [draft, published]) { d.pickups = clone(next); d.orderingPaused = input.paused === true; }
+    const windows = new Set();
+    for (const p of next.filter(p => !p.closed && localInstant(p.date, p.end) > now)) {
+      const key = p.date + ':' + p.start + ':' + p.end;
+      if (windows.has(key)) bad('This pickup window already exists. Edit its capacity instead.', 409);
+      windows.add(key);
+    }
+    for (const d of [draft, published]) { d.pickupSchedule = clone(schedule); d.pickups = clone(next); d.orderingPaused = input.paused === true; }
+    const previous = calendarPickups(JSON.parse(row.published_json), now, ledger);
+    const changes = next.filter(p => canonical(p) !== canonical(previous.find(v => v.id === p.id))).map(p => ({ id: p.id, before: previous.find(v => v.id === p.id) || null, after: clone(p) }));
+    m.audit.unshift({ id: opaque(), kind: 'pickup-calendar-history', at, actor, changes });
     changedDocument = true; result = { affectedOrders: affected.reduce((n, a) => n + a.count, 0), preservedPickups: next.filter(p => p.closed).map(p => p.id) }; description = 'Pickup calendar saved; existing order commitments and past pickup history retained';
   } else if (path === '/api/manage/content') {
     expectedDocument();
     if (!input.document || structure(input.document) !== structure(draft)) bad('The approved layout and visual styling are locked. Change wording or images only.');
     // Operational fields are always taken from the current published site.
-    const next = clone(input.document); next.products = clone(published.products); next.pickups = clone(published.pickups); next.orderingPaused = published.orderingPaused; next.freshAnnouncement = published.freshAnnouncement || '';
+    const next = clone(input.document); next.products = clone(published.products); next.pickups = clone(published.pickups); next.pickupSchedule = clone(pickupSchedule(published)); next.orderingPaused = published.orderingPaused; next.freshAnnouncement = published.freshAnnouncement || '';
     Object.assign(draft, next); changedDocument = true; result = { draftOnly: true }; description = 'Website content draft saved';
   } else if (path === '/api/manage/publish' || path === '/api/manage/restore-content') {
     expectedDocument();
@@ -345,7 +376,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
       next = clone(v.document);
       if (structure(next) !== structure(published)) bad('This old version has a different layout. Restore individual wording or pictures instead.');
     }
-    next.products = clone(published.products); next.pickups = clone(published.pickups); next.orderingPaused = published.orderingPaused; next.freshAnnouncement = published.freshAnnouncement || '';
+    next.products = clone(published.products); next.pickups = clone(published.pickups); next.pickupSchedule = clone(pickupSchedule(published)); next.orderingPaused = published.orderingPaused; next.freshAnnouncement = published.freshAnnouncement || '';
     Object.assign(published, next); Object.assign(draft, clone(next)); changedDocument = true;
     description = path.endsWith('restore-content') ? 'Website content restored' : 'Website content published';
   } else if (path === '/api/manage/verify-payment') {
@@ -404,13 +435,14 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     const reason = text(input.reason || '', 500, 'the status reason', correction || target === 'canceled');
     if (correction && reason.length < 5) bad('Give a correction reason of at least five characters.');
     if (o.status === 'canceled' && target !== 'canceled') {
-      const pickup = published.pickups.find(p => p.id === o.pickupId);
+      const pickups = calendarPickups(published, now, ledger);
+      const pickup = pickups.find(p => p.id === o.pickupId);
       if (!pickup || pickup.closed) bad('This canceled order cannot be reopened into a closed or removed pickup.');
       if (!holdsInventory(o)) {
-        if (ledger.orders.filter(order => holdsInventory(order) && order.pickupId === o.pickupId).length >= pickup.capacity || published.pickups.filter(p => p.date === pickup.date && p.dailyCapacity !== undefined).some(p => ledger.orders.filter(order => holdsInventory(order) && (order.originalPickup || order.pickup).date === pickup.date).length >= p.dailyCapacity)) bad('This pickup no longer has an available order slot.', 409);
+        if (ledger.orders.filter(order => holdsInventory(order) && order.pickupId === o.pickupId).length >= pickup.capacity || pickups.filter(p => p.date === pickup.date && p.dailyCapacity !== undefined).some(p => ledger.orders.filter(order => holdsInventory(order) && (order.originalPickup || order.pickup).date === pickup.date).length >= p.dailyCapacity)) bad('This pickup no longer has an available order slot.', 409);
         for (const productId of new Set(o.lines.map(l => l.productId))) {
           const qty = o.lines.filter(l => l.productId === productId).reduce((n, l) => n + l.qty, 0), p = published.products.find(p => p.id === productId);
-          if (!p || p.archived || !p.active || sellingMethod(p) === 'in-store' || (inventoryMode(p) !== 'production' && bookedUnits(ledger, p.id) + qty > p.stock) || (inventoryMode(p) !== 'physical' && bookedUnits(ledger, p.id, o.pickupId, inventoryMode(p) === 'production' ? pickup.date : undefined) + qty > productionLimit(p, pickup, published.pickups))) bad('Reopening this order would exceed available inventory or production capacity, or the product is no longer available online.', 409);
+          if (!p || p.archived || !p.active || sellingMethod(p) === 'in-store' || (inventoryMode(p) !== 'production' && bookedUnits(ledger, p.id) + qty > p.stock) || (inventoryMode(p) !== 'physical' && bookedUnits(ledger, p.id, o.pickupId, inventoryMode(p) === 'production' ? pickup.date : undefined) + qty > productionLimit(p, pickup, pickups))) bad('Reopening this order would exceed available inventory or production capacity, or the product is no longer available online.', 409);
         }
       }
     }

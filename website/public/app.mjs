@@ -29,6 +29,8 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     checkoutEmail = "",
     emailOptIn = false;
   let commerceEnabled = false, policyAccepted = false, paymentDestinations = {}, checkoutPaymentMethod = '', productionMode = false, checkoutEnabled = true;
+  let automaticCalendar = false, serverOffset = 0, calendarTimer;
+  const calendarNow = () => Date.now() + serverOffset;
   let experience = false, customer, customerWorkspace = "", checkoutMode = "guest";
   let checkoutProfile = { name: "", email: "", phone: "" };
   const editing = new URLSearchParams(location.search).has("studio-preview");
@@ -509,7 +511,11 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     });
     const pickupClosed = p => p.closed ||
       cart.lines.some(line => p.productionRemaining?.[line.productId] !== undefined && p.productionRemaining[line.productId] < cart.lines.filter(l => l.productId === line.productId).reduce((n, l) => n + l.qty, 0)) ||
-      Date.now() >= localInstant(p.cutoffDate, p.cutoffTime) || Date.now() >= localInstant(p.date, p.start) || p.capacity === 0;
+      calendarNow() >= localInstant(p.cutoffDate, p.cutoffTime) || calendarNow() >= localInstant(p.date, p.start) || p.capacity === 0;
+    const eligiblePickups = doc.pickups.filter(p => !pickupClosed(p));
+    if (automaticCalendar && !eligiblePickups.some(p => p.id === cart.pickupId)) {
+      cart.pickupId = eligiblePickups[0]?.id || ''; cart.requestId = crypto.randomUUID(); saveCart();
+    }
     const select = h(
       "select",
       {
@@ -523,7 +529,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
         },
       },
       h("option", { value: "" }, doc.ui.pickup),
-      doc.pickups.filter(p => Date.now() < localInstant(p.date, p.start)).map((p) => {
+      (automaticCalendar ? eligiblePickups : doc.pickups.filter(p => calendarNow() < localInstant(p.date, p.start))).map((p) => {
         const closed = pickupClosed(p);
         return h(
           "option",
@@ -911,15 +917,24 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     );
     if (sequence !== loadSequence) return;
     if (editing && previewDocumentReceived) return;
+    serverOffset = (result.serverNow || Date.now()) - Date.now();
     if (result.id === workspace && (result.revision < revision ||
       (result.revision === revision && result.availabilityRevision < availabilityRevision))) return;
     const changed = result.id !== workspace || result.revision !== revision;
-    if (!force && !changed && result.availabilityRevision === availabilityRevision) {
+    if (!force && !changed && result.availabilityRevision === availabilityRevision && JSON.stringify(result.document.pickups) === JSON.stringify(doc.pickups)) {
       if (experience && path === "/roost" && await customer.refresh(false)) render();
       if (experience && path === '/comments') await customer.refreshComments();
       return;
     }
     doc = result.document;
+    automaticCalendar = result.studioManagementEnabled === true;
+    clearTimeout(calendarTimer);
+    if (automaticCalendar) {
+      const next = Math.min(...doc.pickups.map(p => localInstant(p.cutoffDate, p.cutoffTime)).filter(at => at > calendarNow()));
+      if (Number.isFinite(next)) calendarTimer = setTimeout(() => {
+        render(); void load(true).catch(error => notify(error.message, true));
+      }, Math.min(2147483647, Math.max(1, next - calendarNow() + 1)));
+    }
     productionMode = result.productionMode === true;
     checkoutEnabled = result.checkoutEnabled !== false;
     experience = !!result.customerExperienceEnabled;

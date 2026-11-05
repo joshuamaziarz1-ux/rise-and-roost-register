@@ -84,18 +84,18 @@ test('preorder availability accounts for date capacity, shared windows, full dat
   const doc = document('preorder', { stock: 0, capacity: 1 }), first = doc.pickups[0];
   doc.pickups = [first, { ...first, id: 'second-same-day', start: '18:01', end: '19:00' }];
   const booked = { ...quote(doc, { orders: [] }, basket(doc), now), id: 'synthetic', originalPickup: structuredClone(first) };
-  const ledger = { orders: [booked] }, sold = availableDocument(doc, ledger, { managed: true, now });
+  const ledger = { orders: [booked] }, sold = availableDocument(doc, ledger, { now });
   assert.equal(sold.products[0].stock, 0); assert.equal(sold.products[0].active, true);
   assert.ok(sold.pickups.every(p => p.productionRemaining[doc.products[0].id] === 0));
   assert.throws(() => quote(doc, ledger, basket(doc, 1, doc.pickups[1]), now), /capacity/);
   doc.products[0].capacity = 2;
-  assert.equal(availableDocument(doc, ledger, { managed: true, now }).products[0].stock, 1);
+  assert.equal(availableDocument(doc, ledger, { now }).products[0].stock, 1);
   booked.status = 'canceled'; doc.products[0].capacity = 1;
-  assert.equal(availableDocument(doc, ledger, { managed: true, now }).products[0].stock, 1);
+  assert.equal(availableDocument(doc, ledger, { now }).products[0].stock, 1);
   booked.keepInventory = true;
-  assert.equal(availableDocument(doc, ledger, { managed: true, now }).products[0].stock, 0);
+  assert.equal(availableDocument(doc, ledger, { now }).products[0].stock, 0);
   ledger.orders = []; doc.pickups.forEach(p => { p.capacity = 0; });
-  assert.equal(availableDocument(doc, ledger, { managed: true, now }).products[0].stock, 0);
+  assert.equal(availableDocument(doc, ledger, { now }).products[0].stock, 0);
 });
 
 test('legacy preorders retain both stock and pickup limits while explicit preorders use make-ahead limits', () => {
@@ -153,10 +153,11 @@ test('two concurrent direct requests cannot oversell the last online item or pre
     const attempts = await Promise.all([h.order(), h.order()]);
     assert.deepEqual(attempts.map(r => r.status).sort(), [201, 409]);
     const catalog = (await h.call('/api/site', undefined, { guest: true })).data.document;
-    assert.equal(catalog.products[0].stock, 0); assert.equal(catalog.products[0].active, true);
-    assert.equal((await h.snapshot()).management.products[0].availableToOrder, 0);
+    assert.equal(catalog.products[0].stock, method === 'preorder' ? 1 : 0); assert.equal(catalog.products[0].active, true);
+    assert.equal(catalog.pickups.find(p => p.id === s.published.pickups[0].id)?.productionRemaining[catalog.products[0].id], method === 'preorder' ? 0 : undefined);
+    assert.equal((await h.snapshot()).management.products[0].availableToOrder, method === 'preorder' ? 1 : 0);
     assert.equal((await h.save(method, { capacity: 2 }, 1)).status, 200);
-    assert.equal((await h.snapshot()).management.products[0].availableToOrder, 1);
+    assert.equal((await h.snapshot()).management.products[0].availableToOrder, method === 'preorder' ? 2 : 1);
     assert.equal((await h.order()).status, 201);
   }
 });

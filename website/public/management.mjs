@@ -309,23 +309,25 @@ export async function start(root, initial, newAccessKey) {
   function pickupOrders(p) { return data.orders.filter(o => o.pickupId === p.id || o.pickup?.id === p.id || o.originalPickup?.id === p.id); }
   const futurePickup = p => localInstant(p.date, p.end) > Date.parse(data.now);
   async function removePickup(p) {
-    const count = pickupOrders(p).length;
-    if (!confirm(count ? 'Remove this pickup from new ordering? ' + count + ' existing order' + (count === 1 ? '' : 's') + ' will keep the original pickup details. Contact each customer through Orders if a new arrangement is needed.' : 'Remove this future pickup date?')) return;
-    return send('calendar', { revision: data.revision, ledgerVersion: data.ledgerVersion, pickups: data.published.pickups.filter(v => v.id !== p.id), paused: !!data.published.orderingPaused, confirmExistingOrders: count > 0 });
+    const count = data.orders.filter(o => (o.originalPickup || o.pickup).date === p.date).length;
+    if (!confirm(count ? 'Remove this pickup from new ordering? ' + count + ' existing order' + (count === 1 ? '' : 's') + ' will keep the original pickup details. Contact each customer through Orders if a new arrangement is needed.' : 'Skip this pickup date? It will close to new orders. Other weeks continue automatically.')) return;
+    return send('calendar-date', { revision: data.revision, ledgerVersion: data.ledgerVersion, pickup: { ...p, closed: true }, closeDate: true, confirmExistingOrders: count > 0 });
   }
   function calendar() {
-    const date = selection || data.management.today.range.start, list = data.published.pickups.slice().sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
+    const date = selection || data.management.today.range.start, list = data.management.pickups.slice().sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
     const orders = data.orders.filter(o => o.pickup.date === date && !o.resolution && !['canceled', 'picked-up'].includes(o.status));
     const totals = new Map(); for (const o of orders) for (const l of o.lines) { const k = l.productId + ':' + l.variantId; const v = totals.get(k) || { name: l.name, variant: l.variant, qty: 0 }; v.qty += l.qty; totals.set(k, v); }
     const card = p => {
       const associated = pickupOrders(p), future = futurePickup(p);
-      return h('article', { class: 'ms-panel' }, h('div', { class: 'ms-row' }, h('strong', {}, pickupLabel(p)), pill(!future ? 'Past pickup' : p.closed ? 'Closed to new orders' : p.event || 'Open')), h('p', {}, 'Order by ' + orderByLabel(p)), h('p', {}, p.capacity + ' order limit'),
+      return h('article', { class: 'ms-panel' }, h('div', { class: 'ms-row' }, h('strong', {}, pickupLabel(p)), pill(!future ? 'Past pickup' : p.closed ? 'Closed to new orders' : localInstant(p.cutoffDate, p.cutoffTime) <= Date.parse(data.now) ? 'Ordering deadline passed' : p.event || 'Open')), h('p', {}, 'Order by ' + orderByLabel(p)), h('p', {}, p.capacity + ' order limit'),
+        p.event ? h('p', {}, p.event) : null,
         associated.length ? h('p', { class: 'ms-note' }, associated.length + ' scheduled order' + (associated.length === 1 ? '' : 's') + '. Saved customer commitments are kept.') : null,
-        h('div', { class: 'ms-actions' }, future ? button('Edit pickup', () => editPickup(p), { class: 'ms-secondary' }) : null, button('Copy', () => editPickup(p, true), { class: 'ms-secondary' }), future && (!p.closed || !associated.length) ? button('Remove pickup', () => removePickup(p), { class: 'ms-secondary', disabled: busy }) : null, button('Pickup & baking lists', () => { selection = p.date; render(); }, { class: 'ms-secondary' })),
+        h('div', { class: 'ms-actions' }, future ? button('Edit pickup', () => editPickup(p), { class: 'ms-secondary' }) : null, button('Copy', () => editPickup(p, true), { class: 'ms-secondary' }), future && (!p.closed || !associated.length) ? button('Skip / close date', () => removePickup(p), { class: 'ms-secondary', disabled: busy }) : null, button('Pickup & baking lists', () => { selection = p.date; render(); }, { class: 'ms-secondary' })),
         associated.length ? h('details', {}, h('summary', {}, 'View scheduled orders'), associated.map(o => button([h('strong', {}, o.orderNumber), h('span', {}, o.customer?.name || 'Guest customer'), h('span', {}, pickupLabel(o.pickup)), pill(fulfillmentLabels[o.status])], () => go('Orders', o.id), { class: 'ms-menu' }))) : null);
     };
-    return h('div', {}, h('div', { class: 'ms-heading' }, h('h1', {}, 'Calendar'), button('Add pickup', () => editPickup(), { class: 'ms-primary' })),
-      h('div', { class: 'ms-actions' }, button('Set recurring days', () => edit('recurrence', { start: date, end: date, weekdays: [], startTime: '15:00', endTime: '18:00', cutoffTime: '18:00', deadlineDays: 1, capacity: 24 }), { class: 'ms-secondary' }),
+    return h('div', {}, h('div', { class: 'ms-heading' }, h('h1', {}, 'Calendar'), button('Add special pickup', () => editPickup(), { class: 'ms-primary' })),
+      h('p', { class: 'ms-note' }, 'Wednesday, Thursday and Friday repeat automatically. Order by noon two calendar days before pickup, Indiana time. Nine weeks are shown; no weekly maintenance is needed.'),
+      h('div', { class: 'ms-actions' },
         button(data.published.orderingPaused ? 'Resume ordering' : 'Pause new ordering', () => { if (confirm(data.published.orderingPaused ? 'Resume new website orders?' : 'Pause new website orders? Existing confirmed orders will stay intact.')) send('calendar', { revision: data.revision, ledgerVersion: data.ledgerVersion, pickups: data.published.pickups, paused: !data.published.orderingPaused, confirmExistingOrders: true }); }, { class: 'ms-secondary' })),
       data.published.orderingPaused ? h('p', { role: 'status', class: 'ms-warning' }, 'New ordering is paused. Existing orders are protected.') : null,
       h('div', { class: 'ms-calendar-list' }, list.filter(futurePickup).map(card)), !list.some(futurePickup) ? empty('No future pickup dates. Add a pickup when you’re ready.') : null,
@@ -338,10 +340,11 @@ export async function start(root, initial, newAccessKey) {
   }
   function editPickup(pickup, copy = false) {
     const today = data.management.today.range.start;
-    const p = pickup ? clone(pickup) : { id: 'pickup-' + id(), date: today, start: '15:00', end: '18:00', cutoffDate: today, cutoffTime: '12:00', capacity: 24, closed: false, productionLimits: {} };
+    const defaultDay = new Date(Date.parse(today + 'T12:00:00Z') + 3 * 86400000).toISOString().slice(0, 10);
+    const p = pickup ? clone(pickup) : { id: 'pickup-' + id(), date: defaultDay, ...clone(data.management.pickupSchedule), closed: false, productionLimits: {} };
     if (copy) { p.id = 'pickup-' + id(); p.closed = false; }
     p.event ||= ''; p.productionLimits ||= {};
-    edit('calendar', { pickup: p, confirmExistingOrders: false });
+    edit('calendar', { pickup: p, existing: !!pickup && !copy, confirmExistingOrders: false });
   }
   function members() {
     const members = data.management.members.filter(m => [m.profile.name, m.profile.email, m.profile.phone].join(' ').toLowerCase().includes(search.toLowerCase()));
@@ -446,9 +449,9 @@ export async function start(root, initial, newAccessKey) {
         method !== 'preorder' || dualLimits ? f(method === 'in-store' ? 'How many are in the store?' : dualLimits ? 'How many are available in total?' : 'How many are available?', v, 'available', { type: 'number', min: 0, max: 10000 }) : null,
         h('p', { class: 'ms-note' }, 'Existing orders are already reserved. A quantity of zero shows Sold Out and keeps the product visible.'),
         method === 'preorder' ? panel('Which pickup dates are available?',
-          data.published.pickups.filter(p => futurePickup(p) && !p.closed && localInstant(p.cutoffDate, p.cutoffTime) > Date.parse(data.now)).map(pickup => h('p', {}, pickupLabel(pickup))),
-          !data.published.pickups.some(p => futurePickup(p) && !p.closed && localInstant(p.cutoffDate, p.cutoffTime) > Date.parse(data.now)) ? h('p', {}, 'No open future pickup dates. Add dates in Calendar before customers can preorder.') : null,
-          h('p', {}, 'Manage pickup dates and order deadlines in Calendar. Each date can have its own quantity limit.'), button('Open pickup calendar', () => go('Calendar'), { class: 'ms-secondary' })) : null,
+          data.management.pickups.filter(p => futurePickup(p) && !p.closed && localInstant(p.cutoffDate, p.cutoffTime) > Date.parse(data.now)).map(pickup => h('p', {}, pickupLabel(pickup))),
+          !data.management.pickups.some(p => futurePickup(p) && !p.closed && localInstant(p.cutoffDate, p.cutoffTime) > Date.parse(data.now)) ? h('p', {}, 'No open pickup dates. Review closures and capacity in Calendar.') : null,
+          h('p', {}, 'Pickup dates repeat automatically. Use Calendar for closures, special dates and quantity limits.'), button('Open pickup calendar', () => go('Calendar'), { class: 'ms-secondary' })) : null,
         hiddenProduct(p) ? h('p', { class: 'ms-warning' }, 'This product is hidden. Save changes, then use Show Product to display it again.') : null,
         p.images.map((photo, index) => h('div', { class: 'ms-photo' }, h('img', { src: photo.src, alt: photo.alt || p.name }), f('Photo description ' + (index + 1), photo, 'alt'), h('label', { class: 'ms-secondary' }, 'Replace photo', h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', disabled: busy, onchange: event => upload(event.target.files[0], src => photo.src = src) })))),
         f('Description', p, 'description', { type: 'textarea', maxlength: 6000 }), f('Category', p, 'category', { maxlength: 100 }),
@@ -465,22 +468,10 @@ export async function start(root, initial, newAccessKey) {
     if (e.type === 'calendar') {
       const p = v.pickup, associated = pickupOrders(p); p.dailyCapacity ??= p.capacity;
       return form('Pickup date', [associated.length ? h('div', { class: 'ms-warning', role: 'note' }, h('strong', {}, associated.length + ' existing order' + (associated.length === 1 ? '' : 's') + ' use this pickup.'), h('p', {}, 'Changes apply to new orders. Existing orders keep their original pickup details and pickup deadline. If the date or time changes, the original pickup closes to new orders and a new date is created. Contact customers through Orders to approve any new arrangement.'), associated.map(o => h('p', {}, o.orderNumber + ' · ' + (o.customer?.name || 'Guest customer') + ' · ' + pickupLabel(o.pickup)))) : null,
-        f('Pickup date', p, 'date', { type: 'date', min: data.management.today.range.start, required: true }), clockField('Pickup start', p, 'start'), clockField('Pickup end', p, 'end'), f('Order-by date', p, 'cutoffDate', { type: 'date', required: true }), clockField('Order-by time', p, 'cutoffTime'), f('Pickup window order limit', p, 'capacity', { type: 'number', min: 0, max: 10000 }), f('Daily combined order limit', p, 'dailyCapacity', { type: 'number', min: 0, max: 10000 }), f('Special event name (optional)', p, 'event', { maxlength: 120 }), check('Close this pickup to new orders', p, 'closed'),
+        f('Pickup date', p, 'date', { type: 'date', min: data.management.today.range.start, required: true, disabled: v.existing }), clockField('Pickup start', p, 'start'), clockField('Pickup end', p, 'end'), h('p', { class: 'ms-note' }, 'Ordering closes automatically at noon two calendar days before this pickup, Indiana time.'), f('Pickup window order limit', p, 'capacity', { type: 'number', min: 0, max: 10000 }), f('Daily combined order limit', p, 'dailyCapacity', { type: 'number', min: 0, max: 10000 }), f('Special event name (optional)', p, 'event', { maxlength: 120 }), check('Close this pickup to new orders', p, 'closed'),
         h('h3', {}, 'How many can I make for this date?'), data.published.products.filter(p => !hiddenProduct(p) && sellingMethod(p) === 'preorder').map(product => field(product.name + ' units', p.productionLimits[product.id] ?? product.capacity, value => { p.productionLimits[product.id] = +value; marked(); }, { type: 'number', min: 0, max: 10000 })),
         associated.length ? check('I understand existing orders keep their original pickup details', v, 'confirmExistingOrders') : null,
-      ], () => { const pickups = clone(data.published.pickups), i = pickups.findIndex(n => n.id === p.id); if (i < 0) pickups.push(p); else pickups[i] = p; return send('calendar', { revision: e.revision, ledgerVersion: e.ledgerVersion, pickups, paused: !!data.published.orderingPaused, confirmExistingOrders: v.confirmExistingOrders }); }, 'Save pickup live');
-    }
-    if (e.type === 'recurrence') {
-      return form('Recurring pickup days', [f('First date', v, 'start', { type: 'date', required: true }), f('Repeat through', v, 'end', { type: 'date', required: true }), h('div', { class: 'ms-weekdays' }, ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((name, day) => field(name, v.weekdays.includes(day), value => { v.weekdays = value ? [...v.weekdays, day] : v.weekdays.filter(d => d !== day); }, { type: 'checkbox' }))), clockField('Pickup start', v, 'startTime'), clockField('Pickup end', v, 'endTime'), f('Order deadline days before pickup', v, 'deadlineDays', { type: 'number', min: 0, max: 30 }), clockField('Order-by time', v, 'cutoffTime'), f('Daily order limit', v, 'capacity', { type: 'number', min: 1, max: 10000 })], () => {
-        const first = Date.parse(v.start + 'T12:00:00Z'), last = Date.parse(v.end + 'T12:00:00Z');
-        if (!v.weekdays.length || last < first || last - first > 90 * 86400000) { error = 'Choose recurring days and a date range of no more than 90 days.'; chrome(); return; }
-        const pickups = clone(data.published.pickups);
-        for (let n = first; n <= last; n += 86400000) if (v.weekdays.includes(new Date(n).getUTCDay())) {
-          const date = new Date(n).toISOString().slice(0, 10);
-          if (!pickups.some(p => p.date === date && p.start === v.startTime && p.end === v.endTime)) pickups.push({ id: 'pickup-' + id(), date, start: v.startTime, end: v.endTime, cutoffDate: new Date(n - v.deadlineDays * 86400000).toISOString().slice(0, 10), cutoffTime: v.cutoffTime, capacity: v.capacity, dailyCapacity: v.capacity, closed: false });
-        }
-        return send('calendar', { revision: e.revision, ledgerVersion: e.ledgerVersion, pickups, paused: !!data.published.orderingPaused, confirmExistingOrders: true });
-      }, 'Save recurring pickups');
+      ], () => send('calendar-date', { revision: e.revision, ledgerVersion: e.ledgerVersion, pickup: p, confirmExistingOrders: v.confirmExistingOrders }), 'Save pickup live');
     }
     if (e.type === 'payment') return form('Verify payment', [h('p', {}, 'Open your payment account and check the customer name and full order total. Confirm below only after you have received the payment.'), f('Payment method', v, 'method', { choices: [...Object.entries(providers).map(([value,label]) => ({ value,label })), { value: 'external_record', label: 'Historical independent record' }] }), f('Transaction reference (optional)', v, 'evidence', { maxlength: 500 }), check('I checked an independent record for the full payment', v, 'independentlyVerified')], () => send('verify-payment', { id: v.orderId, orderVersion: v.orderVersion, method: v.method, evidence: v.evidence, independentlyVerified: v.independentlyVerified }), 'Confirm Verify Payment');
     if (e.type === 'refund') return form('Record an external refund', [h('p', {}, 'Record a refund only after checking that it happened outside this website. This does not send money or change Square.'), f('Refund amount ($)', v, 'amount', { type: 'number', min: '.01', max: 10000, step: '.01', required: true }), f('Independent refund reference', v, 'evidence', { required: true, minlength: 5, maxlength: 500 }), f('Refund reason', v, 'reason', { required: true, maxlength: 500 }), check('I independently verified this refund', v, 'independentlyVerified')], () => send('refund', { id: v.orderId, orderVersion: v.orderVersion, amount: price(v.amount), evidence: v.evidence, reason: v.reason, independentlyVerified: v.independentlyVerified }), 'Record refund');

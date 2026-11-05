@@ -8,7 +8,7 @@ after(() => { globalThis.fetch = originalFetch; });
 
 test('Phase 3 owner actions require signed Access credentials and same-origin requests', async t => {
   const h = await productionFixture(); t.after(() => h.sql.close());
-  const actions = ['fresh-announcement', 'product-visibility', 'calendar', 'product'];
+  const actions = ['fresh-announcement', 'product-visibility', 'calendar', 'calendar-date', 'product'];
   const before = h.sql.prepare('SELECT * FROM workspaces').get();
   for (const action of actions) {
     const path = '/studio/api/manage/' + action;

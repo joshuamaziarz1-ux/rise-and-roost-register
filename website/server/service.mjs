@@ -9,6 +9,7 @@ import { managementApi, holdsInventory, productionLimit, structure } from './man
 import { isPreviewGrant } from './preview-access.mjs';
 import { isProductionContext } from './production-access.mjs';
 import { sellingMethods, sellingMethod, inventoryMode, normalizeSellingMethod } from '../public/selling.mjs';
+import { calendarPickups } from './pickup-calendar.mjs';
 
 const encoder = new TextEncoder();
 const token = () =>
@@ -101,6 +102,13 @@ export function validateDocument(doc) {
   if (!doc.business.name?.trim() || !doc.theme || !doc.ui)
     fail("Business name, theme, and website copy are required.");
   if (doc.freshAnnouncement !== undefined && (typeof doc.freshAnnouncement !== 'string' || doc.freshAnnouncement.length > 240)) fail('Use a daily announcement of no more than 240 characters.');
+  if (doc.pickupSchedule !== undefined) {
+    const schedule = doc.pickupSchedule;
+    if (!schedule || !integer(schedule.capacity, 0, 10000)) fail('Check automatic pickup capacity.');
+    try { if (localInstant('2026-01-14', schedule.end) <= localInstant('2026-01-14', schedule.start)) fail('Pickup must end after it starts.'); }
+    catch { fail('Check automatic pickup hours.'); }
+    for (const [id, limit] of Object.entries(schedule.productionLimits || {})) if (!doc.products.some(p => p.id === id) || !integer(limit, 0, 10000)) fail('Check automatic production limits.');
+  }
   if (doc.business.pickupAddress && ['name', 'street', 'city'].some(key => typeof doc.business.pickupAddress[key] !== 'string' || !doc.business.pickupAddress[key].trim() || doc.business.pickupAddress[key].length > 200)) fail('Check the pickup address fields.');
   if (doc.business.paymentInstructions !== undefined && (typeof doc.business.paymentInstructions !== 'string' || doc.business.paymentInstructions.length > 3000)) fail('Use payment instructions of no more than 3,000 characters.');
   if (
@@ -241,10 +249,10 @@ export function validateDocument(doc) {
   }
   if (
     !Array.isArray(doc.pickups) ||
-    doc.pickups.length > 100 ||
+    doc.pickups.length > 2000 ||
     new Set(doc.pickups.map((p) => p.id)).size !== doc.pickups.length
   )
-    fail("Use unique pickup windows, up to 100.");
+    fail("Use unique pickup windows, up to 2,000 including history.");
   for (const p of doc.pickups) {
     if (p.dailyCapacity !== undefined && !integer(p.dailyCapacity, 0, 10000)) fail('Check the daily combined order limit.');
     for (const [id, value] of Object.entries(p.productionLimits || {})) if (!doc.products.some(product => product.id === id) || !integer(value, 0, 10000)) fail('Check production limits for this pickup.');
@@ -265,7 +273,8 @@ export function validateDocument(doc) {
   }
   return doc;
 }
-export function quote(doc, ledger, input, now = Date.now()) {
+export function quote(doc, ledger, input, now = Date.now(), { recurring = false } = {}) {
+  if (recurring) doc = { ...doc, pickups: calendarPickups(doc, now, ledger) };
   if (doc.orderingPaused) fail('New ordering is paused. Please check back soon.', 409);
   if (
     !Array.isArray(input.lines) ||
@@ -351,6 +360,7 @@ export function quote(doc, ledger, input, now = Date.now()) {
 }
 // Publish aggregate availability, never order details or customer/owner credentials.
 export function availableDocument(document, ledger, { managed = false, now = Date.now() } = {}) {
+  if (managed) document = { ...document, pickups: calendarPickups(document, now, ledger) };
   const doc = copy(document);
   const units = new Map(), orders = new Map(), dayOrders = new Map();
   for (const order of ledger.orders) {
@@ -689,6 +699,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         paymentReadiness: commerceEnabled ? paymentReadiness(JSON.parse(row.ledger_json).management?.settings) : undefined,
         notificationsEnabled: emailEnabled && id === publicWorkspaceId,
         document: availableDocument(JSON.parse(row.published_json), JSON.parse(row.ledger_json), { managed: studioManagementEnabled, now }),
+        ...(studioManagementEnabled ? { serverNow: now } : {}),
         revision: row.published_revision,
         availabilityRevision: row.ledger_version,
         studioManagementEnabled,
@@ -898,7 +909,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           customer.consentedAt = new Date(now).toISOString();
         }
         if (productionContext && !JSON.parse(row.published_json).business.pickupAddress?.street?.trim()) fail('Pickup details are not ready yet. Please check back soon.', 409);
-        const quoted = quote(JSON.parse(row.published_json), ledger, input, now);
+        const quoted = quote(JSON.parse(row.published_json), ledger, input, now, { recurring: studioManagementEnabled });
         let selectedPaymentMethod;
         if (commerceEnabled && quoted.total > 0) {
           const active = configuredPayments(ledger.management?.settings);

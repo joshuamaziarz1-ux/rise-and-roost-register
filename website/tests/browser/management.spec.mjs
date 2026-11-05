@@ -187,17 +187,17 @@ test.describe('Rise & Roost management Studio', () => {
     } finally { await second.close(); }
   });
 
-  test('recurring arbitrary pickup days, pause, and comment moderation synchronize without refresh', async ({ page, browser }, info) => {
+  test('automatic pickup days, a special Sunday, pause, and comment moderation synchronize without refresh', async ({ page, browser }, info) => {
     await owner(page); await nav(page, 'Calendar').click();
-    await page.getByRole('button', { name: 'Set recurring days', exact: true }).click();
-    const start = new Date(); start.setUTCDate(start.getUTCDate()+8); const end = new Date(start); end.setUTCDate(end.getUTCDate()+6);
-    await page.getByLabel('First date', { exact: true }).fill(start.toISOString().slice(0,10));
-    await page.getByLabel('Repeat through', { exact: true }).fill(end.toISOString().slice(0,10));
-    await page.getByLabel('Wednesday', { exact: true }).check(); await page.getByLabel('Sunday', { exact: true }).check();
-    await page.getByRole('button', { name: 'Save recurring pickups', exact: true }).click();
+    await expect(page.getByText('Wednesday, Thursday and Friday repeat automatically.', { exact: false })).toBeVisible();
+    await page.getByRole('button', { name: 'Add special pickup', exact: true }).click();
+    const start = new Date(); start.setUTCDate(start.getUTCDate() + 8);
+    start.setUTCDate(start.getUTCDate() + (7 - start.getUTCDay()) % 7);
+    await page.getByLabel('Pickup date', { exact: true }).fill(start.toISOString().slice(0,10));
+    await page.getByRole('button', { name: 'Save pickup live', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Calendar', exact: true })).toBeVisible();
     const snapshot = await (await page.request.get(fixture.origin+'/api/manage/snapshot', { headers: { 'X-RR-Workspace': fixture.id } })).json();
-    const added = snapshot.published.pickups.filter(p => p.date >= start.toISOString().slice(0,10));
+    const added = snapshot.management.pickups.filter(p => p.date >= start.toISOString().slice(0,10));
     expect(added.some(p => new Date(p.date+'T12:00Z').getUTCDay() === 0)).toBe(true);
     expect(added.some(p => new Date(p.date+'T12:00Z').getUTCDay() === 3)).toBe(true);
     const visitors = await browser.newContext({ ...info.project.use });
