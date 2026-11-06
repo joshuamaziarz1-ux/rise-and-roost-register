@@ -1,3 +1,5 @@
+import { weekStart } from '../server/pickup-booking.mjs';
+import { calendarPickups, addCalendarDays } from '../server/pickup-calendar.mjs';
 // Real local workerd/D1, synthetic Access signing authority, no hosted requests.
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { readFile } from 'node:fs/promises';
@@ -18,7 +20,7 @@ const mf = new Miniflare(convertV4MiniflareOptions({ modules: true, modulesRoot:
     assert.equal(request.url, authority.team + '/cdn-cgi/access/certs');
     return new Response(JSON.stringify({ keys: [authority.jwk] }), { headers: { 'Content-Type': 'application/json' } });
   },
-  bindings: { DEPLOYMENT_ENVIRONMENT: 'production', PRODUCTION_RELEASE_APPROVED: 'true', REAL_CHECKOUT_ENABLED: 'true', PRODUCTION_DATABASE_ID, PUBLIC_WORKSPACE_ID: PRODUCTION_WORKSPACE_ID,
+  bindings: { PICKUP_APPROVALS_REQUIRED: 'true', DEPLOYMENT_ENVIRONMENT: 'production', PRODUCTION_RELEASE_APPROVED: 'true', REAL_CHECKOUT_ENABLED: 'true', PRODUCTION_DATABASE_ID, PUBLIC_WORKSPACE_ID: PRODUCTION_WORKSPACE_ID,
     WEBSITE_BASE_URL: origin, REVIEW_BUILD: 'false', STUDIO_MANAGEMENT_ENABLED: 'true', COMMERCE_UPDATE_ENABLED: 'true', CUSTOMER_EXPERIENCE_ENABLED: 'true',
     PRODUCTION_ACCESS_TEAM_DOMAIN: authority.team, PRODUCTION_ACCESS_AUD: authority.aud, PRODUCTION_OWNERS: JSON.stringify([{ email: TESTER_A, name: 'Synthetic Owner', role: 'owner' }]) } }));
 try {
@@ -31,6 +33,8 @@ try {
   doc.pickups = []; doc.pickupSchedule = { start: '15:00', end: '18:00', capacity: 1 };
   const serialized = JSON.stringify(doc);
   await db.prepare('INSERT INTO workspaces(id,owner_hash,draft_json,published_json,versions_json,created_at) VALUES(?,?,?,?,?,?)').bind(PRODUCTION_WORKSPACE_ID, 'disabled-legacy-owner', serialized, serialized, '[]', new Date().toISOString()).run();
+  const booking = { weeks: Object.fromEntries(calendarPickups(doc, Date.now()).map(p => [weekStart(p.date), {status:'approved', actor:{id:'synthetic-owner'}}])), dates:{}, closedDates:{} };
+  await db.prepare('UPDATE workspaces SET ledger_json=? WHERE id=?').bind(JSON.stringify({orders:[],pickupBooking:booking}),PRODUCTION_WORKSPACE_ID).run();
   await db.prepare("INSERT INTO deployment_identity VALUES('main','production',?,?)").bind(PRODUCTION_DATABASE_ID, PRODUCTION_WORKSPACE_ID).run();
   const call = (path, body, owner = false, headers = {}) => mf.dispatchFetch(origin + path, { method: body === undefined ? 'GET' : 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', ...(owner ? { 'Cf-Access-Jwt-Assertion': token } : {}), ...headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   // Exercise the compiled passkey/session code in the real edge runtime, using
@@ -145,5 +149,22 @@ try {
   assert.equal((await customer('me')).cashPickup.eligible,true);
   await mutation('cash-settings', { enabled:false });
   assert.equal((await customer('me')).cashPickup.eligible,false);
-  console.log(JSON.stringify({ actualProductionWorkerdD1: true, cashPickupAtomicMemberEligibilityReceiptAndCreditLifecycle: true, returnCreditsFavoritesReservationFinalizationCancellationAndZeroDue: true, customerPasskeysSessionsRecoveryAndRevocation: true, individualSignedOwnerIdentity: true, privateApiAuthorization: true, manualPaymentVerification: true, duplicateVerificationPrevented: true, atomicInventoryRace: true, trackingAndFulfillment: true, automaticCalendar: true, calendarExceptionPreservesOrder: true, remoteRequests: 0, remoteWrites: 0 }));
+  // New booking and rescheduling operations use the exact production executable.
+  const originalDate=cashOrder.pickup.date;
+  await mutation('pickup-week',{week:weekStart(originalDate),status:'closed',confirmExistingOrders:true});
+  assert.equal((await call('/api/orders',{...memberInput,pickupId:cashOrder.pickupId,requestId:crypto.randomUUID()},false,memberHeaders)).status,409);
+  const pr=await call('/studio/api/manage/pickup-preview?date='+originalDate,undefined,true);assert.equal(pr.status,200);const preview=await pr.json();assert.ok(preview.orders.some(o=>o.id===cashOrder.id));
+  const pending=await mutation('pickup-change',{date:originalDate,orderIds:preview.orders.map(o=>o.id),mode:'pending',message:'Synthetic pending makeup notice.',reason:'unexpected',confirmed:true});
+  const changed=pending.orders.find(o=>o.id===cashOrder.id);assert.equal(changed.pickupChange.replacement,null);assert.equal(changed.paymentStatus,'verified');assert.equal(changed.returnCredit.status,'used');assert.equal(changed.pickupDeadline,null);
+  const event=pending.management.pickupChanges[0];
+  await mutation('pickup-change-update',{eventId:event.id,eventVersion:1,mode:'makeup',replacementDate:addCalendarDays(originalDate,5),start:'14:00',end:'17:00',message:'Synthetic makeup appointment.',reason:'unexpected',confirmed:true});
+  const response=await customer('pickup-response',{orderId:cashOrder.id,eventId:event.id,version:2,response:'confirmed'});assert.equal(response.pickupChange.acknowledgement.response,'confirmed');
+  assert.equal((await customer('me')).orders.find(o=>o.id===cashOrder.id).pickupChange.acknowledgement.response,'confirmed');
+  assert.equal((await call('/api/order-tracking/'+PRODUCTION_WORKSPACE_ID+'/'+cashOrder.id+'/pickup-response',{eventId:event.id,version:2,response:'alternate'})).status,401);
+  const state=await snapshot();assert.equal(state.management.pickupChanges[0].revisions.length,2);assert.equal(state.orders.find(o=>o.id===cashOrder.id).pickupChangeHistory.length,1);
+  const stored=await db.prepare('SELECT ledger_json FROM workspaces WHERE id=?').bind(PRODUCTION_WORKSPACE_ID).first(), withoutBooking=JSON.parse(stored.ledger_json);delete withoutBooking.pickupBooking;
+  await db.prepare('UPDATE workspaces SET ledger_json=? WHERE id=?').bind(JSON.stringify(withoutBooking),PRODUCTION_WORKSPACE_ID).run();
+  assert.equal((await call('/api/site')).status,503,'Production cannot silently fall back to legacy availability');
+  await db.prepare('UPDATE workspaces SET ledger_json=? WHERE id=?').bind(stored.ledger_json,PRODUCTION_WORKSPACE_ID).run();
+  console.log(JSON.stringify({ actualProductionWorkerdD1: true, pickupApprovalsReschedulingAcknowledgements: true, cashPickupAtomicMemberEligibilityReceiptAndCreditLifecycle: true, returnCreditsFavoritesReservationFinalizationCancellationAndZeroDue: true, customerPasskeysSessionsRecoveryAndRevocation: true, individualSignedOwnerIdentity: true, privateApiAuthorization: true, manualPaymentVerification: true, duplicateVerificationPrevented: true, atomicInventoryRace: true, trackingAndFulfillment: true, automaticCalendar: true, calendarExceptionPreservesOrder: true, remoteRequests: 0, remoteWrites: 0 }));
 } finally { await mf.dispose(); }

@@ -1,3 +1,4 @@
+import { acknowledgePickup } from './pickup-changes.mjs';
 import { cashEligibility } from './cash-pickup.mjs';
 import { customerCredits } from './return-credits.mjs';
 import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } from '@simplewebauthn/server';
@@ -51,6 +52,19 @@ export async function roostApi({ request, db, now, input, path, json, rateLimit 
     const orders = ledger.orders.filter(o => o.customer?.memberId === member.id).map(o => customerOrder(o, workspaceId, ledger.management?.settings, now));
     const devices = await list(db, "SELECT json_group_array(json_object('id',d.id,'label',d.label,'lastSeen',d.last_seen,'current',s.hash=?)) AS items FROM roost_sessions s JOIN roost_session_details d ON d.hash=s.hash WHERE s.workspace_id=? AND s.member_id=? AND s.expires>? AND d.absolute_expires>?", member.session_hash, workspaceId, member.id, now, now);
     return response({ member: safeMember(member), orders, devices, cashPickup: cashEligibility(ledger, member.id), credits: customerCredits(ledger, member.id), favorites: ledger.roostFavorites?.[member.id] || [] }, [renewed.cookie]);
+  }
+  if (path === '/api/roost/pickup-response' && request.method === 'POST') {
+    const member = await memberFor(request, db, workspaceId, now, true);
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const row = await first(db, 'SELECT ledger_json,ledger_version FROM workspaces WHERE id=?', workspaceId), ledger = JSON.parse(row.ledger_json);
+      const order = ledger.orders.find(o => o.id === input.orderId && o.customer?.memberId === member.id);
+      if (!order) fail('Order not found.', 404);
+      if (!acknowledgePickup(order, input, now, { memberId: member.id })) return response(customerOrder(order, workspaceId, ledger.management?.settings, now));
+      order.version = (order.version || 1) + 1;
+      const saved = await run(db, 'UPDATE workspaces SET ledger_json=?,ledger_version=ledger_version+1 WHERE id=? AND ledger_version=?', JSON.stringify(ledger), workspaceId, row.ledger_version);
+      if (saved.meta.changes === 1) return response(customerOrder(order, workspaceId, ledger.management?.settings, now));
+    }
+    fail('Another save arrived. Refresh and retry.', 409);
   }
   if (path === '/api/roost/favorite' && request.method === 'POST') {
     const member = await memberFor(request, db, workspaceId, now, true);

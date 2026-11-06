@@ -4,7 +4,7 @@ import { PRODUCTION_DATABASE_ID, PRODUCTION_WORKSPACE_ID } from './production-pr
 
 const response = (error, status) => new Response(JSON.stringify({ error, productionOwnerAccessRequired: status === 401 || status === 403 }), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, private', 'CDN-Cache-Control': 'no-store' } });
 const publicApi = (path, method) => method === 'GET' && (['/api/site', '/api/comments', '/api/roost/me'].includes(path) || /^\/api\/assets\/[a-f0-9]{48}$/.test(path) || /^\/api\/order-tracking\/[a-f0-9]{48}\/[a-f0-9]{48}$/.test(path)) ||
-  method === 'POST' && (['/api/orders', '/api/comments', '/api/roost/profile', '/api/roost/logout', '/api/roost/options', '/api/roost/verify', '/api/roost/recover', '/api/roost/claim-order', '/api/roost/revoke-device', '/api/roost/favorite'].includes(path) || /^\/api\/order-tracking\/[a-f0-9]{48}\/[a-f0-9]{48}\/(?:message|payment-method)$/.test(path));
+  method === 'POST' && (['/api/orders', '/api/comments', '/api/roost/profile', '/api/roost/logout', '/api/roost/options', '/api/roost/verify', '/api/roost/recover', '/api/roost/claim-order', '/api/roost/revoke-device', '/api/roost/favorite', '/api/roost/pickup-response'].includes(path) || /^\/api\/order-tracking\/[a-f0-9]{48}\/[a-f0-9]{48}\/(?:message|payment-method|pickup-response)$/.test(path));
 
 // All production owner traffic lives below /studio, so one Access application
 // protects the page AND its APIs. Unprotected legacy owner URLs are closed.
@@ -35,6 +35,10 @@ export async function productionFetch(request, env, now = Date.now()) {
   try {
     const identity = await env.DB.prepare("SELECT * FROM deployment_identity WHERE id='main'").bind().first();
     if (identity?.environment !== 'production' || identity.database_id !== PRODUCTION_DATABASE_ID || identity.workspace_id !== PRODUCTION_WORKSPACE_ID) return response('The production database identity could not be verified.', 503);
+    if (env.PICKUP_APPROVALS_REQUIRED === 'true') {
+      const booking = await env.DB.prepare("SELECT json_extract(ledger_json,'$.pickupBooking') AS booking FROM workspaces WHERE id=?").bind(PRODUCTION_WORKSPACE_ID).first();
+      if (!booking?.booking) return response('Pickup approval transition requires operator review. Ordering remains unavailable.', 503);
+    }
     if (path === '/api/studio-info') return new Response(JSON.stringify({ productionOwnerAccess: true, studioManagementEnabled: true, mainStudioPath: '/studio' }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
     if (!path.startsWith('/api/')) return await env.ASSETS.fetch(request);
     url.pathname = path;

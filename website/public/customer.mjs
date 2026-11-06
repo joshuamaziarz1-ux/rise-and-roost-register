@@ -1,3 +1,4 @@
+import { pickupNotice } from './pickup-notice.mjs';
 import { h, button, field, notify, guard, request } from './dom.mjs';
 import { money, pickupLabel, localInstant } from './model.mjs';
 import { paymentLabels, fulfillmentLabels } from './orders.mjs';
@@ -114,7 +115,8 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
         h('section', { id: 'my-orders', class: 'member-orders', 'aria-label': 'Your Roost orders' },
           h('div', { class: 'panel-heading' }, h('h2', {}, 'My Orders'), button('Refresh orders', action(() => refresh(false, true)), { class: 'text-button', disabled: busy })),
           orders.length ? orders.map(order => h('article', { class: 'member-order' },
-            h('div', {}, h('h3', {}, order.orderNumber), h('p', {}, pickupLabel(order.pickup))),
+            h('div', {}, h('h3', {}, order.orderNumber), h('p', {}, order.pickupChange && !order.pickupChange.replacement ? 'Awaiting makeup date' : pickupLabel(order.pickup))),
+            pickupNotice(order, payload => action(async () => { await api('/api/roost/pickup-response', { ...payload, orderId: order.id }); await refresh(false, true); })(), busy),
             h('p', {}, order.lines.map(l => `${l.qty} × ${l.name}`).join(', ')),
             order.selectedPaymentMethod === 'cash_pickup' ? h('p', {}, 'Cash at Pickup · Cash Due: ' + money(order.paymentVerifiedAt || order.status === 'canceled' || order.resolution ? 0 : order.total)) : null,
             h('p', { class: 'order-state' }, paymentLabels[order.paymentStatus || 'not_collected'], ' · ', fulfillmentLabels[order.status || 'pending']),
@@ -164,9 +166,10 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
   }
   const jump = target => () => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   function dashboard() {
-    const upcoming = orders.filter(o => !['canceled', 'picked-up'].includes(o.status) && !o.resolution && localInstant(o.pickup.date, o.pickup.end) > Date.now()).sort((a,b) => localInstant(a.pickup.date, a.pickup.start) - localInstant(b.pickup.date, b.pickup.start))[0];
+    const upcoming = orders.filter(o => !['canceled', 'picked-up'].includes(o.status) && !o.resolution && (o.pickupChange && !o.pickupChange.replacement || localInstant(o.pickup.date, o.pickup.end) > Date.now())).sort((a,b) => localInstant(a.pickup.date, a.pickup.start) - localInstant(b.pickup.date, b.pickup.start))[0];
     return h('div', { class: 'roost-dashboard' },
-      h('section', {}, h('h2', {}, 'Upcoming Pickup'), upcoming ? [h('strong', {}, pickupLabel(upcoming.pickup)), h('p', {}, upcoming.orderNumber + ' · ' + fulfillmentLabels[upcoming.status || 'pending']), h('a', { href: upcoming.trackingPath, class: 'primary-link' }, 'View order details')] : [h('p', {}, 'Your next pickup will be right here.'), link('/shop', 'Find something fresh', 'primary-link')]),
+      orders.some(o => o.pickupChange && !o.pickupChange.acknowledgement && !o.resolution && !['canceled','picked-up'].includes(o.status)) ? h('section',{class:'pickup-change-notice',role:'note'},h('h2',{},'Pickup schedule update'),h('p',{},'Danielle has updated a pickup arrangement. Review the notice in My Orders below.'),button('Review pickup notice',jump('my-orders'),{class:'primary-link'})) : null,
+      h('section', {}, h('h2', {}, 'Upcoming Pickup'), upcoming ? [h('strong', {}, upcoming.pickupChange && !upcoming.pickupChange.replacement ? 'Awaiting makeup date' : pickupLabel(upcoming.pickup)), h('p', {}, upcoming.orderNumber + ' · ' + fulfillmentLabels[upcoming.status || 'pending']), h('a', { href: upcoming.trackingPath, class: 'primary-link' }, 'View order details')] : [h('p', {}, 'Your next pickup will be right here.'), link('/shop', 'Find something fresh', 'primary-link')]),
       h('section', {}, h('h2', {}, 'Fresh at The Roost!'), h('p', {}, getDocument().freshAnnouncement || 'See what Danielle has available today.'), link('/shop', 'Browse available products', 'primary-link')),
       h('section', {}, h('h2', {}, 'Your Return Credit: ' + money(credits.available)), credits.reserved ? h('p', {}, money(credits.reserved) + ' reserved for pending orders') : null, button('View credit history and return items', jump('my-return-credits'), { class: 'text-button' })),
       h('nav', { class: 'roost-shortcuts', 'aria-label': 'My Roost' }, button('My Orders', jump('my-orders'), { class: 'secondary-button' }), button('Favorites', jump('my-favorites'), { class: 'secondary-button' })));

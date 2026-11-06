@@ -1416,3 +1416,4 @@ select {
     gap: 5px;
   }
 }
+.pickup-change-notice{background:#f4f3e9;border:1px solid #a7b49e;border-radius:12px;padding:1.25rem;margin:1rem 0;overflow-wrap:anywhere}.pickup-change-notice h2{font-size:1.3rem}.pickup-response-actions{display:flex;flex-wrap:wrap;gap:.75rem}.pickup-response-actions button{background:#274d38;color:#fff;border:0;border-radius:8px;padding:.8rem;cursor:pointer}.pickup-response-actions button:disabled{opacity:.65}
