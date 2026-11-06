@@ -55,11 +55,11 @@ export function orderAttention(order, now = Date.now()) {
   const unresolved = !!order.contact?.unresolved;
   const terminal = ['canceled','picked-up'].includes(order.status) || !!order.resolution;
   const deadline = order.pickupDeadline || null; // Historical orders retain their original policy; no retroactive deadline.
-  const overdue = !terminal && !unresolved && !!deadline && Date.parse(deadline) < now;
+  const overdue = !terminal && !unresolved && !order.pickupChange?.forfeitureProtected && !!deadline && Date.parse(deadline) < now;
   const history = (terminal && !unresolved && !order.dispute?.open) || (!!order.archivedAt && !unresolved && !overdue && !!order.paymentVerifiedAt);
   return { customerContacted: unresolved, extensionRequested: unresolved && !!order.contact?.extensionRequested,
     extensionApproved: !!order.extension && !unresolved && !terminal && !overdue, resolved: !!order.contact?.resolvedAt && !unresolved,
-    overdue, history, needsAttention: unresolved || overdue || order.dispute?.open === true };
+    overdue, history, needsAttention: order.pickupChange?.acknowledgement?.response === 'alternate' || unresolved || overdue || order.dispute?.open === true };
 }
 
 export function requestedPickupLabel(message) {

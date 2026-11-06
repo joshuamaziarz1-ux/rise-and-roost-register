@@ -1,3 +1,4 @@
+import { pickupNotice } from './pickup-notice.mjs';
 import { requestedPickupLabel, POLICY_TITLE, POLICY } from './commerce.mjs';
 import { h, button, guard, field } from "./dom.mjs";
 import { money, pickupLabel, orderByLabel, customerTime, customerTimestamp, seed } from "./model.mjs";
@@ -125,6 +126,7 @@ export async function start(root) {
         h("a", { href: shop, class: "brand" }, h("img", { src: doc.business.logo, alt: doc.business.logoAlt }), h("span", {}, doc.business.name)),
         h("a", { href: shop }, "Back to the shop")));
     const main = h("main", { id: "main-content", tabindex: "-1", class: "section-inner cart-page tracking-page" + (order?.paidReceipt ? " has-paid-receipt" : "") },
+      pickupNotice(order || {}, payload => save('/pickup-response', payload), busy),
       h("span", { class: "eyebrow" }, "YOUR PRIVATE ORDER STATUS"),
       h("h1", { style: { fontSize: "clamp(1.25rem, 5vw, 2rem)" } }, order?.orderNumber || "Order tracking"),
       h("p", { class: "small-note" }, "Keep this link private. It lets you view this order and contact Danielle. Payment is verified only by an owner."),
@@ -171,9 +173,9 @@ export async function start(root) {
         h("p", {}, "Payment and preparation are tracked separately. A stage is complete only when its own event is recorded."),
         h("ol", { "aria-label": "Order stages" }, stages(order).map(([label, at]) =>
           h("li", { class: "sub-card" }, h("strong", {}, label), h("p", {}, stageNote(label, at))))),
-        h("h2", {}, "Pickup details"), h("p", {}, pickupLabel(order.pickup)),
+        h("h2", {}, "Pickup details"), h("p", {}, order.pickupChange && !order.pickupChange.replacement ? "Awaiting makeup date — the original pickup has changed." : pickupLabel(order.pickup)),
         experience ? pickupLocation({ pickupAddress: order.pickupAddress }) : null,
-        order.pickupDeadline ? h('p', {}, h('strong', {}, 'Pickup deadline: ' + stamp(order.pickupDeadline))) : null,
+        order.pickupDeadline && !order.pickupChange ? h('p', {}, h('strong', {}, 'Pickup deadline: ' + stamp(order.pickupDeadline))) : null,
         order.originalPickup && order.extension ? h('p', {}, 'Original pickup: ' + pickupLabel(order.originalPickup)) : null,
         h('details', {}, h('summary', {}, POLICY_TITLE), POLICY.map((paragraph,i) => h('p', {}, i === 2 ? h('strong', {}, paragraph) : paragraph))),
         h("h2", {}, "Your order"),

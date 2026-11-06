@@ -1,3 +1,5 @@
+import { bookingAllowed } from './pickup-booking.mjs';
+import { acknowledgePickup } from './pickup-changes.mjs';
 import { CASH_METHOD, requireCash } from './cash-pickup.mjs';
 import { POLICY_VERSION, pickupDeadline, defaultCalendar, providers, configuredPayments, paymentReadiness } from '../public/commerce.mjs';
 import * as css from "css-tree";
@@ -288,6 +290,7 @@ export function quote(doc, ledger, input, now = Date.now(), { recurring = false 
   if (
     !pickup ||
     pickup.closed ||
+    (recurring && !bookingAllowed(ledger, pickup)) ||
     now >= localInstant(pickup.cutoffDate, pickup.cutoffTime) ||
     now >= localInstant(pickup.date, pickup.start)
   )
@@ -383,7 +386,7 @@ export function availableDocument(document, ledger, { managed = false, now = Dat
     const daily = document.pickups.filter(p => p.date === pickup.date && p.dailyCapacity !== undefined).map(p => p.dailyCapacity - (dayOrders.get(p.date) || 0));
     pickup.capacity = Math.max(0, Math.min(pickup.capacity - (orders.get(pickup.id) || 0), ...daily));
   }
-  const future = p => !p.closed && localInstant(p.cutoffDate, p.cutoffTime) > now && localInstant(p.date, p.start) > now;
+  const future = p => (!managed || bookingAllowed(ledger, p)) && !p.closed && localInstant(p.cutoffDate, p.cutoffTime) > now && localInstant(p.date, p.start) > now;
   const eligible = doc.pickups.filter(p => future(p) && p.capacity > 0);
   for (let index = 0; index < doc.products.length; index++) {
     const product = normalizeSellingMethod(doc.products[index]);
@@ -578,7 +581,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
     if (studioManagementEnabled && path.startsWith('/api/manage/')) {
       const row = await owner();
       const actor = productionContext ? productionContext.owner.actor : previewGrant ? previewGrant.actor : { id: 'workspace-session:' + authenticated.hash.slice(0, 16), name: 'Owner · workspace access', authentication: 'workspace_access' };
-      return await managementApi({ request, db, now, row, actor, input, path, json, validateDocument, ownerResult, availableDocument });
+      return await managementApi({ request, db, now, row, actor, input, path, json, validateDocument, ownerResult, availableDocument, checkoutEnabled: productionContext?.checkoutEnabled ?? true });
     }
     if (path === "/api/workspaces" && request.method === "POST") {
       await rateLimit("create", 40);
@@ -969,7 +972,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         409,
       );
     }
-    const tracking = /^\/api\/order-tracking\/([a-f0-9]{48})\/([a-f0-9]{48})(\/(?:report|message|payment-method))?$/.exec(path);
+    const tracking = /^\/api\/order-tracking\/([a-f0-9]{48})\/([a-f0-9]{48})(\/(?:report|message|payment-method|pickup-response))?$/.exec(path);
     if (tracking && ((request.method === "GET" && !tracking[3]) || (request.method === "POST" && tracking[3]))) {
       const raw = /^Bearer ([a-f0-9]{48})$/.exec(request.headers.get("Authorization") || "")?.[1];
       if (!raw) fail("Use the complete private tracking link from your order confirmation.", 401);
@@ -982,7 +985,9 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           fail("This private tracking link is invalid. Check the complete link or contact the farm.", 404);
         }
         if (request.method === "GET") return json(customerOrder(order, row.id, ledger.management?.settings, now));
-        if (tracking[3] === '/report') {
+        if (tracking[3] === '/pickup-response') {
+          if (!acknowledgePickup(order, input, now, { kind: 'private-tracking' })) return json(customerOrder(order, row.id, ledger.management?.settings, now));
+        } else if (tracking[3] === '/report') {
           if (commerceEnabled || studioManagementEnabled) fail('Payment reporting is no longer needed. Danielle verifies payments independently.', 410);
           // Backward compatibility for the original beta API, which is not deployed by this task.
           if (order.status === 'canceled') fail('This order was canceled.', 409);

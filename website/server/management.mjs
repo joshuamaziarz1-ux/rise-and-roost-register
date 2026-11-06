@@ -1,3 +1,5 @@
+import { bookingSummary } from './pickup-booking.mjs';
+import { managePickup, changePreview } from './pickup-changes.mjs';
 import { CASH_METHOD, outstandingCash, requireCash } from './cash-pickup.mjs';
 import { creditProgram, creditBalance, manageCredits, finalizeCredit, cancelCredit, reopenCredit } from './return-credits.mjs';
 import { defaultCalendar, calendarConfig, paymentDestination, providers, pickupDeadline, orderAttention, paymentReadiness } from '../public/commerce.mjs';
@@ -90,7 +92,7 @@ export function productionList(orders, date) {
   return { date, orders: selected, products: [...combined.values()].sort((a, b) => a.name.localeCompare(b.name)) };
 }
 
-export async function managementApi({ request, db, now, row, actor, input, path, json, validateDocument, ownerResult, availableDocument }) {
+export async function managementApi({ request, db, now, row, actor, input, path, json, validateDocument, ownerResult, availableDocument, checkoutEnabled = true }) {
   const first = (sql, ...params) => db.prepare(sql).bind(...params).first();
   const all = async (sql, ...params) => (await db.prepare(sql).bind(...params).all()).results;
   const url = new URL(request.url), at = new Date(now).toISOString();
@@ -105,8 +107,10 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     const remaining = new Map(availableDocument(doc, ledger, { managed: true, now }).products.map(p => [p.id, p.stock]));
     const products = doc.products.map(p => ({ ...p, booked: bookedUnits(ledger, p.id), available: Math.max(0, p.stock - bookedUnits(ledger, p.id)), availableToOrder: remaining.get(p.id) || 0 }));
     const contentOnly = document => { const d = clone(document); delete d.products; delete d.pickups; delete d.pickupSchedule; delete d.orderingPaused; delete d.freshAnnouncement; return d; };
+    const availability = availableDocument(doc, ledger, { managed: true, now });
+    const bookableDates = new Set(availability.pickups.filter(p => availability.products.some(product => ['online','preorder'].includes(sellingMethod(product)) && product.stock > 0 && (p.productionRemaining?.[product.id] === undefined || p.productionRemaining[product.id] > 0))).map(p => p.date)).size;
     return { ...ownerResult(source), hasContentDraft: canonical(contentOnly(JSON.parse(source.draft_json))) !== canonical(contentOnly(doc)), orders: ownerResult(source).orders.map(o => ({ ...o, businessDate: businessDay(o.at), attention: orderAttention(o, now) })), ledgerVersion: source.ledger_version, actor, layoutLocked: true, now: at,
-      management: { returnCredits: creditProgram(ledger), pickups: calendarPickups(doc, now, ledger, { includeHistory: true }), pickupSchedule: pickupSchedule(doc), paymentReadiness: paymentReadiness(m.settings), settings: m.settings || { calendar: defaultCalendar(), payments: {} }, reports: financialReport(ledger.orders, range), today, products,
+      management: { pickupBooking: bookingSummary(doc, ledger, now, doc.orderingPaused || !checkoutEnabled, bookableDates), pickupVisibility: ledger.pickupBooking?.dates || {}, pickupClosedDates: ledger.pickupBooking?.closedDates || {}, pickupChanges: ledger.pickupChanges || [], returnCredits: creditProgram(ledger), pickups: calendarPickups(doc, now, ledger, { includeHistory: true }), pickupSchedule: pickupSchedule(doc), paymentReadiness: paymentReadiness(m.settings), settings: m.settings || { calendar: defaultCalendar(), payments: {} }, reports: financialReport(ledger.orders, range), today, products,
         members: members.map(m => ({ cashPrivilege: ledger.management?.cashPrivileges?.[m.id] || { allowed: true, reason: '' }, credits: creditBalance(ledger, m.id), id: m.id, profile: JSON.parse(m.profile_json), createdAt: m.created_at,
           orderCount: ledger.orders.filter(o => o.customer?.memberId === m.id).length,
           benefits: (ledger.management?.benefits || []).filter(b => b.memberId === m.id) })), comments,
@@ -115,6 +119,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
         notifications: { externalEnabled: false, preferences: m.notificationPreferences || { orders: true, payments: true, stock: true, pickups: true, comments: true, errors: true } },
         limits: { orderCount: ledger.orders.length, orderLimit: 300, memberDirectoryLimit: 500 },
         attention: {
+          pickupArrangements: ledger.orders.filter(o => !o.resolution && ['pending','preparing','ready'].includes(o.status) && o.pickupChange?.acknowledgement?.response === 'alternate').length,
           payments: ledger.orders.filter(o => o.total > 0 && !o.paymentVerifiedAt && o.status !== 'canceled' && !o.resolution).length,
           preparing: ledger.orders.filter(o => o.status === 'preparing' && !o.resolution).length,
           ready: ledger.orders.filter(o => o.status === 'ready' && !o.resolution).length,
@@ -128,6 +133,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
           comments: comments.filter(c => c.status === 'pending').length,
         } } };
   }
+  if (path === '/api/manage/pickup-preview' && request.method === 'GET') { const preview = changePreview(JSON.parse(row.published_json), JSON.parse(row.ledger_json), url.searchParams.get('date'), now); preview.openForBookings &&= checkoutEnabled; return json(preview); }
   if (path === '/api/manage/snapshot' && request.method === 'GET') return json(await snapshot());
   if (path === '/api/manage/operation' && request.method === 'GET') {
     const op = JSON.parse(row.ledger_json).management?.operations?.find(o => o.id === url.searchParams.get('operationId'));
@@ -168,7 +174,10 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     if (input.orderVersion !== (o.version || 1)) bad('This order changed on another device. Refresh it before trying again.', 409);
     o.audit ||= []; return o;
   };
-  if (path === '/api/manage/cash-settings' || path === '/api/manage/cash-privilege') {
+  if (['pickup-week','pickup-visibility','pickup-change','pickup-change-update','pickup-contact'].some(action => path === '/api/manage/' + action)) {
+    if (input.ledgerVersion !== row.ledger_version) bad('Pickup details or orders changed. Refresh and review before confirming.', 409);
+    result = managePickup({ action: path.slice('/api/manage/'.length), input, ledger, published, now, actor }); description = 'Pickup booking / schedule change saved';
+  } else if (path === '/api/manage/cash-settings' || path === '/api/manage/cash-privilege') {
     if (input.ledgerVersion !== row.ledger_version) bad('Cash settings or orders changed. Refresh and review before saving.', 409);
     if (path.endsWith('cash-settings')) {
       if (typeof input.enabled !== 'boolean') bad('Choose whether Cash at Pickup is enabled.');
@@ -197,6 +206,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     } else {
       const reason = text(input.reason, 500, 'the unpaid-order review reason', true);
       if (reason.length < 5) bad('Record a clear reason for closing this unpaid order.');
+      if (o.pickupChange?.forfeitureProtected) bad('Owner initiated rescheduling protects this order from deadline penalties.', 409);
       if (o.contact?.unresolved || o.dispute?.open) bad('Resolve customer communications and disputes before closing this order.', 409);
       if (!orderAttention(o, now).overdue) bad('Use cancellation before the pickup deadline. Closing as not picked up requires a passed deadline.', 409);
       cancelCredit(ledger, o, now, actor);
@@ -209,6 +219,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     if (input.ledgerVersion !== row.ledger_version) bad('Credit settings, a balance, or an order changed. Refresh and review before confirming.', 409);
     if (path === '/api/manage/credit-expire') {
       const o = order();
+      if (o.pickupChange?.forfeitureProtected) bad('Owner initiated rescheduling protects this order from deadline penalties.', 409);
       if (input.confirmed !== true || o.returnCredit?.status !== 'reserved' || o.paymentVerifiedAt || o.resolution || o.contact?.unresolved || o.dispute?.open || !o.pickupDeadline || Date.parse(o.pickupDeadline) > now) bad('Only an expired, unverified credit reservation can be released here. Review payment records first.');
       const reason = text(input.reason, 500, 'the expiry review reason', true);
       if (reason.length < 5) bad('Record a clear expiry review reason.');
@@ -294,6 +305,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     if (outstandingCash(o)) bad('Use Close as Unpaid / Not Picked Up or cancel this cash order.', 409);
     if (o.returnCredit?.status === 'reserved') bad('Verify the remaining payment or cancel the order to release credit before resolving this pickup.', 409);
     if (input.confirmed !== true || !['forfeited','reviewed'].includes(input.resolution)) bad('Confirm an owner-reviewed resolution.');
+    if (input.resolution === 'forfeited' && o.pickupChange?.forfeitureProtected) bad('Owner initiated rescheduling protects this order from deadline penalties.', 409);
     if (o.contact?.unresolved || o.dispute?.open) bad('Resolve customer communications and any payment dispute before recording a pickup resolution.', 409);
     if (['canceled','picked-up'].includes(o.status) || o.resolution) bad('This order already has a final resolution.', 409);
     if (input.resolution === 'forfeited' && !orderAttention(o,now).overdue) bad('Forfeiture requires a passed pickup deadline and explicit owner review.', 409);
