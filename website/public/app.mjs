@@ -773,7 +773,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
               commerceEnabled && remainingDue > 0 ? h('section', { 'aria-label': 'Checkout payment options' }, h('h2', {}, 'Payment options'),
                 h('div', { class: 'checkout-payments', role: 'group', 'aria-label': 'Choose payment method' },
                   Object.entries({ ...providers, ...(cash.eligible ? { cash_pickup: 'Cash at Pickup' } : {}) }).filter(([method]) => checkoutPayments[method]).map(([method, label]) => button(
-                    [h('strong', { class: 'provider-name' }, method === 'cash_pickup' ? [h('span', { 'aria-hidden': 'true' }, '💵 '), label] : label), h('span', { class: 'payment-state', 'aria-hidden': 'true' }, !checkoutPayments[method] ? 'Unavailable' : checkoutPaymentMethod === method ? '✓ Selected' : 'Select')],
+                    [h('strong', { class: 'provider-name' }, label), h('span', { class: 'payment-state', 'aria-hidden': 'true' }, !checkoutPayments[method] ? 'Unavailable' : checkoutPaymentMethod === method ? '✓ Selected' : 'Select')],
                     () => { checkoutPaymentMethod = method; render(); root.querySelector('[data-payment="' + method + '"]')?.focus({ preventScroll: true }); },
                     { class: 'checkout-payment', 'data-payment': method, 'aria-label': label, 'aria-pressed': checkoutPaymentMethod === method, disabled: orderSubmitting || !checkoutPayments[method] }))),
                 !customer?.member ? h('p', { class: 'small-note' }, link('/roost', 'Join The Roost to pay cash at pickup.')) : null,
