@@ -119,5 +119,31 @@ try {
   assert.equal((await customer('me')).credits.available, 100);
   assert.equal((await call('/api/orders', { ...memberInput, requestId: crypto.randomUUID(), creditCents: 200 }, false, memberHeaders)).status, 409);
   assert.equal((await call('/studio/api/manage/credit-adjust', { memberId: joined.member.id, delta: 999999, operationId: crypto.randomUUID(), confirmed: true, reason: 'forged' }, false, memberHeaders)).status, 401);
-  console.log(JSON.stringify({ actualProductionWorkerdD1: true, returnCreditsFavoritesReservationFinalizationCancellationAndZeroDue: true, customerPasskeysSessionsRecoveryAndRevocation: true, individualSignedOwnerIdentity: true, privateApiAuthorization: true, manualPaymentVerification: true, duplicateVerificationPrevented: true, atomicInventoryRace: true, trackingAndFulfillment: true, automaticCalendar: true, calendarExceptionPreservesOrder: true, remoteRequests: 0, remoteWrites: 0 }));
+  // Cash uses the same atomic workspace transaction in the actual production bundle.
+  assert.equal((await customer('me')).cashPickup.eligible, false);
+  await mutation('cash-settings', { enabled: true });
+  const cashInput = { ...memberInput, paymentMethod: 'cash_pickup', creditCents: 50 };
+  const cashGuest = await call('/api/orders', { ...cashInput, requestId: crypto.randomUUID(), checkoutMode: 'guest', creditCents: 0 });
+  assert.equal(cashGuest.status, 401);
+  const cashRace = await Promise.all([call('/api/orders', { ...cashInput, requestId: crypto.randomUUID() }, false, memberHeaders), call('/api/orders', { ...cashInput, requestId: crypto.randomUUID() }, false, memberHeaders)]);
+  assert.deepEqual(cashRace.map(r => r.status).sort(), [201,409]);
+  const cashOrder = await cashRace.find(r => r.status === 201).json();
+  assert.equal(cashOrder.total,850); assert.equal(cashOrder.paymentStatus,'awaiting_cash');
+  for (const status of ['preparing','ready']) { const so = (await snapshot()).orders.find(o => o.id === cashOrder.id); await mutation('fulfillment', { id: so.id, orderVersion: so.version, status }); }
+  assert.equal((await customer('me')).cashPickup.outstanding,true);
+  const so = (await snapshot()).orders.find(o => o.id === cashOrder.id);
+  const cashReceipt = { id:so.id, orderVersion:so.version, amount:so.total, confirmed:true };
+  assert.equal((await call('/studio/api/manage/cash-received', { ...cashReceipt, operationId:crypto.randomUUID() },false,memberHeaders)).status,401);
+  await mutation('cash-received', cashReceipt);
+  const paid = (await snapshot()).orders.find(o => o.id === so.id);
+  assert.equal(paid.paymentStatus,'verified'); assert.equal(paid.verifications.length,1); assert.equal(paid.returnCredit.status,'used');
+  assert.equal((await customer('me')).cashPickup.outstanding,false);
+  assert.equal((await call('/studio/api/manage/cash-received', { ...cashReceipt, orderVersion:paid.version, operationId:crypto.randomUUID() },true)).status,409);
+  await mutation('cash-privilege', { memberId:joined.member.id, allowed:false, reason:'Private edge test note' });
+  assert.equal((await customer('me')).cashPickup.eligible,false);
+  await mutation('cash-privilege', { memberId:joined.member.id, allowed:true });
+  assert.equal((await customer('me')).cashPickup.eligible,true);
+  await mutation('cash-settings', { enabled:false });
+  assert.equal((await customer('me')).cashPickup.eligible,false);
+  console.log(JSON.stringify({ actualProductionWorkerdD1: true, cashPickupAtomicMemberEligibilityReceiptAndCreditLifecycle: true, returnCreditsFavoritesReservationFinalizationCancellationAndZeroDue: true, customerPasskeysSessionsRecoveryAndRevocation: true, individualSignedOwnerIdentity: true, privateApiAuthorization: true, manualPaymentVerification: true, duplicateVerificationPrevented: true, atomicInventoryRace: true, trackingAndFulfillment: true, automaticCalendar: true, calendarExceptionPreservesOrder: true, remoteRequests: 0, remoteWrites: 0 }));
 } finally { await mf.dispose(); }

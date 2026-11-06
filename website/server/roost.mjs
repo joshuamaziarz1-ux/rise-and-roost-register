@@ -1,3 +1,4 @@
+import { cashEligibility } from './cash-pickup.mjs';
 import { customerCredits } from './return-credits.mjs';
 import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } from '@simplewebauthn/server';
 import { customerOrder, emailAddress } from './orders.mjs';
@@ -49,7 +50,7 @@ export async function roostApi({ request, db, now, input, path, json, rateLimit 
     const ledger = JSON.parse(row.ledger_json);
     const orders = ledger.orders.filter(o => o.customer?.memberId === member.id).map(o => customerOrder(o, workspaceId, ledger.management?.settings, now));
     const devices = await list(db, "SELECT json_group_array(json_object('id',d.id,'label',d.label,'lastSeen',d.last_seen,'current',s.hash=?)) AS items FROM roost_sessions s JOIN roost_session_details d ON d.hash=s.hash WHERE s.workspace_id=? AND s.member_id=? AND s.expires>? AND d.absolute_expires>?", member.session_hash, workspaceId, member.id, now, now);
-    return response({ member: safeMember(member), orders, devices, credits: customerCredits(ledger, member.id), favorites: ledger.roostFavorites?.[member.id] || [] }, [renewed.cookie]);
+    return response({ member: safeMember(member), orders, devices, cashPickup: cashEligibility(ledger, member.id), credits: customerCredits(ledger, member.id), favorites: ledger.roostFavorites?.[member.id] || [] }, [renewed.cookie]);
   }
   if (path === '/api/roost/favorite' && request.method === 'POST') {
     const member = await memberFor(request, db, workspaceId, now, true);

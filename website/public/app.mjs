@@ -484,6 +484,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
             orderByLabel(receipt.pickup),
         ) : null,
         h("h2", {}, money(receipt.total)),
+        receipt.selectedPaymentMethod === 'cash_pickup' ? h('div', {}, h('strong', {}, 'Payment: Cash at Pickup'), h('p', {}, 'Cash Due: ' + money(receipt.total)), h('p', {}, 'Please bring your payment when you pick up your order.')) : null,
         receipt.creditApplied ? h('p', {}, 'Subtotal: ' + money(receipt.subtotal) + ' · Return credit: −' + money(receipt.creditApplied) + ' · Remaining payment: ' + money(receipt.total)) : null,
         h(
           "p",
@@ -510,6 +511,9 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     );
     const appliedCredit = checkoutMode === 'member' && customer?.member && customer.credits.enabled ? Math.min(creditChoice, customer.credits.available, total) : 0;
     const remainingDue = total - appliedCredit;
+    const cash = checkoutMode === 'member' && customer?.member ? customer.cashPickup : {};
+    const checkoutPayments = { ...paymentDestinations, ...(cash.eligible ? { cash_pickup: {} } : {}) };
+    if (!checkoutPayments[checkoutPaymentMethod]) checkoutPaymentMethod = Object.keys(checkoutPayments)[0] || '';
     const invalidBasket = cart.lines.length !== lines.length || lines.some(l =>
       !visibleProduct(l.p) || sellingMethod(l.p) === 'in-store' || soldOut(l.p) ||
       lines.filter(other => other.productId === l.productId).reduce((n, other) => n + other.qty, 0) > l.p.stock);
@@ -559,7 +563,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
       ...[["Name", "name", "text", "name"], ["Email (optional)", "email", "email", "email"], ["Phone (optional)", "phone", "tel", "tel"]].map(([label, key, type, autocomplete]) => h("label", { class: "field" }, label,
         h("input", { name: "checkout-" + key, type, autocomplete, required: key === "name", maxlength: key === "name" ? 80 : key === "phone" ? 32 : 254, value: checkoutProfile[key], oninput: e => { checkoutProfile[key] = e.target.value; updateActionValidity(); } })))) : null;
     const checkoutInvalid = () => orderSubmitting || !checkoutEnabled || doc.orderingPaused || !chosen || pickupClosed(chosen) || invalidBasket || !lines.length || isPreview || editing ||
-      commerceEnabled && (!policyAccepted || remainingDue > 0 && !paymentDestinations[checkoutPaymentMethod]) ||
+      commerceEnabled && (!policyAccepted || remainingDue > 0 && !checkoutPayments[checkoutPaymentMethod]) ||
       emailOptIn && !emailInput.checkValidity() ||
       experience && (!checkoutProfile.name.trim() || [...customerFields.querySelectorAll('input')].some(input => !input.checkValidity()));
     const updateActionValidity = () => {
@@ -573,7 +577,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
         if (orderSubmitting) return;
         if (invalidBasket) throw new Error('Some items are no longer available for online ordering. Please update your basket before continuing.');
         if (!checkoutEnabled || doc.orderingPaused || !chosen || pickupClosed(chosen)) throw new Error('Ordering is unavailable for this pickup. Please choose another available date.');
-        if (commerceEnabled && remainingDue > 0 && !paymentDestinations[checkoutPaymentMethod]) throw new Error('Ordering is paused while payment options are being set up.');
+        if (commerceEnabled && remainingDue > 0 && !checkoutPayments[checkoutPaymentMethod]) throw new Error('Ordering is paused while payment options are being set up.');
         if (commerceEnabled && !policyAccepted) throw new Error("Please read and acknowledge the pickup policy.");
         if (emailOptIn && !emailInput.reportValidity()) return;
         if (experience) {
@@ -768,11 +772,13 @@ if (!location.pathname.startsWith('/studio/preview/') && (
                 : experience ? "Your confirmation includes a private order tracking link." : "Email is not connected for this beta site. You will receive a private order tracking link instead."),
               commerceEnabled && remainingDue > 0 ? h('section', { 'aria-label': 'Checkout payment options' }, h('h2', {}, 'Payment options'),
                 h('div', { class: 'checkout-payments', role: 'group', 'aria-label': 'Choose payment method' },
-                  Object.entries(providers).map(([method, label]) => button(
-                    [h('strong', { class: 'provider-name' }, label), h('span', { class: 'payment-state', 'aria-hidden': 'true' }, !paymentDestinations[method] ? 'Unavailable' : checkoutPaymentMethod === method ? '✓ Selected' : 'Select')],
+                  Object.entries({ ...providers, ...(cash.eligible ? { cash_pickup: 'Cash at Pickup' } : {}) }).filter(([method]) => checkoutPayments[method]).map(([method, label]) => button(
+                    [h('strong', { class: 'provider-name' }, label), h('span', { class: 'payment-state', 'aria-hidden': 'true' }, !checkoutPayments[method] ? 'Unavailable' : checkoutPaymentMethod === method ? '✓ Selected' : 'Select')],
                     () => { checkoutPaymentMethod = method; render(); root.querySelector('[data-payment="' + method + '"]')?.focus({ preventScroll: true }); },
-                    { class: 'checkout-payment', 'data-payment': method, 'aria-label': label, 'aria-pressed': checkoutPaymentMethod === method, disabled: orderSubmitting || !paymentDestinations[method] }))),
-                h('p', { role: 'status' }, Object.keys(paymentDestinations).length ? 'Choose an available method. Danielle verifies payment after you pay.' : 'Ordering is paused while Danielle finishes payment setup. Please check back soon.')) : null,
+                    { class: 'checkout-payment', 'data-payment': method, 'aria-label': label, 'aria-pressed': checkoutPaymentMethod === method, disabled: orderSubmitting || !checkoutPayments[method] }))),
+                !customer?.member ? h('p', { class: 'small-note' }, link('/roost', 'Join The Roost to pay cash at pickup.')) : null,
+                cash.enabled && cash.allowed && cash.outstanding ? h('p', { role: 'status' }, 'You already have an order awaiting cash payment. Please complete that order before placing another cash order.') : null,
+                h('p', { role: 'status' }, Object.keys(checkoutPayments).length ? checkoutPaymentMethod === 'cash_pickup' ? 'Please bring your payment when you pick up your order.' : 'Choose an available method. Danielle verifies payment after you pay.' : 'Ordering is paused while Danielle finishes payment setup. Please check back soon.')) : null,
               commerceEnabled ? h('div', { class: 'checkout-policy' }, h('h3', {}, 'Pickup policy'), h('p', {}, POLICY[0]), h('details', {}, h('summary', {}, POLICY_TITLE), POLICY.map((paragraph, i) => h('p', {}, i === 2 ? h('strong', {}, paragraph) : paragraph))),
                 h('label', { class: 'field' }, h('input', { type: 'checkbox', checked: policyAccepted, required: true, onchange: e => { policyAccepted = e.target.checked; updateActionValidity(); }, 'aria-label': 'I have read and acknowledge the Rise & Roost Pickup Policy' }), 'I have read and acknowledge the Rise & Roost Pickup Policy')) : null,
               action,
@@ -985,7 +991,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     experience = !!result.customerExperienceEnabled;
     commerceEnabled = !!result.commerceEnabled;
     paymentDestinations = result.paymentDestinations || {};
-    if (!paymentDestinations[checkoutPaymentMethod]) checkoutPaymentMethod = Object.keys(paymentDestinations)[0] || '';
+    if (checkoutPaymentMethod !== 'cash_pickup' && !paymentDestinations[checkoutPaymentMethod]) checkoutPaymentMethod = Object.keys(paymentDestinations)[0] || '';
     notificationsEnabled = !!result.notificationsEnabled;
     revision = result.revision || 1;
     availabilityRevision = result.availabilityRevision || 0;

@@ -1,3 +1,4 @@
+import { CASH_METHOD, requireCash } from './cash-pickup.mjs';
 import { POLICY_VERSION, pickupDeadline, defaultCalendar, providers, configuredPayments, paymentReadiness } from '../public/commerce.mjs';
 import * as css from "css-tree";
 import { customerOrder, emailAddress, enqueue } from "./orders.mjs";
@@ -918,9 +919,10 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         let selectedPaymentMethod;
         if (commerceEnabled && quoted.total - (input.creditCents || 0) > 0) {
           const active = configuredPayments(ledger.management?.settings);
-          if (!Object.keys(active).length) fail('Ordering is paused while Danielle finishes payment setup. Please check back soon.',409);
+          if (!Object.keys(active).length && input.paymentMethod !== CASH_METHOD) fail('Ordering is paused while Danielle finishes payment setup. Please check back soon.',409);
           selectedPaymentMethod = input.paymentMethod ?? Object.keys(active)[0];
-          if (!Object.hasOwn(active,selectedPaymentMethod)) fail('That payment method is no longer available. Review the current payment options.',409);
+          if (selectedPaymentMethod === CASH_METHOD) requireCash(ledger, checkoutMember?.id);
+          else if (!Object.hasOwn(active,selectedPaymentMethod)) fail('That payment method is no longer available. Review the current payment options.',409);
         }
         const order = {
           ...quoted,
@@ -945,6 +947,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           const settings = ledger.management?.settings || {};
           order.commerceEnabled = true;
           if (order.total === 0) order.paymentStatus = 'not_required';
+          else if (selectedPaymentMethod === CASH_METHOD) order.paymentStatus = 'awaiting_cash';
           order.policyAcceptance = { version: POLICY_VERSION, at: order.at, calendar: settings.calendar || defaultCalendar() };
           order.pickupDeadline = pickupDeadline(order.pickup, order.policyAcceptance.calendar);
           order.originalPickup = copy(order.pickup);
@@ -988,6 +991,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           order.audit.push({ action: 'Payment reported by customer; not verified', at: order.paymentReportedAt });
         } else
         if (tracking[3] === '/payment-method') {
+          if (order.selectedPaymentMethod === CASH_METHOD) fail('Contact Danielle to change a Cash at Pickup order.', 409);
           if (!Object.hasOwn(providers, input.method) || !configuredPayments(ledger.management?.settings)[input.method]) fail('This business payment destination is not configured. Contact Danielle.');
           if (order.total === 0 || order.paymentVerifiedAt || order.status === 'canceled' || order.resolution) fail('This order no longer needs payment.', 409);
           if (order.selectedPaymentMethod === input.method) return json(customerOrder(order, row.id, ledger.management?.settings, now));
