@@ -41,9 +41,10 @@ Member checkout supports partial credit, full available credit and credit-only o
 | Production owner / payment browser regressions | 10 |
 | Commerce / payment-settings browser regressions | 8 |
 | Studio navigation / Help Guide browser matrix | 15 |
-| **Total** | **348** |
+| Legacy preview Access/PIN browser regressions | 30 |
+| **Total** | **378** |
 
-All final runs have zero failures or skips. Desktop Chromium, desktop WebKit, iPhone WebKit, Android Chromium and tablet Chromium are covered. The exact prebuilt executable additionally passed actual local workerd/D1 tests for customer authentication/recovery/devices, owner authorization, guest checkout, payment verification, inventory concurrency, favorites, credit reservation/finalization/cancellation and credit-only checkout. New backend tests include adversarial amounts/quantities, multi-item returns, idempotency, concurrent spending and adjustments, failed commits, ownership isolation, reversals and expired reservations.
+The final focused runs have zero unresolved failures or skips. The initial broader GitHub run passed 185 of 200 browser cases; its 15 failures were outdated preview Studio URL expectations from before the approved Home/Back navigation. A test-only follow-up aligns those expectations with `/studio#Home`. All 30 preview Access/PIN cases passed across the five profiles after correction; three local startup failures from an interrupted fixture were resolved by a clean Chromium rerun. The deployed application files did not change. Desktop Chromium, desktop WebKit, iPhone WebKit, Android Chromium and tablet Chromium are covered. The exact prebuilt executable additionally passed actual local workerd/D1 tests for customer authentication/recovery/devices, owner authorization, guest checkout, payment verification, inventory concurrency, favorites, credit reservation/finalization/cancellation and credit-only checkout. New backend tests include adversarial amounts/quantities, multi-item returns, idempotency, concurrent spending and adjustments, failed commits, ownership isolation, reversals and expired reservations.
 
 Earlier browser runs identified a shared local fixture port and geometry checks reading a replaced header. The new fixture uses a unique port, startup validates the responding database identity, and geometry assertions read one polled DOM snapshot. Final affected suites passed. Signing software authenticators exercise real server verification in Linux WebKit; physical-device biometric prompts are not certified by emulation.
 
@@ -63,7 +64,7 @@ The complete program remains paused until Danielle reviews applicable store-cred
 
 The current workspace ledger has a 1.2 MB safety limit and 2,000 owner-operation limit. It rejects further work before exceeding limits; durable history is never pruned. Arrange storage expansion before reaching them. Existing full-database backup/recovery preserves original monetary ownership. Contact-only business-copy imports refuse monetary histories instead of assigning money to newly generated account identities.
 
-Rollback, if needed after checking for newer releases, must shift traffic to the retained previous version and matching assets. Leave D1 and legitimate customer actions intact; never restore a database for a code rollback. No rollback was needed.
+Rollback, if needed after checking for newer releases, must shift traffic to the retained previous version and matching assets. Leave D1 and legitimate customer actions intact; never restore a database for a code rollback. The retained customer-login version is suitable only for an immediate rollback before any monetary events exist. After the program is used, keep ordering and credits paused during repair and use a version that supports the credit lifecycle or a forward fix; the older version cannot finalize or release reservations. No rollback was needed.
 
 ## Files changed
 
@@ -93,5 +94,7 @@ The implementation commit changes these 24 files; this deployment report is the 
 - `website/tests/primary-fixture.mjs`
 - `website/tests/production-launch-worker-smoke.mjs`
 - `website/tests/return-credits.test.mjs`
+
+The test-only follow-up also updates `website/tests/browser/preview-cloudflare.spec.mjs` and `website/tests/browser/studio-pin.spec.mjs`. The complete change spans 27 files, including this report.
 
 See [implementation and operator details](ROOST-RETURN-CREDITS.md). Private configuration, fingerprints, receipts, raw test logs and screenshots remain outside Git under `/workspace/roost-experience-audit`.

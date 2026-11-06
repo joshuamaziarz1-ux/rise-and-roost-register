@@ -11,7 +11,7 @@ test.describe('Cloudflare Access remembered Studio preview', () => {
   const nav = (page, name) => page.getByRole('navigation', { name: page.viewportSize().width <= 900 ? 'Primary Studio navigation' : 'Studio navigation', exact: true }).getByRole('button', { name, exact: true });
   async function noLogin(page) {
     await expect(page.getByRole('heading', { name: 'Hi, Danielle!', exact: true })).toBeVisible();
-    await expect(page).toHaveURL(fixture.origin+'/studio');
+    await expect(page).toHaveURL(fixture.origin+'/studio#Home');
     await expect(page.getByLabel('Workspace ID', { exact: true })).toHaveCount(0);
     await expect(page.getByLabel('Private access key', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toHaveCount(0);
