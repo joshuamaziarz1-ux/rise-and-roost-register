@@ -93,3 +93,46 @@ The exact final Worker additionally passes actual local workerd/D1 checks for ex
 - `website/tests/pickup-approvals.test.mjs`
 - `website/tests/production-launch-worker-smoke.mjs`
 - `website/wrangler.production.toml`
+
+## Verified production release — November 6, 2026
+
+| Item | Value |
+| --- | --- |
+| Development branch | `feature/pickup-approvals-rescheduling` |
+| Tested/deployed implementation commit | `07f552318388b84f8e82582663234a0e725eff26` |
+| Production Worker | `rise-roost-website-production` |
+| Active Worker version, 100% traffic | `777bc9f9-2dd8-4a15-a067-3ae79efeeddb` |
+| Deployment ID | `267522c3-7002-4e38-bb15-cb68ad65a1f6` |
+| Exact deployed executable SHA-256 | `0183895028bb98a5ba14731499b1d3fa717612f94f953e6cba5e7e36a639c327` |
+| Previous retained Worker version | `13e25ac5-094b-4ce3-83c4-4258e30c6645` |
+| Database | Existing `rise-roost-production-db`; no schema migration |
+| Deployment data write | One guarded additive ledger update: approval state and its audit entry, ledger version +1 |
+| Initially approved weeks | November 9–15 and November 16–22, 2026 |
+| Initially eligible dates | November 11, 12, 13, 18, 19 and 20 |
+| Later weeks | Unapproved until Danielle explicitly approves them |
+| Checkout | `REAL_CHECKOUT_ENABLED=false`, unchanged |
+| Separate calendar pause toggle | `orderingPaused=false`, unchanged; this does not activate checkout |
+| Cash / outbound email | Cash OFF; `ORDER_EMAIL_ENABLED=false`, unchanged |
+| Review | [Draft PR #20](https://github.com/joshuamaziarz1-ux/rise-and-roost-register/pull/20), stacked on the approved cash branch; no merge performed |
+
+Immediately before activation, original server sources, remote source branches, live deployment, Worker bindings/runtime/handlers, all original database rows/schema and Access apps/policies were checked. The approved source and deployment had not advanced. Two legitimate Studio announcement edits (save/clear) occurred while tests ran: only the announcement, its revisions and corresponding audit/operation/history entries changed. They were verified and retained in the latest baseline before the transition. No announcement edit was overwritten. The pickup schedule, orders and activation/payment settings were unchanged.
+
+The candidate retains every original binding, runtime/asset behavior and handler. Only the new `PICKUP_APPROVALS_REQUIRED=true` guard was added. The one-time transition refused any changed workspace revision or ledger version, then wrote approval metadata and audit together. Post-transition and post-release comparisons preserved every other original workspace field and ledger value, every other table row and the complete schema. No order/payment/account/inventory mutation or notification send occurred during deployment. Production had zero customer orders at inspection and still has zero after release.
+
+Read-only verification confirmed the active version/deployment and byte-for-byte identity with the tested executable. Nine application assets match the committed candidate. The public site exposes only the six reviewed eligible dates, with `productionMode=true` and `checkoutEnabled=false`. Studio and its private management API retain their HTTP 302 Access challenge. Desktop Chromium and iPhone WebKit live shop/basket/checkout and anonymous Roost checks pass with zero JavaScript errors, zero horizontal overflow and **zero write requests**. Direct Python HTTP requests encountered the existing browser-integrity filter; the normal browser verification succeeded without changing any Cloudflare security setting.
+
+### Requested delivery confirmations
+
+1. The existing Studio Calendar layout, date edits, recurring settings and history are retained.
+2. Danielle controls each future Monday–Sunday week through Approve, Close and Reopen; date visibility cannot bypass approval.
+3. Home reminders show approved ranges, next unapproved week, bookable dates and the appropriate pause/eligibility warning.
+4. Public availability and direct order creation enforce unapproved/closed weeks, hidden/closed dates and existing deadlines/product/capacity rules.
+5. Makeup appointments can use future dates/times outside the recurring schedule; Date To Be Announced stays explicit and no replacement is invented.
+6. All affected orders are updated transactionally and idempotently, with original snapshots, payment/credit/inventory state and history preserved.
+7. Affected members and guests can view private schedule notices; customer confirmations and alternate-arrangement requests persist with order ownership/capability checks.
+8. Studio tracks responses and outreach. Delivery status is accurate: in-app notice and owner-recorded direct contact, with no claim of automated email/text delivery.
+9. Newer checkout, Studio pickup-history, Roost passkey/credit and Cash at Pickup work is retained.
+10. Production ordering remains disabled and all activation settings are unchanged. No notifications were automatically sent.
+11. All 417 distinct checks and the exact workerd/D1 smoke pass; no unresolved implementation/test/deployment blocker remains.
+
+The final report follow-up changes documentation only; the deployed executable and assets remain those tested from implementation commit `07f5523`.
