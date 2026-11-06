@@ -16,10 +16,10 @@ async function freshWorkspace(browser, info) {
 }
 async function selectPickup(page) {
   const pickup = page.getByLabel('Choose your pickup', { exact: true });
-  await pickup.selectOption(await pickup.locator('option:not([disabled])').nth(1).getAttribute('value'));
+  await pickup.getByRole('button').first().click();
   await expect(page.locator('.deadline p')).toHaveText(/^[A-Za-z]+, [A-Za-z]+ \d+ at (?:[1-9]|1[0-2]):\d{2} [AP]M$/);
   await customerClocks(page);
-  return pickup.locator('option:checked').textContent();
+  return pickup.locator('[aria-pressed="true"]').textContent();
 }
 async function customerClocks(page) {
   const text = await page.locator('main').innerText();

@@ -245,11 +245,7 @@ test("products, upload/crop, varieties, price, pickup cutoff, and simulated cart
   await page.getByLabel("Quantity Danielle’s demo loaf").fill("2");
   await page.getByLabel("Quantity Danielle’s demo loaf").press("Tab");
   const select = page.getByLabel("Choose your pickup", { exact: true });
-  const value = await select
-    .locator("option:not([disabled])")
-    .nth(1)
-    .getAttribute("value");
-  await select.selectOption(value);
+  await select.getByRole('button').first().click();
   await expect(page.locator(".deadline")).toContainText("5:30 PM");
   await expect(page.locator(".total")).toContainText("$23.00");
   await page
@@ -313,7 +309,7 @@ test("Sold Out, in-store and hidden availability persist; failed saves recover w
   await visitor.getByRole("button", { name: "Add to basket", exact: true }).click();
   await visitor.locator(".basket-link").click();
   const pickup = visitor.getByLabel("Choose your pickup", { exact: true });
-  await pickup.selectOption(await pickup.locator("option:not([disabled])").nth(1).getAttribute("value"));
+  await pickup.getByRole('button').first().click();
   await visitor.getByRole("button", { name: "Request a demo preorder", exact: true }).click();
   await expect(visitor.locator(".receipt")).toContainText("no payment collected");
   expect((await (await page.request.get("/api/studio")).json()).id).toBe(id);

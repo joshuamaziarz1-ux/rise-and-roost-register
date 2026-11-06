@@ -121,7 +121,7 @@ test.describe('Rise & Roost management Studio', () => {
       const customer = await customers.newPage(); await customer.goto(customerPath('/shop'));
       await customer.getByRole('button', { name: 'Add Slow Sunday sourdough to basket', exact: true }).click();
       await customer.locator('.basket-link').click(); await customer.getByLabel('Name', { exact: true }).fill('Synthetic Pickup Neighbor');
-      const pickup = customer.getByLabel('Choose your pickup', { exact: true }); await pickup.selectOption(await pickup.locator('option:not([disabled])').nth(1).getAttribute('value'));
+      const pickup = customer.getByLabel('Choose your pickup', { exact: true }); await pickup.getByRole('button').first().click();
       await customer.getByRole('button', { name: 'Place preorder', exact: true }).click();
       await customer.getByRole('link', { name: 'Track your order', exact: true }).click();
       await expect(customer.getByRole('button', { name: "I've Sent Payment", exact: true })).toHaveCount(0);

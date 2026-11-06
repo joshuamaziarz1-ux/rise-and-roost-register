@@ -93,7 +93,7 @@ test('workspace authentication and device pairing keep the main site, demos and 
     await visitor.getByRole('button', { name: 'Add to basket', exact: true }).click();
     await visitor.locator('.basket-link').click();
     const pickup = visitor.getByLabel('Choose your pickup', { exact: true });
-    await pickup.selectOption(await pickup.locator('option:not([disabled])').nth(1).getAttribute('value'));
+    await pickup.getByRole('button').first().click();
     const submission = visitor.waitForRequest(r => r.url().endsWith('/api/orders') && r.method() === 'POST');
     const response = visitor.waitForResponse(r => r.url().endsWith('/api/orders') && r.request().method() === 'POST');
     await visitor.getByRole('button', { name: 'Request a demo preorder', exact: true }).click();

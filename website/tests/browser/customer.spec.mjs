@@ -18,12 +18,12 @@ test.describe('isolated customer experience', () => {
   const authenticator = (page, info) => installTestPasskey(page, info, fixture.origin);
   async function pickup(page) {
     const select = page.getByLabel('Choose your pickup', { exact: true });
-    for (const label of await select.locator('option[value]:not([value=""])').allTextContents())
+    for (const label of await select.getByRole('button').allTextContents())
       expect(label).toMatch(/^[A-Za-z]+, [A-Za-z]+ \d+ · (?:[1-9]|1[0-2]):\d{2} [AP]M – (?:[1-9]|1[0-2]):\d{2} [AP]M(?: · Closed)?$/);
-    await select.selectOption(await select.locator('option:not([disabled])').nth(1).getAttribute('value'));
+    await select.getByRole('button').first().click();
     await expect(page.locator('.deadline p')).toHaveText(/^[A-Za-z]+, [A-Za-z]+ \d+ at (?:[1-9]|1[0-2]):\d{2} [AP]M$/);
     await customerClocks(page);
-    return select.locator('option:checked').textContent();
+    return select.locator('[aria-pressed="true"]').textContent();
   }
   async function customerClocks(page) {
     const text = await page.locator('main').innerText();

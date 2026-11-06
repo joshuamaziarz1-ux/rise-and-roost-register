@@ -22,7 +22,7 @@ test('customer order tracking separates payment verification and fulfillment acr
     await customer.locator('.basket-link').click();
     await expect(customer.getByLabel('Email for order updates', { exact: true })).toBeDisabled();
     const pickup = customer.getByLabel('Choose your pickup', { exact: true });
-    await pickup.selectOption(await pickup.locator('option:not([disabled])').nth(1).getAttribute('value'));
+    await pickup.getByRole('button').first().click();
     await customer.getByRole('button', { name: 'Request a demo preorder', exact: true }).click();
     const tracking = customer.getByRole('link', { name: 'Track your order', exact: true });
     const trackingPath = await tracking.getAttribute('href');

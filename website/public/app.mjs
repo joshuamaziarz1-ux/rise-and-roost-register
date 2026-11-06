@@ -33,6 +33,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
   const calendarNow = () => Date.now() + serverOffset;
   let experience = false, customer, customerWorkspace = "", checkoutMode = "guest";
   let checkoutProfile = { name: "", email: "", phone: "" };
+  let orderSubmitting = false;
   const editing = new URLSearchParams(location.search).has("studio-preview");
   let previewDocumentReceived = false;
   const match = location.pathname.match(
@@ -121,6 +122,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     render();
   });
   const add = (product, variant, qty = 1) => {
+    if (orderSubmitting) return;
     if (!visibleProduct(product) || sellingMethod(product) === 'in-store' || soldOut(product)) {
       notify('This item is unavailable for online ordering.', true);
       return;
@@ -513,53 +515,52 @@ if (!location.pathname.startsWith('/studio/preview/') && (
       cart.lines.some(line => p.productionRemaining?.[line.productId] !== undefined && p.productionRemaining[line.productId] < cart.lines.filter(l => l.productId === line.productId).reduce((n, l) => n + l.qty, 0)) ||
       calendarNow() >= localInstant(p.cutoffDate, p.cutoffTime) || calendarNow() >= localInstant(p.date, p.start) || p.capacity === 0;
     const eligiblePickups = doc.pickups.filter(p => !pickupClosed(p));
-    if (automaticCalendar && !eligiblePickups.some(p => p.id === cart.pickupId)) {
+    if (!orderSubmitting && automaticCalendar && !eligiblePickups.some(p => p.id === cart.pickupId)) {
       // An earlier checkout response may have been lost. Keep its retry ID so
       // advancing availability cannot create a second order automatically.
       cart.pickupId = eligiblePickups[0]?.id || ''; saveCart();
     }
-    const select = h(
-      "select",
-      {
-        id: "pickup-select",
-        "aria-label": doc.ui.pickup,
-        onchange: (e) => {
-          cart.pickupId = e.target.value;
+    const pickupChoices = h('div', { class: 'pickup-options', role: 'group', 'aria-label': doc.ui.pickup },
+      eligiblePickups.map(p => button(pickupLabel(p), () => {
+        if (orderSubmitting || pickupClosed(p)) return;
+        if (cart.pickupId !== p.id) {
+          cart.pickupId = p.id;
           cart.requestId = crypto.randomUUID();
           saveCart();
-          render();
-        },
-      },
-      h("option", { value: "" }, doc.ui.pickup),
-      (automaticCalendar ? eligiblePickups : doc.pickups.filter(p => calendarNow() < localInstant(p.date, p.start))).map((p) => {
-        const closed = pickupClosed(p);
-        return h(
-          "option",
-          { value: p.id, selected: cart.pickupId === p.id, disabled: closed },
-          pickupLabel(p) + (closed ? " · Closed" : ""),
-        );
-      }),
+        }
+        render();
+        // Rendering replaces the cards. Keep keyboard focus on the tapped date.
+        root.querySelectorAll('.pickup-date').forEach(card => {
+          if (card.dataset.pickupId === p.id) card.focus({ preventScroll: true });
+        });
+      }, { class: 'pickup-date', 'data-pickup-id': p.id, 'aria-pressed': cart.pickupId === p.id, disabled: orderSubmitting })),
     );
-    const chosen = doc.pickups.find((p) => p.id === cart.pickupId);
+    const chosen = eligiblePickups.find((p) => p.id === cart.pickupId);
     const emailInput = h("input", {
       type: "email", "aria-label": "Email for order updates", autocomplete: "email", maxlength: 254,
       value: checkoutEmail, disabled: !notificationsEnabled,
-      oninput: (e) => { checkoutEmail = e.target.value; },
+      oninput: (e) => { checkoutEmail = e.target.value; updateActionValidity(); },
     });
     const emailConsent = h("input", {
       type: "checkbox", checked: emailOptIn, disabled: !notificationsEnabled,
       "aria-label": "Email me order updates",
-      onchange: (e) => { emailOptIn = e.target.checked; emailInput.required = emailOptIn; },
+      onchange: (e) => { emailOptIn = e.target.checked; emailInput.required = emailOptIn; updateActionValidity(); },
     });
     emailInput.required = emailOptIn;
     const customerFields = experience ? h("div", { class: "checkout-details" },
       h("h2", {}, "Your pickup details"),
       h("p", { class: "small-note" }, "We’ll know who your order is for."),
       ...[["Name", "name", "text", "name"], ["Email (optional)", "email", "email", "email"], ["Phone (optional)", "phone", "tel", "tel"]].map(([label, key, type, autocomplete]) => h("label", { class: "field" }, label,
-        h("input", { name: "checkout-" + key, type, autocomplete, required: key === "name", maxlength: key === "name" ? 80 : key === "phone" ? 32 : 254, value: checkoutProfile[key], oninput: e => checkoutProfile[key] = e.target.value })))) : null;
+        h("input", { name: "checkout-" + key, type, autocomplete, required: key === "name", maxlength: key === "name" ? 80 : key === "phone" ? 32 : 254, value: checkoutProfile[key], oninput: e => { checkoutProfile[key] = e.target.value; updateActionValidity(); } })))) : null;
+    const checkoutInvalid = () => orderSubmitting || !checkoutEnabled || doc.orderingPaused || !chosen || pickupClosed(chosen) || invalidBasket || !lines.length || isPreview || editing ||
+      commerceEnabled && (!policyAccepted || total > 0 && !paymentDestinations[checkoutPaymentMethod]) ||
+      emailOptIn && !emailInput.checkValidity() ||
+      experience && (!checkoutProfile.name.trim() || [...customerFields.querySelectorAll('input')].some(input => !input.checkValidity()));
+    const updateActionValidity = () => { action.disabled = checkoutInvalid(); };
     const action = button(
       experience ? "Place preorder" : doc.ui.checkout,
       guard(async () => {
+        if (orderSubmitting) return;
         if (invalidBasket) throw new Error('Some items are no longer available for online ordering. Please update your basket before continuing.');
         if (!checkoutEnabled || doc.orderingPaused || !chosen || pickupClosed(chosen)) throw new Error('Ordering is unavailable for this pickup. Please choose another available date.');
         if (commerceEnabled && total > 0 && !paymentDestinations[checkoutPaymentMethod]) throw new Error('Ordering is paused while payment options are being set up.');
@@ -570,7 +571,8 @@ if (!location.pathname.startsWith('/studio/preview/') && (
           if (fields.some(input => !input.reportValidity())) return;
           for (const key of ["name", "email", "phone"]) checkoutProfile[key] = customerFields.querySelector('[name="checkout-' + key + '"]').value;
         }
-        action.disabled = true;
+        orderSubmitting = true;
+        updateActionValidity();
         try {
           if (!workspace) {
             const created = await request("/api/workspaces", { customerDemo: true });
@@ -608,13 +610,14 @@ if (!location.pathname.startsWith('/studio/preview/') && (
           if (experience) void customer.refresh(false);
           render();
         } finally {
-          action.disabled = false;
+          orderSubmitting = false;
+          render();
         }
       }),
       {
         class: "primary-link",
         type: experience ? "submit" : "button",
-        disabled: !checkoutEnabled || doc.orderingPaused || !chosen || pickupClosed(chosen) || invalidBasket || !lines.length || isPreview || editing || commerceEnabled && total > 0 && !paymentDestinations[checkoutPaymentMethod],
+        disabled: checkoutInvalid(),
       },
     );
     return h(
@@ -624,6 +627,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
       invalidBasket ? h('div', { class: 'basket-availability-warning', role: 'status' },
         h('p', {}, 'Some items are no longer available for online ordering. Remove unavailable items or lower their quantities before continuing.'),
         blockedItems.length ? button('Remove unavailable items', () => {
+          if (orderSubmitting) return;
           cart.lines = cart.lines.filter(l => !blockedItems.some(blocked => blocked.productId === l.productId && blocked.variantId === l.variantId));
           cart.requestId = crypto.randomUUID(); saveCart(); render();
         }, { class: 'text-button' }) : null) : null,
@@ -666,6 +670,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
                         value: l.qty,
                         "aria-label": doc.ui.quantity + " " + l.p.name,
                         onchange: (e) => {
+                          if (orderSubmitting) return;
                           const qty = Math.max(
                             1,
                             Math.min(
@@ -687,6 +692,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
                     button(
                       doc.ui.remove,
                       () => {
+                        if (orderSubmitting) return;
                         cart.lines = cart.lines.filter(
                           (x) =>
                             x.productId !== l.productId ||
@@ -709,7 +715,8 @@ if (!location.pathname.startsWith('/studio/preview/') && (
               { class: "order-summary" },
               !experience ? h("span", { class: "eyebrow" }, "SIMULATION ONLY") : null,
               h("h2", {}, doc.ui.pickup),
-              select,
+              eligiblePickups.length ? pickupChoices : h('p', { class: 'pickup-empty', role: 'status' },
+                doc.orderingPaused ? 'Ordering is currently paused. No pickup dates are available. Please check back soon.' : 'No eligible pickup dates are available for all items in your basket. Please check back soon or update your basket.'),
               experience ? pickupLocation(doc.business) : null,
               chosen
                 ? h(
@@ -739,7 +746,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
                 Object.entries(providers).filter(([method]) => paymentDestinations[method]).map(([method,label]) => button(label, () => { checkoutPaymentMethod = method; render(); }, { class: 'secondary-button', 'aria-pressed': checkoutPaymentMethod === method })),
                 h('p', { role: 'status' }, Object.keys(paymentDestinations).length ? 'Choose an available method. Danielle verifies payment after you pay.' : 'Ordering is paused while Danielle finishes payment setup. Please check back soon.')) : null,
               commerceEnabled ? h('div', {}, h('p', {}, POLICY[0]), h('details', {}, h('summary', {}, POLICY_TITLE), POLICY.map((paragraph, i) => h('p', {}, i === 2 ? h('strong', {}, paragraph) : paragraph))),
-                h('label', { class: 'field' }, h('input', { type: 'checkbox', checked: policyAccepted, required: true, onchange: e => { policyAccepted = e.target.checked; }, 'aria-label': 'I have read and acknowledge the Rise & Roost Pickup Policy' }), 'I have read and acknowledge the Rise & Roost Pickup Policy')) : null,
+                h('label', { class: 'field' }, h('input', { type: 'checkbox', checked: policyAccepted, required: true, onchange: e => { policyAccepted = e.target.checked; updateActionValidity(); }, 'aria-label': 'I have read and acknowledge the Rise & Roost Pickup Policy' }), 'I have read and acknowledge the Rise & Roost Pickup Policy')) : null,
               action,
               h(
                 "p",
@@ -899,6 +906,14 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     const betaNotice = site.querySelector(".demo-bar");
     if (productionMode && !isPreview) { betaNotice?.remove(); root.replaceChildren(site); }
     else root.replaceChildren(betaNotice, site);
+    // Keep a later selected date visible when another checkout control redraws
+    // the list, without moving the customer's page or opening a native picker.
+    const pickupOptions = site.querySelector('.pickup-options');
+    const selectedPickup = pickupOptions?.querySelector('[aria-pressed="true"]');
+    if (selectedPickup) {
+      const bottom = selectedPickup.getBoundingClientRect().bottom - pickupOptions.getBoundingClientRect().top;
+      if (bottom > pickupOptions.clientHeight) pickupOptions.scrollTop = bottom - pickupOptions.clientHeight + 4;
+    }
   }
   let loadSequence = 0;
   function ensureCustomer() {

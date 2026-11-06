@@ -41,7 +41,7 @@ test('production owner identities, payment settings, launch lock and complete cu
     await visitor.goto(f.origin + '/shop'); await expect(visitor.locator('.demo-bar')).toBeHidden();
     await visitor.getByRole('button', { name: 'Add ' + product.name + ' to basket', exact: true }).click(); await visitor.locator('.basket-link').click();
     await visitor.getByLabel('Name', { exact: true }).fill('Synthetic Production Customer');
-    const pickup = visitor.getByLabel('Choose your pickup', { exact: true }); await pickup.selectOption(await pickup.locator('option:not([disabled])').nth(1).getAttribute('value'));
+    const pickup = visitor.getByLabel('Choose your pickup', { exact: true }); await pickup.getByRole('button').first().click();
     await visitor.getByLabel('I have read and acknowledge the Rise & Roost Pickup Policy', { exact: true }).check();
     await expect(visitor.getByRole('button', { name: 'Place preorder', exact: true })).toBeDisabled();
     // Approval flag changed only in the disposable local test environment.
@@ -113,10 +113,21 @@ test('all three saved payment QR tiles decode correctly, open directly, and pres
       expect((await f.snapshot()).management.today.verifiedSales).toBe(0);
     }
     // A failed choice save cannot lose the order or claim money was received.
+    // A popup/focus refresh may clear the transient alert. Observe it from the
+    // start of the failed request rather than after returning from the popup.
+    await page.evaluate(() => {
+      window.paymentChoiceFailureShown = false;
+      const observer = new MutationObserver(() => {
+        if (document.querySelector('[role="alert"]')?.textContent.includes('payment-method choice was not confirmed')) {
+          window.paymentChoiceFailureShown = true; observer.disconnect();
+        }
+      });
+      observer.observe(document.querySelector('#app'), { childList: true, subtree: true });
+    });
     await page.route('**/api/order-tracking/*/*/payment-method', r => r.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"Synthetic save interruption"}' }));
     const retryOpening = page.waitForEvent('popup'); await page.getByRole('link', { name: 'Open Venmo', exact: true }).click(); const retryExternal = await retryOpening;
     await expect(retryExternal.getByRole('heading')).toContainText('Synthetic payment destination'); await retryExternal.close();
-    await expect(page.getByRole('alert')).toContainText('payment-method choice was not confirmed');
+    await expect.poll(() => page.evaluate(() => window.paymentChoiceFailureShown)).toBe(true);
     expect((await f.snapshot()).orders[0].selectedPaymentMethod).toBe('cashapp');
     expect((await f.snapshot()).management.today.verifiedSales).toBe(0); expect(page.url()).toBe(privateURL);
     await page.unroute('**/api/order-tracking/*/*/payment-method');

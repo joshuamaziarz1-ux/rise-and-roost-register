@@ -261,13 +261,13 @@ test.describe('Phase 3 selling and pickup controls', () => {
     await page.goto(fixture.origin + '/shop');
     await card(page, current.published.products[0].name).getByRole('button', { name: 'Add ' + current.published.products[0].name + ' to basket', exact: true }).click();
     await page.getByRole('link', { name: /^Basket/ }).first().click();
-    await expect(page.locator('#pickup-select')).toHaveValue(first.id);
+    await expect(page.locator('.pickup-date[aria-pressed="true"]')).toHaveAttribute('data-pickup-id', first.id);
     const retryId = await page.evaluate(() => JSON.parse(localStorage.getItem('rr-beta-cart:')).requestId);
     serverNow += 2000;
     await page.clock.runFor(2000);
-    await expect(page.locator('#pickup-select option[value="' + first.id + '"]')).toHaveCount(0);
+    await expect(page.locator('.pickup-date[data-pickup-id="' + first.id + '"]')).toHaveCount(0);
     const expected = availableDocument(current.published, { orders: [] }, { managed: true, now: serverNow }).pickups[0];
-    await expect(page.locator('#pickup-select')).toHaveValue(expected.id);
+    await expect(page.locator('.pickup-date[aria-pressed="true"]')).toHaveAttribute('data-pickup-id', expected.id);
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('rr-beta-cart:')).requestId)).toBe(retryId);
   });
 
@@ -285,8 +285,8 @@ test.describe('Phase 3 selling and pickup controls', () => {
     await page.goto(fixture.origin + '/shop');
     for (const product of [bread, eggs]) await card(page, product.name).getByRole('button', { name: 'Add ' + product.name + ' to basket', exact: true }).click();
     await page.getByRole('link', { name: /^Basket/ }).first().click();
-    await expect(page.locator('#pickup-select')).toHaveValue(pickups[2].id);
-    await expect(page.locator('#pickup-select option[value="' + pickups[0].id + '"]')).toHaveCount(0);
-    await expect(page.locator('#pickup-select option[value="' + pickups[1].id + '"]')).toHaveCount(0);
+    await expect(page.locator('.pickup-date[aria-pressed="true"]')).toHaveAttribute('data-pickup-id', pickups[2].id);
+    await expect(page.locator('.pickup-date[data-pickup-id="' + pickups[0].id + '"]')).toHaveCount(0);
+    await expect(page.locator('.pickup-date[data-pickup-id="' + pickups[1].id + '"]')).toHaveCount(0);
   });
 });

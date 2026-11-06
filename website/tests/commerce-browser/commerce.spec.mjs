@@ -29,8 +29,8 @@ test('guest checkout, payments, owner verification, messages and extensions sync
     await customer.route(/https:\/\/(www.paypal.com|venmo.com|cash.app)\//,route=>route.fulfill({status:200,contentType:'text/html',body:'<h1>Fictional payment destination — no money sent</h1>'}));
     await visitor.goto(fixture.origin+'/shop');await visitor.getByRole('button',{name:'Add Slow Sunday sourdough to basket',exact:true}).click();await visitor.locator('.basket-link').click();
     await visitor.getByLabel('Name',{exact:true}).fill('Fictional Preview Neighbor');
-    const pickup=visitor.getByLabel('Choose your pickup',{exact:true});await pickup.selectOption(await pickup.locator('option:not([disabled])').nth(1).getAttribute('value'));
-    await visitor.getByRole('button',{name:'Place preorder',exact:true}).click();await expect(visitor.getByRole('heading',{name:'Thank you. Your preorder is in.',exact:true})).toHaveCount(0);
+    const pickup=visitor.getByLabel('Choose your pickup',{exact:true});await pickup.getByRole('button').first().click();
+    await expect(visitor.getByRole('button',{name:'Place preorder',exact:true})).toBeDisabled();await expect(visitor.getByRole('heading',{name:'Thank you. Your preorder is in.',exact:true})).toHaveCount(0);
     await visitor.getByText('Rise & Roost Pickup Policy',{exact:true}).first().click();await expect(visitor.locator('main')).toContainText('forfeited without a refund');
     await visitor.getByLabel('I have read and acknowledge the Rise & Roost Pickup Policy',{exact:true}).check();await visitor.getByRole('button',{name:'Place preorder',exact:true}).click();
     const tracking=await visitor.getByRole('link',{name:'Pay & track your order',exact:true}).getAttribute('href');await visitor.goto(fixture.origin+tracking);
