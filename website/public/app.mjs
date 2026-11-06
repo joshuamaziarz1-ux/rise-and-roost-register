@@ -939,7 +939,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
       (result.revision === revision && result.availabilityRevision < availabilityRevision))) return;
     const changed = result.id !== workspace || result.revision !== revision;
     if (!force && !changed && result.availabilityRevision === availabilityRevision && JSON.stringify(result.document.pickups) === JSON.stringify(doc.pickups)) {
-      if (experience && path === "/roost" && await customer.refresh(false)) render();
+      if (experience && await customer.refresh(false)) render();
       if (experience && path === '/comments') await customer.refreshComments();
       return;
     }
@@ -964,7 +964,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     workspace = result.id || workspace;
     ensureCustomer();
     studioPath = result.studioPath || (result.id ? "/studio?workspace=" + result.id : "/studio");
-    if (!force && experience && path === "/roost") await customer.refresh(false);
+    if (!force && experience) await customer.refresh(false);
     if (!force && experience && path === '/comments') {
       await customer.refreshComments(changed ? false : true);
       if (!changed) return;

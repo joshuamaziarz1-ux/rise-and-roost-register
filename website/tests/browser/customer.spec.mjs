@@ -155,7 +155,7 @@ test.describe('isolated customer experience', () => {
     await expect(page.getByRole('heading', { name: 'Welcome back, Returning.' })).toBeVisible();
     await expect(page.getByLabel('Roost recovery key', { exact: true })).toBeVisible();
     // Even an undismissed one-time secret and prefilled contact fields must clear.
-    await page.getByRole('button', { name: 'Sign out of The Roost', exact: true }).click();
+    await page.getByRole('button', { name: 'Log Out', exact: true }).click();
     await expect(page.getByLabel('Roost recovery key', { exact: true })).toHaveCount(0);
     await expect(page.getByLabel('Name', { exact: true })).toHaveValue('');
     await page.getByRole('button', { name: 'Sign in with a passkey', exact: true }).click();
@@ -190,7 +190,7 @@ test.describe('isolated customer experience', () => {
       await expect(other.locator('.member-order')).toHaveCount(1);
       expect((await restored.request.get(fixture.origin+'/api/studio')).status()).toBe(401);
     } finally { await restored.close(); }
-    await page.getByRole('button', { name: 'Sign out of The Roost', exact: true }).click();
+    await page.getByRole('button', { name: 'Log Out', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Make yourself at home.' })).toBeVisible();
     await page.getByRole('button', { name: 'Sign in with a passkey', exact: true }).click();
     await expect(page.locator('.member-order')).toHaveCount(1);

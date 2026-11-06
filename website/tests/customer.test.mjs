@@ -50,7 +50,8 @@ test('real WebAuthn enrollment and signed authentication create remembered HttpO
   const r = await h.post(h.member, '/api/roost/verify', { response: joined.key.login(options, h.origin) }); assert.equal(r.status, 200);
   assert.match(r.headers.getSetCookie()[0], /HttpOnly; SameSite=Strict; Path=\/; Max-Age=2592000; Secure/);
   assert.equal((await h.get(h.member, undefined, { now: now + 29*86400000 })).data.member.id, joined.member.id);
-  assert.equal((await h.get(h.member, undefined, { now: now + 31*86400000 })).data.member, null);
+  assert.equal((await h.get(h.member, undefined, { now: now + 31*86400000 })).data.member.id, joined.member.id);
+  assert.equal((await h.get(h.member, undefined, { now: now + 62*86400000 })).data.member, null);
 });
 test('member checkout stores only the authenticated membership; another member cannot read orders or customer details', async () => {
   const h = await fixture(), a = await h.register(); await h.register(h.stranger);
@@ -145,4 +146,114 @@ test('a member credential, cookie and moderator authority cannot cross into a se
   assert.equal((await h.post(otherOwner, '/api/studio-comments', { id: c.id, version: c.version, status: 'approved' })).status, 409);
   assert.equal((await h.get(h.guest, '/api/comments')).data.comments.length, 0);
   assert.equal((await h.get(h.member)).data.orders.length, 1);
+});
+
+test('rolling sessions stop at 30 days inactivity or exactly 90 days absolute, and expired cookies clear', async () => {
+  const h = await fixture(), joined = await h.register(), day = 86400000;
+  const unvisited = new Map(h.member);
+  assert.equal((await h.get(unvisited, undefined, { now: now + 30*day })).data.member, null);
+  // Separate fresh session: the previous lookup must not revive an expired token.
+  const options = (await h.post(h.member, '/api/roost/options', { kind: 'login' })).data.options;
+  await h.post(h.member, '/api/roost/verify', { response: joined.key.login(options, h.origin) });
+  for (const days of [1, 29, 55, 80, 89]) {
+    const r = await h.get(h.member, undefined, { now: now + days*day });
+    assert.equal(r.data.member.id, joined.member.id);
+    assert.equal(Date.parse(r.data.member.sessionExpiresAt), Math.min(now+(days+30)*day, now+90*day));
+    assert.match(r.headers.get('Cache-Control'), /no-store/);
+  }
+  const expired = await h.get(h.member, undefined, { now: now + 90*day });
+  assert.equal(expired.data.member, null); assert.match(expired.headers.getSetCookie()[0], /Max-Age=0/);
+  assert.equal((await h.get(h.member, undefined, { now: now + 91*day })).data.member, null);
+});
+test('legacy memberships, credentials, orders, recovery hashes and unexpired sessions survive additive migration', async () => {
+  const h = await fixture(), joined = await h.register();
+  await h.order(h.member, { checkoutMode: 'member' });
+  const before = h.sql.prepare('SELECT * FROM roost_members').get();
+  const credential = h.sql.prepare('SELECT * FROM roost_credentials').get();
+  h.sql.exec('DROP TABLE roost_session_details');
+  const migration = readFileSync(new URL('../migrations/0003_customer_remembered_sessions.sql', import.meta.url), 'utf8');
+  h.sql.exec(migration); h.sql.exec(migration);
+  const me = await h.get(h.member, undefined, { now: now+86400000 });
+  assert.equal(me.data.member.id, joined.member.id); assert.equal(me.data.orders.length, 1);
+  assert.equal(Date.parse(me.data.member.sessionMaximumAt), now+90*86400000);
+  assert.deepEqual(h.sql.prepare('SELECT * FROM roost_members').get(), before);
+  assert.deepEqual(h.sql.prepare('SELECT * FROM roost_credentials').get(), credential);
+  assert.equal(me.data.devices[0].label, 'Previously remembered browser');
+});
+test('devices are independent, logout revokes copied tokens, and device revocation checks ownership and CSRF', async () => {
+  const h = await fixture(), joined = await h.register(), device = h.browser();
+  const options = (await h.post(device, '/api/roost/options', { kind: 'login' })).data.options;
+  await h.post(device, '/api/roost/verify', { response: joined.key.login(options, h.origin) });
+  const copied = new Map(device);
+  let me = (await h.get(h.member)).data;
+  assert.equal(me.devices.length, 2);
+  const other = me.devices.find(d => !d.current);
+  await h.register(h.stranger);
+  assert.equal((await h.post(h.stranger, '/api/roost/revoke-device', { deviceId: other.id })).status, 200);
+  assert.ok((await h.get(device)).data.member);
+  assert.equal((await h.post(h.member, '/api/roost/revoke-device', { deviceId: other.id }, { headers: { Origin: 'https://evil.test' } })).status, 403);
+  assert.equal((await h.post(h.member, '/api/roost/revoke-device', { deviceId: other.id })).status, 200);
+  assert.equal((await h.get(copied)).data.member, null);
+  assert.ok((await h.get(h.member)).data.member);
+  const saved = new Map(h.member), logout = await h.post(h.member, '/api/roost/logout');
+  assert.match(logout.headers.getSetCookie()[0], /Max-Age=0/);
+  assert.equal((await h.get(saved)).data.member, null);
+  assert.equal((await h.post(saved, '/api/roost/profile', { profile: { name: 'Forged' } })).status, 401);
+  const forged = h.browser(); forged.set('rr_roost_'+h.site.id, 'a'.repeat(48));
+  assert.equal((await h.get(forged)).data.member, null);
+});
+test('adding passkeys requires recent authentication and rechecks the session at completion', async () => {
+  const h = await fixture(), joined = await h.register(), secondKey = softwarePasskey();
+  assert.equal((await h.post(h.member, '/api/roost/options', { kind: 'register', profile: { name: 'Duplicate' } })).status, 409);
+  assert.equal((await h.post(h.member, '/api/roost/options', { kind: 'add' }, { now: now+600000 })).status, 401);
+  const options = (await h.post(h.member, '/api/roost/options', { kind: 'add' })).data.options;
+  assert.equal((await h.post(h.member, '/api/roost/verify', { response: secondKey.register(options, h.origin) })).status, 200);
+  assert.equal(h.sql.prepare('SELECT count(*) n FROM roost_credentials').get().n, 2);
+  const other = h.browser();
+  const login = (await h.post(other, '/api/roost/options', { kind: 'login' })).data.options;
+  assert.equal((await h.post(other, '/api/roost/verify', { response: secondKey.login(login, h.origin) })).data.member.id, joined.member.id);
+  const add = (await h.post(h.member, '/api/roost/options', { kind: 'add' })).data.options;
+  const stolen = new Map(h.member); await h.post(h.member, '/api/roost/logout');
+  assert.equal((await h.post(stolen, '/api/roost/verify', { response: softwarePasskey().register(add, h.origin) })).status, 401);
+});
+test('recovery is atomic, revokes old passkeys and sessions, and retains the same membership and orders', async () => {
+  const h = await fixture(), joined = await h.register();
+  await h.order(h.member, { checkoutMode: 'member' });
+  const old = new Map(h.member);
+  h.sql.exec("CREATE TRIGGER fail_recovery BEFORE INSERT ON roost_sessions BEGIN SELECT RAISE(ABORT,'test-only failure'); END");
+  assert.equal((await h.post(h.stranger, '/api/roost/recover', { recoveryKey: joined.recoveryKey })).status, 500);
+  assert.ok((await h.get(old)).data.member);
+  assert.equal(h.sql.prepare('SELECT count(*) n FROM roost_credentials').get().n, 1);
+  h.sql.exec('DROP TRIGGER fail_recovery');
+  const r = await h.post(h.stranger, '/api/roost/recover', { recoveryKey: joined.recoveryKey });
+  assert.equal(r.status, 200); assert.equal(r.data.member.id, joined.member.id);
+  assert.equal((await h.get(h.stranger)).data.orders.length, 1);
+  assert.equal((await h.get(old)).data.member, null);
+  assert.equal(h.sql.prepare('SELECT count(*) n FROM roost_credentials').get().n, 0);
+  const options = (await h.post(h.member, '/api/roost/options', { kind: 'login' })).data.options;
+  assert.equal((await h.post(h.member, '/api/roost/verify', { response: joined.key.login(options, h.origin) })).status, 401);
+  const add = (await h.post(h.stranger, '/api/roost/options', { kind: 'add' })).data.options;
+  assert.equal((await h.post(h.stranger, '/api/roost/verify', { response: softwarePasskey().register(add, h.origin) })).status, 200);
+});
+test('authentication endpoints enforce CSRF and rate limits without trusting contact identity', async () => {
+  const h = await fixture();
+  for (const path of ['options','verify','recover','logout','revoke-device','profile'])
+    assert.equal((await h.post(h.guest, '/api/roost/'+path, {}, { headers: { Origin: 'https://evil.test' } })).status, 403);
+  for (let i=0;i<10;i++) assert.equal((await h.post(h.guest, '/api/roost/recover', { recoveryKey: 'a'.repeat(48) })).status, 401);
+  assert.equal((await h.post(h.guest, '/api/roost/recover', { recoveryKey: 'a'.repeat(48) })).status, 429);
+  assert.equal(h.sql.prepare('SELECT count(*) n FROM roost_members').get().n, 0);
+});
+test('logout during passkey verification prevents credential enrollment and session issuance atomically', async () => {
+  const h = await fixture(); await h.register();
+  const options = (await h.post(h.member, '/api/roost/options', { kind: 'add' })).data.options;
+  const batch = h.db.batch.bind(h.db);
+  h.db.batch = statements => {
+    // Model another request revoking the session while WebAuthn crypto runs.
+    h.sql.exec('UPDATE roost_sessions SET expires=0');
+    return batch(statements);
+  };
+  const result = await h.post(h.member, '/api/roost/verify', { response: softwarePasskey().register(options, h.origin) });
+  assert.equal(result.status, 409);
+  assert.equal(h.sql.prepare('SELECT count(*) n FROM roost_credentials').get().n, 1);
+  assert.equal(h.sql.prepare('SELECT count(*) n FROM roost_sessions WHERE expires>0').get().n, 0);
 });

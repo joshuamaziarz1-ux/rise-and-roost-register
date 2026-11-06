@@ -5,7 +5,7 @@ import { paymentLabels, fulfillmentLabels } from './orders.mjs';
 const decode = value => Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
 const encode = value => btoa(String.fromCharCode(...new Uint8Array(value))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 async function passkey(options, register) {
-  if (!window.PublicKeyCredential || !navigator.credentials) throw new Error('This browser cannot use passkeys. You can always check out as a guest.');
+  if (!window.PublicKeyCredential || !navigator.credentials) throw new Error('Passkeys are unavailable in this browser. Use your saved recovery key below, or a browser that supports passkeys. Guest checkout is always available.');
   const publicKey = { ...options, challenge: decode(options.challenge) };
   if (register) {
     publicKey.user = { ...options.user, id: decode(options.user.id) };
@@ -25,41 +25,62 @@ async function passkey(options, register) {
 }
 
 export function createCustomerExperience({ workspaceId, link, navigate, render, onMember, readOnly = false }) {
-  let member = null, orders = [], recoveryKey = '', error = '', busy = false, loaded = false, pending;
+  let member = null, orders = [], devices = [], recoveryKey = '', error = '', busy = false, loaded = false, pending, generation = 0;
+  const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('rr-roost-' + workspaceId) : null;
   const joinProfile = { name: '', email: '', phone: '' };
   let profileDraft;
   const api = (path, data) => request(path + (data === undefined ? '?workspace=' + workspaceId : ''), data === undefined ? undefined : { ...data, workspaceId });
   const action = fn => async () => {
     if (busy) return;
     busy = true; error = ''; render();
-    try { await fn(); }
+    try { if (pending) await pending; await fn(); }
     catch (e) { error = e.message; }
     finally { busy = false; render(); }
   };
-  async function refresh(rerender = true) {
+  function clearPrivate() {
+    generation++; member = null; orders = []; devices = []; recoveryKey = ''; profileDraft = undefined;
+    Object.assign(joinProfile, { name: '', email: '', phone: '' });
+    Object.assign(commentDraft, { name: '', body: '', consent: false }); onMember(null);
+  }
+  channel?.addEventListener('message', () => { clearPrivate(); loaded = false; render(); void refresh(); });
+  window.addEventListener('pagehide', () => { clearPrivate(); loaded = false; render(); });
+  window.addEventListener('pageshow', event => { if (event.persisted) { clearPrivate(); loaded = false; render(); void refresh(); } });
+  async function refresh(rerender = true, duringAction = false) {
     if (readOnly) { loaded = true; return; }
+    if (busy && !duringAction) return false;
     if (pending) return pending;
+    const started = generation;
     pending = (async () => {
       try {
         const result = await api('/api/roost/me');
+        if (started !== generation) return false;
         const changed = member?.id !== result.member?.id;
-        const viewChanged = !loaded || changed || JSON.stringify(orders) !== JSON.stringify(result.orders || []);
-        member = result.member; orders = result.orders || []; loaded = true;
+        if (!result.member && member) { clearPrivate(); }
+        const viewChanged = !loaded || changed || JSON.stringify(orders) !== JSON.stringify(result.orders || []) || JSON.stringify(devices) !== JSON.stringify(result.devices || []);
+        member = result.member; orders = result.orders || []; devices = result.devices || []; loaded = true;
         if (changed) { profileDraft = member ? { ...member.profile } : undefined; onMember(member); }
         if (rerender && viewChanged) render();
         return viewChanged;
-      } catch (e) { error = e.message; loaded = true; if (rerender) render(); }
+      } catch (e) { if (started !== generation) return false; const hadPrivate = !!member; if (hadPrivate) clearPrivate(); error = e.message; loaded = true; if (rerender || hadPrivate) render(); return hadPrivate; }
       finally { pending = null; }
     })();
     return pending;
   }
   const authenticate = async (kind, profile) => {
+    if (kind === 'add' && (!member?.passkeyAdditionUntil || Date.parse(member.passkeyAdditionUntil) <= Date.now())) await authenticate('login');
     const result = await api('/api/roost/options', { kind, profile });
     const response = await passkey(result.options, kind !== 'login');
     const verified = await api('/api/roost/verify', { response });
-    recoveryKey = verified.recoveryKey || '';
-    await refresh(false);
+    await authenticated(verified.recoveryKey || '');
   };
+  async function authenticated(key) {
+    // A background response from before authentication must not erase the new
+    // account/recovery key or repaint the previous account after a sign-in.
+    generation++;
+    if (pending) await pending;
+    recoveryKey = key;
+    await refresh(false, true); channel?.postMessage('changed');
+  }
   const profileFields = (profile, suffix = '') => h('div', { class: 'customer-fields' },
     field('Name' + suffix, profile.name, v => profile.name = v, { name: 'customer-name', autocomplete: 'name', required: true, maxlength: 80 }),
     field('Email (optional)' + suffix, profile.email, v => profile.email = v, { name: 'customer-email', autocomplete: 'email', type: 'email', maxlength: 254 }),
@@ -83,11 +104,11 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
       const form = h('form', { class: 'roost-profile', onsubmit: async e => {
         e.preventDefault();
         profile.name = form.elements['customer-name'].value; profile.email = form.elements['customer-email'].value; profile.phone = form.elements['customer-phone'].value;
-        await action(async () => { await api('/api/roost/profile', { profile }); await refresh(false); onMember(member); notify('Your pickup details are saved.'); })();
+        await action(async () => { await api('/api/roost/profile', { profile }); await refresh(false, true); onMember(member); notify('Your pickup details are saved.'); })();
       } }, h('h2', {}, 'Your pickup details'), profileFields(profile), h('button', { type: 'submit', class: 'primary-link', disabled: busy }, 'Save my details'));
       result.append(h('div', { class: 'roost-layout' },
         h('section', { class: 'member-orders', 'aria-label': 'Your Roost orders' },
-          h('div', { class: 'panel-heading' }, h('h2', {}, 'Your orders'), button('Refresh orders', action(() => refresh(false)), { class: 'text-button', disabled: busy })),
+          h('div', { class: 'panel-heading' }, h('h2', {}, 'My Orders'), button('Refresh orders', action(() => refresh(false, true)), { class: 'text-button', disabled: busy })),
           orders.length ? orders.map(order => h('article', { class: 'member-order' },
             h('div', {}, h('h3', {}, order.orderNumber), h('p', {}, pickupLabel(order.pickup))),
             h('p', {}, order.lines.map(l => `${l.qty} × ${l.name}`).join(', ')),
@@ -96,16 +117,18 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
             : h('div', { class: 'gentle-empty' }, h('h3', {}, 'Something good is waiting.'), h('p', {}, 'Orders you place while signed in will appear here.'), link('/shop', 'Start Shopping', 'primary-link')),
           h('details', { class: 'claim-order' }, h('summary', {}, 'Add an order placed as a guest'),
             h('p', {}, 'Paste the complete private tracking link from your order confirmation.'),
-            h('form', { onsubmit: async e => { e.preventDefault(); const input = e.currentTarget.elements.link; await action(async () => { await api('/api/roost/claim-order', { link: input.value }); await refresh(false); notify('Order added to your Roost.'); })(); } },
+            h('form', { onsubmit: async e => { e.preventDefault(); const input = e.currentTarget.elements.link; await action(async () => { await api('/api/roost/claim-order', { link: input.value }); await refresh(false, true); notify('Order added to your Roost.'); })(); } },
               h('label', { class: 'field' }, 'Private tracking link', h('input', { name: 'link', type: 'text', required: true, autocomplete: 'off' })),
               h('button', { type: 'submit', class: 'secondary-button', disabled: busy }, 'Add my order')))),
         h('aside', {}, form, h('section', { class: 'account-controls' },
-          h('h2', {}, 'Your sign-in'), h('p', {}, 'This trusted browser stays signed in for up to 30 days. Sign out on shared computers.'),
+          h('h2', {}, 'Account Settings'), h('p', {}, 'Welcome back to The Roost! This personal device stays signed in for about 30 days after your last visit, for at most 90 days. Log out on shared computers.'),
+          h('p', { class: 'small-note' }, 'Your passkey verifies your Roost membership. Contact details are for pickup, never proof of account ownership.'),
           button('Add a passkey on this device', action(() => authenticate('add')), { class: 'secondary-button', disabled: busy }),
-          button('Sign out of The Roost', action(async () => {
-            await api('/api/roost/logout', {}); member = null; orders = []; recoveryKey = ''; profileDraft = undefined;
-            Object.assign(joinProfile, { name: '', email: '', phone: '' });
-            Object.assign(commentDraft, { name: '', body: '', consent: false }); onMember(null);
+          h('details', { class: 'remembered-devices' }, h('summary', {}, 'Remembered devices'),
+            devices.map(device => h('div', { class: 'remembered-device' }, h('p', {}, device.label, device.current ? ' · This device' : ''),
+              !device.current ? button('Log out ' + device.label, action(async () => { await api('/api/roost/revoke-device', { deviceId: device.id }); await refresh(false, true); }), { class: 'text-button', disabled: busy }) : null))),
+          button('Log Out', action(async () => {
+            await api('/api/roost/logout', {}); clearPrivate(); channel?.postMessage('changed');
           }), { class: 'text-button', disabled: busy })))));
     } else {
       const profile = joinProfile;
@@ -116,14 +139,15 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
       } }, h('h2', {}, 'A little place of your own'), h('p', {}, 'Save your details, see past orders, and keep track of your next pickup.'), profileFields(profile),
         h('button', { type: 'submit', class: 'primary-link', disabled: busy || readOnly }, busy ? 'Opening passkeys…' : 'Join with a passkey'),
         h('p', { class: 'small-note' }, 'Use Touch ID, your device unlock, or a security key. No password to remember.'));
-      result.append(h('div', { class: 'roost-layout' }, form,
-        h('section', { class: 'roost-signin' }, h('h2', {}, 'Already part of The Roost?'), h('p', {}, 'Pick up right where you left off.'),
+      const signin = h('section', { class: 'roost-signin' }, h('h2', {}, 'Already part of The Roost?'), h('p', {}, 'Use Face ID, Touch ID, your fingerprint, Windows Hello, device PIN, or a security key. Your device handles the verification.'),
           button('Sign in with a passkey', action(() => authenticate('login')), { class: 'primary-link', disabled: busy || readOnly }),
-          h('details', {}, h('summary', {}, 'Recover my membership'), h('p', {}, 'Use the recovery key you saved when you joined. A new recovery key replaces it after use.'),
-            h('form', { onsubmit: async e => { e.preventDefault(); const code = e.currentTarget.elements.key.value.trim(); await action(async () => { const r = await api('/api/roost/recover', { recoveryKey: code }); recoveryKey = r.recoveryKey; await refresh(false); })(); } },
+          h('details', {}, h('summary', {}, 'Another way to sign in / recover my membership'), h('p', {}, 'No passkey on this device? Use the recovery key you saved when you joined. Recovery signs out all remembered devices and removes old passkeys. Save your replacement recovery key, then add a new passkey if supported.'),
+            h('form', { onsubmit: async e => { e.preventDefault(); const code = e.currentTarget.elements.key.value.trim(); await action(async () => { const r = await api('/api/roost/recover', { recoveryKey: code }); await authenticated(r.recoveryKey); })(); } },
               h('label', { class: 'field' }, 'Saved recovery key', h('input', { name: 'key', type: 'password', required: true, autocomplete: 'off' })),
               h('button', { type: 'submit', class: 'secondary-button', disabled: busy || readOnly }, 'Recover my Roost'))),
-          h('div', { class: 'guest-reminder' }, h('p', {}, 'Just here for something delicious?'), link('/shop', 'Shop as a guest', 'secondary-button')))));
+          h('p', { class: 'small-note' }, 'If you already joined, sign in or recover your membership to keep your orders together. Without a passkey or saved recovery key, we cannot safely restore access using contact details alone.'),
+          h('div', { class: 'guest-reminder' }, h('p', {}, 'Just here for something delicious?'), link('/shop', 'Shop as a guest', 'secondary-button')));
+      result.append(h('div', { class: 'roost-layout' }, signin, form));
     }
     if (busy) result.append(h('p', { role: 'status', class: 'small-note' }, 'Please finish the sign-in prompt.'));
     return result;

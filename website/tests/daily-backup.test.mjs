@@ -39,7 +39,7 @@ test('daily backup archives full records and both media stores; real local resto
   try {
     const source = h.sql.prepare('SELECT * FROM workspaces').all();
     const receipt = await dailyBackup(h.env, day), encrypted = h.objects.get(receipt.key);
-    assert.equal(receipt.tableCount, 12); assert.equal(receipt.mediaCount, 4); assert.equal(receipt.rows.assets, 1);
+    assert.equal(receipt.tableCount, 13); assert.equal(receipt.mediaCount, 4); assert.equal(receipt.rows.assets, 1);
     assert.equal(encrypted.includes('Fictional Recovery Customer'), false);
     assert.equal(JSON.stringify(receipt).includes('recovery@example.test'), false);
     const result = await restoreNewLocalDatabase({ encrypted, key: h.env.BACKUP_ENCRYPTION_KEY, databaseId, outputPath: join(directory, 'restored.sqlite') });
@@ -125,7 +125,7 @@ test('scheduled runner restores an actual SQL export before encrypted backup and
     };
     source = await loadProductionExport({ accountId: 'f'.repeat(32), databaseId, token: 'fixture-export-credential', fetcher, sleep: async () => {} });
     const snapshot = await captureSnapshot({ ...h.env, DB: source.db });
-    assert.equal(calls, 3); assert.equal(snapshot.tables.length, 12);
+    assert.equal(calls, 3); assert.equal(snapshot.tables.length, 13);
     assert.deepEqual(JSON.parse(snapshot.tables.find(t => t.name === 'workspaces').rows[0].ledger_json), h.ledger);
     assert.equal(snapshot.tables.find(t => t.name === 'assets').rows[0].bytes_hex, '00017FFF');
   } finally { source?.close(); h.sql.close(); }

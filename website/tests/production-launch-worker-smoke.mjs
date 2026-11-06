@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { accessAuthority, TESTER_A } from './access-jwt-fixture.mjs';
 import { seed } from '../public/model.mjs';
 import { PRODUCTION_DATABASE_ID, PRODUCTION_WORKSPACE_ID } from '../server/production-preparation.mjs';
+import { softwarePasskey } from './passkey-fixture.mjs';
 const bundle = process.env.RR_PRODUCTION_WORKER_BUNDLE;
 if (!bundle) throw Error('Provide the local production dry-run bundle.');
 const authority = await accessAuthority(), origin = 'https://rise-and-roost.com';
@@ -24,12 +25,41 @@ try {
   const db = await mf.getD1Database('DB');
   const schema = (await readFile(new URL('../production-schema.sql', import.meta.url), 'utf8')).split('\n').filter(line => !line.trim().startsWith('--')).join('\n');
   for (const statement of schema.split(';')) if (statement.trim()) await db.prepare(statement).run();
+  const migration = (await readFile(new URL('../migrations/0003_customer_remembered_sessions.sql', import.meta.url), 'utf8')).split('\n').filter(line => !line.trim().startsWith('--')).join('\n');
+  for (const statement of migration.split(';')) if (statement.trim()) await db.prepare(statement).run();
   const doc = seed(Date.now() + 7 * 86400000); doc.business.pickupAddress = { name: 'Synthetic farm', street: 'Synthetic street', city: 'Synthetic Indiana city' }; doc.products[0].stock = 1; doc.products[0].inventoryMode = 'physical';
   doc.pickups = []; doc.pickupSchedule = { start: '15:00', end: '18:00', capacity: 1 };
   const serialized = JSON.stringify(doc);
   await db.prepare('INSERT INTO workspaces(id,owner_hash,draft_json,published_json,versions_json,created_at) VALUES(?,?,?,?,?,?)').bind(PRODUCTION_WORKSPACE_ID, 'disabled-legacy-owner', serialized, serialized, '[]', new Date().toISOString()).run();
   await db.prepare("INSERT INTO deployment_identity VALUES('main','production',?,?)").bind(PRODUCTION_DATABASE_ID, PRODUCTION_WORKSPACE_ID).run();
   const call = (path, body, owner = false, headers = {}) => mf.dispatchFetch(origin + path, { method: body === undefined ? 'GET' : 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', ...(owner ? { 'Cf-Access-Jwt-Assertion': token } : {}), ...headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  // Exercise the compiled passkey/session code in the real edge runtime, using
+  // only this disposable local D1 and signing authenticator.
+  const cookies = new Map(), key = softwarePasskey();
+  const customer = async (action, body) => {
+    const r = await call('/api/roost/' + action + (body === undefined ? '?workspace=' + PRODUCTION_WORKSPACE_ID : ''), body === undefined ? undefined : { workspaceId: PRODUCTION_WORKSPACE_ID, ...body }, false, { Cookie: [...cookies].map(([k,v]) => k+'='+v).join('; ') });
+    for (const c of r.headers.getSetCookie()) { const [k,v] = c.split(';')[0].split('='); if (c.includes('Max-Age=0')) cookies.delete(k); else cookies.set(k,v); }
+    assert.equal(r.status, 200, await r.clone().text()); return r.json();
+  };
+  let options = (await customer('options', { kind: 'register', profile: { name: 'Synthetic Edge Customer' } })).options;
+  const joined = await customer('verify', { response: key.register(options, origin) });
+  assert.ok(joined.recoveryKey); assert.equal((await customer('me')).member.id, joined.member.id);
+  const copiedCookie = [...cookies].map(([k,v]) => k+'='+v).join('; ');
+  assert.equal((await call('/studio/api/manage/snapshot', undefined, false, { Cookie: copiedCookie })).status, 401);
+  await customer('logout', {});
+  assert.equal((await customer('me')).member, null);
+  assert.equal((await (await call('/api/roost/me?workspace='+PRODUCTION_WORKSPACE_ID, undefined, false, { Cookie: copiedCookie })).json()).member, null);
+  options = (await customer('options', { kind: 'login' })).options;
+  await customer('verify', { response: key.login(options, origin) });
+  const recovered = await customer('recover', { recoveryKey: joined.recoveryKey });
+  assert.equal(recovered.member.id, joined.member.id); assert.notEqual(recovered.recoveryKey, joined.recoveryKey);
+  assert.equal((await db.prepare('SELECT count(*) n FROM roost_credentials').first()).n, 0);
+  const replacement = softwarePasskey();
+  options = (await customer('options', { kind: 'add' })).options;
+  await customer('verify', { response: replacement.register(options, origin) });
+  const devices = (await customer('me')).devices;
+  await customer('revoke-device', { deviceId: devices.find(d => d.current).id });
+  assert.equal((await customer('me')).member, null);
   assert.equal((await call('/studio/api/manage/snapshot')).status, 401);
   assert.equal((await call('/api/manage/snapshot', undefined, true)).status, 404);
   const snapshot = async () => { const r = await call('/studio/api/manage/snapshot', undefined, true); assert.equal(r.status, 200, await r.clone().text()); return r.json(); };
@@ -60,5 +90,5 @@ try {
   s = await mutation('calendar-date', { pickup: { ...pickup, closed: true }, confirmExistingOrders: true });
   assert.deepEqual(s.orders[0].pickup, order.pickup);
   assert.equal(s.published.pickups.length, 1); assert.equal(s.published.pickups[0].closed, true);
-  console.log(JSON.stringify({ actualProductionWorkerdD1: true, individualSignedOwnerIdentity: true, privateApiAuthorization: true, manualPaymentVerification: true, duplicateVerificationPrevented: true, atomicInventoryRace: true, trackingAndFulfillment: true, automaticCalendar: true, calendarExceptionPreservesOrder: true, remoteRequests: 0, remoteWrites: 0 }));
+  console.log(JSON.stringify({ actualProductionWorkerdD1: true, customerPasskeysSessionsRecoveryAndRevocation: true, individualSignedOwnerIdentity: true, privateApiAuthorization: true, manualPaymentVerification: true, duplicateVerificationPrevented: true, atomicInventoryRace: true, trackingAndFulfillment: true, automaticCalendar: true, calendarExceptionPreservesOrder: true, remoteRequests: 0, remoteWrites: 0 }));
 } finally { await mf.dispose(); }
