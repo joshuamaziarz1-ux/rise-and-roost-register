@@ -136,8 +136,15 @@
 @media (max-width: 600px) { .ms-help-category { padding: 1rem; } .ms-help-topic ol { padding-left: 1.4rem; } }
 .ms-help [hidden] { display: none !important; }
 
-.management .ms-history { display:flex; gap:6px; margin-right:auto; }
-.management .ms-history button { min-height:44px; padding:8px 10px; font-size:13px; white-space:nowrap; }
+.management .ms-history { display:flex; align-items:center; gap:8px; margin-right:auto; }
+.management .ms-history .ms-history-button { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:9px 14px; border:1px solid #dce2d5; border-radius:12px; background:#f1f1e7; color:var(--ms-ink); font-size:13px; font-weight:600; line-height:1.25; white-space:nowrap; }
+.management .ms-history .ms-history-home { background:#e0e8da; border-color:#b9c3b2; color:var(--ms-green); }
+.management .ms-history-button svg { flex-shrink:0; }
+.management .ms-history-button:focus-visible { outline:3px solid #83613e; outline-offset:3px; }
+@media (hover:hover) {
+  .management .ms-history .ms-history-button:hover { background:#e0e8da; border-color:var(--ms-green); }
+}
+.management .ms-history .ms-history-button:active { background:#dce2d5; }
 @media(max-width:899px) {
   .management .ms-top { flex-wrap:wrap; }
   .management .ms-history { order:2; flex-basis:100%; }

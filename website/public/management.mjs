@@ -9,6 +9,14 @@ import { sellingMethod, inventoryMode } from './selling.mjs';
 const primary = ['Home', 'Orders', 'Products', 'Calendar', 'More'];
 const secondary = ['The Roost', 'Website Content', 'Customer Comments', 'Sales Reports', 'Settings'];
 const id = () => crypto.randomUUID();
+const navigationIcon = kind => {
+  const namespace = 'http://www.w3.org/2000/svg';
+  const icon = document.createElementNS(namespace, 'svg');
+  for (const [key, value] of Object.entries({ viewBox: '0 0 24 24', width: '18', height: '18', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.7', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', focusable: 'false' })) icon.setAttribute(key, value);
+  const path = document.createElementNS(namespace, 'path');
+  path.setAttribute('d', kind === 'home' ? 'M3 10.5 12 3l9 7.5M5.5 9v11h13V9M9 20v-6h6v6' : 'M19 12H5m6 6-6-6 6-6');
+  icon.append(path); return icon;
+};
 const price = value => Math.round(Number(value) * 100);
 const download = (name, data, type = 'application/json') => {
   const url = URL.createObjectURL(new Blob([data], { type }));
@@ -539,7 +547,7 @@ export async function start(root, initial, newAccessKey) {
     root.replaceChildren(h('div', { class: 'management' },
       h('aside', { class: 'ms-sidebar' }, h('a', { href: initial.studioPath, class: 'ms-brand' }, h('img', { src: '/assets/logo.webp', alt: 'Rise & Roost' }), h('span', {}, 'Rise & Roost', h('small', {}, 'Website Studio'))),
         h('nav', { 'aria-label': 'Studio navigation' }, primary.filter(v => v !== 'More').map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view.startsWith('Settings/') ? 'page' : undefined })), h('details', { open: true }, h('summary', {}, 'More'), secondary.map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view.startsWith('Settings/') ? 'page' : undefined })))), h('a', { href: initial.publishedPath, target: '_blank', rel: 'noopener', class: 'ms-secondary' }, 'View website')),
-      h('div', { class: 'ms-workspace' }, h('header', { class: 'ms-top' }, h('nav', { class: 'ms-history', 'aria-label': 'Studio history' }, button([h('span', { 'aria-hidden': true }, '←'), ' Back'], () => navigation.back(), { class: 'ms-secondary' }), button([h('span', { 'aria-hidden': true }, '⌂'), ' Home'], () => go('Home'), { class: 'ms-secondary' })), h('div', { class: 'ms-mobile-brand' }, h('img', { src: '/assets/logo.webp', alt: '' }), h('strong', {}, 'Rise & Roost', h('small', {}, 'Website Studio'))),
+      h('div', { class: 'ms-workspace' }, h('header', { class: 'ms-top' }, view === 'Home' && !editing ? null : h('nav', { class: 'ms-history', 'aria-label': 'Studio history' }, button([navigationIcon('home'), h('span', {}, 'Home')], () => go('Home'), { class: 'ms-history-button ms-history-home' }), button([navigationIcon('back'), h('span', {}, 'Back')], () => navigation.back(), { class: 'ms-history-button ms-history-back' })), h('div', { class: 'ms-mobile-brand' }, h('img', { src: '/assets/logo.webp', alt: '' }), h('strong', {}, 'Rise & Roost', h('small', {}, 'Website Studio'))),
         h('span', { id: 'management-connection', role: 'status', class: connected ? '' : 'offline' }, connected ? 'Connected' : 'Offline / reconnecting'), button('Check connection', () => refresh(), { class: 'ms-text' }), initial.previewPinAccess ? button('Lock Studio', lockStudio, { class: 'ms-text' }) : null, initial.previewDirectAccess || initial.productionOwnerAccess ? h('a', { id: 'management-reopen', href: initial.studioPath, target: '_blank', rel: 'noopener', class: 'ms-text', hidden: connected }, 'Reopen Studio') : null, pending && !busy ? button('Resolve previous save', cancel, { class: 'ms-text' }) : null),
         h('div', { id: 'management-error', role: 'alert', class: 'ms-error', hidden: !error }, error),
         h('main', { id: 'main-content', class: 'ms-main' }, credentials(), page)),

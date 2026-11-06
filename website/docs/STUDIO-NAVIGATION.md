@@ -1,6 +1,6 @@
 # Studio Back and Home
 
-The Studio header now has compact Back and Home controls. Home always opens the Studio dashboard. Back uses only entries created by the same workspace's Studio; a fresh/direct entry falls back to Studio Home rather than following an unrelated browser history entry. Existing dashboard and primary navigation stay in place. Redundant contextual return buttons in order details, member details, Payments and the Help Guide are removed.
+The Studio header has compact Home and Back controls, in that order. Both are omitted from the main Home dashboard, including the control group itself so no empty toolbar row remains. They remain available in other sections and in edits opened from Home. Home always opens the Studio dashboard. Back uses only entries created by the same workspace's Studio; a fresh/direct entry falls back to Studio Home rather than following an unrelated browser history entry. Existing dashboard and primary navigation stay in place. Redundant contextual return buttons in order details, member details, Payments and the Help Guide are removed.
 
 Studio uses native pushState/popstate history for sections, order/member selections, pickup lists and edit screens. Valid Studio history survives reload, including native browser Back/Forward. Form values and search text stay out of serialized history state and URLs. Each navigation adds one native history entry; redundant replaceState writes are avoided to stay within Safari’s History API rate limit during rapid navigation. In-memory form snapshots retain unfinished fields, while existing session draft recovery, unsaved-change prompts, revision conflict review, beforeunload protection and operation reconciliation remain in use. Navigation is blocked while a save is pending; saved/canceled forms are removed from retained edit snapshots.
 
@@ -45,3 +45,15 @@ Private baseline/configuration, raw test logs and release receipts remain outsid
 - Total: **290 passed**, no unresolved failures or skipped final checks.
 - Exact production executable dry build: passed, identical SHA-256; no incidental modules.
 - Read-only public/security preflight: **11 passed**. Production source assets, operational settings, schema and all 12 application-table fingerprints match the baseline before staging.
+
+## Header refinement
+
+Based on approved production source `32fd1d0c365fbe9182448ed235a2c08c7a197ae1`, deployed as `76a3e8ab-09e4-4ce4-b85a-f30cf83403f2`. Only `public/management.mjs` and `public/management.css` change deployed assets. The checkout pickup fix, navigation history implementation, Studio entry/authentication, Help Guide and all server code are retained byte-for-byte. Separate Customer Accounts development is untouched.
+
+Home is first in DOM, visual and keyboard order; Back is second. The entire navigation group is conditionally omitted only for the actual Home dashboard, not edit screens. The group uses the existing green/cream palette, subtle borders, rounded corners, decorative SVG icons, readable labels, 44-pixel minimum targets and a visible keyboard focus outline. Styles apply only to the two controls. The existing section navigation and dashboard remain otherwise unchanged.
+
+The navigation matrix checks every section, Settings/Payments and Help, nested order/member views, all main edit families, Home edits, safe direct-entry fallback, native history/reload, unsaved forms, touch activation, left/right order, keyboard order, control absence on Home, the reduced mobile header height, width and unchanged synthetic business records. Desktop and mobile screenshots are reviewed before release.
+
+Release follows the same exact-executable, existing-runtime and read-only data safeguards above. No database migration, application-data write, payment/ordering change or authentication change is included. No owner session or open tab is refreshed or signed out.
+
+Refinement validation: **257 passed** (213 backend/security, 7 schema guards, 15 navigation/Help across all five browser profiles, 12 desktop/iPhone Studio regressions, 10 production-owner/session/payment browser regressions). No failed or skipped final tests. Desktop and iPhone screenshots confirm the section controls and compact Home header; exact-Worker dry build retains the current executable SHA-256. Baseline live verification passed all 11 public/security probes and checked all 29 assets, with Access-protected files preserved through the matching deployed version.
