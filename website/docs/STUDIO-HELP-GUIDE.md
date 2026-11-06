@@ -1,6 +1,6 @@
 # Studio Help Guide
 
-The owner manual opens only through **Settings → Studio Help Guide**, with an explicit return to Settings. Home and the existing navigation entries and page layouts are retained. No customer or backend behavior changes; no schema or data migration.
+The owner manual opens only through **Settings → Studio Help Guide**, with the shared Studio header Back/Home controls. Back returns to the preceding Studio screen, or Studio Home for a direct entry with no Studio history. See [Studio navigation](STUDIO-NAVIGATION.md). Home and the existing navigation entries and page layouts are retained. No customer or backend behavior changes; no schema or data migration.
 
 ## Maintenance
 

@@ -27,7 +27,7 @@ test('Settings-only help, real search, categories, keyboard and unchanged busine
     await page.getByRole('button', { name: 'Clear search', exact: true }).click(); await expect(search).toHaveValue(''); await expect(search).toBeFocused();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     await page.screenshot({ path: `qa-results/help-${test.info().project.name}.png`, scale: 'css' });
-    await page.getByRole('button', { name: '← Settings', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+    await page.getByRole('navigation', { name: 'Studio history', exact: true }).getByRole('button', { name: 'Back', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
     const after = await (await page.request.get(fixture.origin + '/api/manage/snapshot', { headers })).json();
     expect(after.revision).toBe(before.revision); expect(after.ledgerVersion).toBe(before.ledgerVersion);
     expect(after.published).toEqual(before.published); expect(after.orders).toEqual(before.orders); expect(after.management.settings).toEqual(before.management.settings);
@@ -52,7 +52,7 @@ test('production owner opens Settings help with closed checkout and retained Acc
     await expect(page.locator('.ms-help-topic').first()).toBeVisible();
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Studio Help Guide', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: '← Settings', exact: true }).click();
+    await page.getByRole('navigation', { name: 'Studio history', exact: true }).getByRole('button', { name: 'Back', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeFocused();
     const snapshot = await page.evaluate(async () => (await fetch('/studio/api/manage/snapshot')).json());
     expect(snapshot.checkoutEnabled).toBe(false);

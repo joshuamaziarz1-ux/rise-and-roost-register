@@ -2,6 +2,7 @@ import { requestedPickupLabel, providers, defaultCalendar, paymentDestination, c
 import { h, button, field, request as apiRequest, notify } from './dom.mjs';
 import { clone, money, pickupLabel, orderByLabel, customerTimestamp, customerTime, localInstant, isOrderingPickup } from './model.mjs';
 import { paymentLabels, fulfillmentLabels } from './orders.mjs';
+import { studioHistory } from './studio-history.mjs';
 import { createHelpGuide } from './help.mjs';
 import { sellingMethod, inventoryMode } from './selling.mjs';
 
@@ -41,15 +42,27 @@ export async function start(root, initial, newAccessKey) {
     bindings.set(input, () => set(options.type === 'checkbox' ? input.checked : input.value)); return node;
   };
   const check = (label, object, key) => f(label, object, key, { type: 'checkbox' });
-  const helpGuide = createHelpGuide(() => go('Settings'));
-  function go(next, selected = '', nextFilter = 'all') {
-    if (editing && !confirm('Leave this form? The latest unfinished product, calendar, content, announcement or payment link form is kept in this tab until you save, cancel, or replace it with another form.')) return;
-    const focusHelpHeading = next === 'Settings/Help' || view === 'Settings/Help';
-    editing = null; error = ''; selection = selected; filter = nextFilter; search = ''; view = next;
-    history.replaceState({}, '', initial.studioPath + '#' + encodeURIComponent(next)); render(); window.scrollTo(0, 0);
+  const helpGuide = createHelpGuide();
+  let navigation;
+  const route = () => ({ view, selection, filter, search, editing });
+  const homeRoute = () => ({ view: 'Home', selection: '', filter: 'all', search: '', editing: null });
+  function canLeave() {
+    if (busy || pending) return false;
+    return !editing || confirm('Leave this form? The latest unfinished product, calendar, content, announcement or payment link form is kept in this tab until you save, cancel, or replace it with another form.');
+  }
+  function applyRoute(next) {
+    const focusHelpHeading = next.view === 'Settings/Help' || view === 'Settings/Help';
+    ({ view, selection, filter, search, editing } = next); error = '';
+    render(); window.scrollTo(0, 0);
     if (focusHelpHeading) { const heading = root.querySelector('.ms-main h1'); heading?.setAttribute('tabindex', '-1'); heading?.focus(); }
   }
-  function edit(type, values) { editing = { type, values: clone(values), original: clone(values), revision: data.revision, ledgerVersion: data.ledgerVersion }; editing.paymentsVersion = paymentsVersion(); error = ''; marked(); render(); }
+  function go(next, selected = '', nextFilter = 'all') {
+    navigation.navigate({ view: next, selection: selected, filter: nextFilter, search: '', editing: null });
+  }
+  function edit(type, values) {
+    const form = { type, values: clone(values), original: clone(values), revision: data.revision, ledgerVersion: data.ledgerVersion, paymentsVersion: paymentsVersion() };
+    navigation.push({ ...route(), editing: form }); marked();
+  }
   const merge = (base, local, remote) => {
     if (JSON.stringify(base) === JSON.stringify(local)) return remote === undefined ? undefined : clone(remote);
     if (local && base && remote && !Array.isArray(local) && typeof local === 'object' && typeof base === 'object' && typeof remote === 'object') {
@@ -84,7 +97,7 @@ export async function start(root, initial, newAccessKey) {
       } catch (e) { error = 'The previous result is still unconfirmed. Reconnect before starting another action. ' + e.message; busy = false; render(); return; }
       busy = false;
     }
-    editing = null; pending = null; error = ''; if (discardDraft) sessionStorage.removeItem(storageKey); sessionStorage.removeItem(pendingKey); render();
+    navigation.forgetForm(editing); editing = null; pending = null; error = ''; if (discardDraft) sessionStorage.removeItem(storageKey); sessionStorage.removeItem(pendingKey); render();
   }
   async function refresh(rerender = true) {
     if (checking || disposed) return;
@@ -102,7 +115,7 @@ export async function start(root, initial, newAccessKey) {
         if (status.found && pending === resolving && !busy) {
           data = await request('/api/manage/snapshot?' + q);
           if (pending === resolving && !busy) {
-            pending = null; if (editing === resolving.form) { if (['product', 'calendar', 'content', 'payment-settings', 'fresh-announcement'].includes(editing?.type)) sessionStorage.removeItem(storageKey); editing = null; }
+            pending = null; if (editing === resolving.form) { if (['product', 'calendar', 'content', 'payment-settings', 'fresh-announcement'].includes(editing?.type)) sessionStorage.removeItem(storageKey); navigation.forgetForm(editing); editing = null; }
             error = ''; sessionStorage.removeItem(pendingKey); notify(status.result?.abandoned ? 'The previous request was canceled.' : 'The server confirms your previous save.');
           }
         }
@@ -128,7 +141,7 @@ export async function start(root, initial, newAccessKey) {
       const result = await request('/api/manage/' + path, { ...payload, operationId: pending.id });
       if (!result.management || result.id !== workspace || result.result === undefined && result.duplicate !== true) throw new Error('The server did not confirm this save. Your fields are kept; check the connection before retrying.');
       data = result;
-      pending = null; sessionStorage.removeItem(pendingKey); if (!keepForm) { if (['product', 'calendar', 'content', 'payment-settings', 'fresh-announcement'].includes(editing?.type)) sessionStorage.removeItem(storageKey); editing = null; }
+      pending = null; sessionStorage.removeItem(pendingKey); if (!keepForm) { if (['product', 'calendar', 'content', 'payment-settings', 'fresh-announcement'].includes(editing?.type)) sessionStorage.removeItem(storageKey); navigation.forgetForm(editing); editing = null; }
       connected = true; notify(successMessage); return result;
     } catch (e) {
       error = e.message; if (e.status && e.status < 500 && !(initial.previewDirectAccess && e.status === 403)) { pending = null; sessionStorage.removeItem(pendingKey); }
@@ -235,7 +248,7 @@ export async function start(root, initial, newAccessKey) {
   }
   function orderDetail(o) {
     if (!o) return empty('This order is not available.');
-    return h('div', {}, button('← All orders', () => go('Orders'), { class: 'ms-text' }),
+    return h('div', {},
       h('div', { class: 'ms-heading' }, h('h1', {}, o.orderNumber), pill(fulfillmentLabels[o.status])),
       attentionPills(o),
       panel('Payment', h('h3', {}, o.customer?.name || 'Guest customer'), h('strong', {}, 'Order total: ' + money(o.total)), pill(paymentLabels[o.paymentStatus] || 'Awaiting Payment'), h('p', {}, 'Selected method: ' + (providers[o.selectedPaymentMethod] || providers[o.verification?.method] || o.verification?.method || 'Not chosen yet')),
@@ -326,7 +339,7 @@ export async function start(root, initial, newAccessKey) {
       return h('article', { class: 'ms-panel' }, h('div', { class: 'ms-row' }, h('strong', {}, pickupLabel(p)), pill(!future ? 'Past pickup' : p.closed ? 'Closed to new orders' : !isOrderingPickup(p) ? 'Legacy date — existing orders only' : localInstant(p.cutoffDate, p.cutoffTime) <= Date.parse(data.now) ? 'Ordering deadline passed' : p.event || 'Open')), h('p', {}, 'Order by ' + orderByLabel(p)), h('p', {}, p.capacity + ' order limit'),
         p.event ? h('p', {}, p.event) : null,
         associated.length ? h('p', { class: 'ms-note' }, associated.length + ' scheduled order' + (associated.length === 1 ? '' : 's') + '. Saved customer commitments are kept.') : null,
-        h('div', { class: 'ms-actions' }, future ? button('Edit pickup', () => editPickup(p), { class: 'ms-secondary' }) : null, button('Copy', () => editPickup(p, true), { class: 'ms-secondary' }), future && (!p.closed || !associated.length) ? button('Skip / close date', () => removePickup(p), { class: 'ms-secondary', disabled: busy }) : null, button('Pickup & baking lists', () => { selection = p.date; render(); }, { class: 'ms-secondary' })),
+        h('div', { class: 'ms-actions' }, future ? button('Edit pickup', () => editPickup(p), { class: 'ms-secondary' }) : null, button('Copy', () => editPickup(p, true), { class: 'ms-secondary' }), future && (!p.closed || !associated.length) ? button('Skip / close date', () => removePickup(p), { class: 'ms-secondary', disabled: busy }) : null, button('Pickup & baking lists', () => go('Calendar', p.date), { class: 'ms-secondary' })),
         associated.length ? h('details', {}, h('summary', {}, 'View scheduled orders'), associated.map(o => button([h('strong', {}, o.orderNumber), h('span', {}, o.customer?.name || 'Guest customer'), h('span', {}, pickupLabel(o.pickup)), pill(fulfillmentLabels[o.status])], () => go('Orders', o.id), { class: 'ms-menu' }))) : null);
     };
     return h('div', {}, h('div', { class: 'ms-heading' }, h('h1', {}, 'Calendar'), button('Add special pickup', () => editPickup(), { class: 'ms-primary' })),
@@ -355,7 +368,7 @@ export async function start(root, initial, newAccessKey) {
     const selected = data.management.members.find(m => m.id === selection);
     if (selected) {
       const credits = selected.benefits.filter(b => b.kind !== 'bottle_return').reduce((n, b) => n + (b.kind === 'credit' ? b.amount : -b.amount), 0);
-      return h('div', {}, button('← Member directory', () => go('The Roost'), { class: 'ms-text' }), h('h1', {}, selected.profile.name), panel('Contact details', h('p', {}, selected.profile.email || 'No email saved'), h('p', {}, selected.profile.phone || 'No phone saved'), h('p', {}, 'Joined ' + stamp(selected.createdAt))),
+      return h('div', {}, h('h1', {}, selected.profile.name), panel('Contact details', h('p', {}, selected.profile.email || 'No email saved'), h('p', {}, selected.profile.phone || 'No phone saved'), h('p', {}, 'Joined ' + stamp(selected.createdAt))),
         panel('Returns & recorded credits', h('strong', {}, money(credits)), h('p', { class: 'ms-note' }, 'Recorded credits are separate from payments. Checkout redemption and rewards are not activated.'), button('Record return / credit adjustment', () => edit('benefit', { memberId: selected.id, kind: 'bottle_return', amount: '', reason: '' }), { class: 'ms-primary' }), selected.benefits.map(b => h('p', {}, b.kind.replace(/_/g, ' ') + ' · ' + (b.kind === 'bottle_return' ? b.amount + ' bottles' : money(b.amount)) + ' · ' + stamp(b.at) + ' · ' + b.reason))),
         panel('Order history', orderCards(data.orders.filter(o => o.customer?.memberId === selected.id))));
     }
@@ -425,7 +438,7 @@ export async function start(root, initial, newAccessKey) {
   }
   function payments() {
     const saved = data.management.settings?.payments || {}, active = configuredPayments(data.management.settings);
-    return h('div', {}, button('← Settings', () => go('Settings'), { class: 'ms-text' }), h('h1', {}, 'Payments'),
+    return h('div', {}, h('h1', {}, 'Payments'),
       panel('Customer ordering', h('p', { role: 'status' }, data.productionOwnerAccess && (!data.checkoutEnabled || data.published.orderingPaused) ? 'Ordering remains paused. Payment links can be prepared before launch approval.' : Object.keys(active).length ? 'Ready — an enabled payment link has an owner-confirmed test.' : 'Ordering paused — save, enable and test at least one payment link.'), h('p', {}, 'Studio stays available while payment links are being set up. Payments are always verified manually by Danielle.')),
       Object.entries(providers).map(([provider,label]) => {
         const p = saved[provider] || {}, ready = !!active[provider], test = p.pendingTest;
@@ -526,7 +539,7 @@ export async function start(root, initial, newAccessKey) {
     root.replaceChildren(h('div', { class: 'management' },
       h('aside', { class: 'ms-sidebar' }, h('a', { href: initial.studioPath, class: 'ms-brand' }, h('img', { src: '/assets/logo.webp', alt: 'Rise & Roost' }), h('span', {}, 'Rise & Roost', h('small', {}, 'Website Studio'))),
         h('nav', { 'aria-label': 'Studio navigation' }, primary.filter(v => v !== 'More').map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view.startsWith('Settings/') ? 'page' : undefined })), h('details', { open: true }, h('summary', {}, 'More'), secondary.map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view.startsWith('Settings/') ? 'page' : undefined })))), h('a', { href: initial.publishedPath, target: '_blank', rel: 'noopener', class: 'ms-secondary' }, 'View website')),
-      h('div', { class: 'ms-workspace' }, h('header', { class: 'ms-top' }, h('div', { class: 'ms-mobile-brand' }, h('img', { src: '/assets/logo.webp', alt: '' }), h('strong', {}, 'Rise & Roost', h('small', {}, 'Website Studio'))),
+      h('div', { class: 'ms-workspace' }, h('header', { class: 'ms-top' }, h('nav', { class: 'ms-history', 'aria-label': 'Studio history' }, button([h('span', { 'aria-hidden': true }, '←'), ' Back'], () => navigation.back(), { class: 'ms-secondary' }), button([h('span', { 'aria-hidden': true }, '⌂'), ' Home'], () => go('Home'), { class: 'ms-secondary' })), h('div', { class: 'ms-mobile-brand' }, h('img', { src: '/assets/logo.webp', alt: '' }), h('strong', {}, 'Rise & Roost', h('small', {}, 'Website Studio'))),
         h('span', { id: 'management-connection', role: 'status', class: connected ? '' : 'offline' }, connected ? 'Connected' : 'Offline / reconnecting'), button('Check connection', () => refresh(), { class: 'ms-text' }), initial.previewPinAccess ? button('Lock Studio', lockStudio, { class: 'ms-text' }) : null, initial.previewDirectAccess || initial.productionOwnerAccess ? h('a', { id: 'management-reopen', href: initial.studioPath, target: '_blank', rel: 'noopener', class: 'ms-text', hidden: connected }, 'Reopen Studio') : null, pending && !busy ? button('Resolve previous save', cancel, { class: 'ms-text' }) : null),
         h('div', { id: 'management-error', role: 'alert', class: 'ms-error', hidden: !error }, error),
         h('main', { id: 'main-content', class: 'ms-main' }, credentials(), page)),
@@ -541,6 +554,7 @@ export async function start(root, initial, newAccessKey) {
   try { const target = decodeURIComponent(location.hash.slice(1)); if ([...primary, ...secondary, 'Settings/Payments', 'Settings/Help'].includes(target)) view = target; } catch {}
   try { const saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null'); if (saved?.type && ['product', 'calendar', 'content', 'payment-settings', 'fresh-announcement'].includes(saved.type)) { editing = saved; view = { product: 'Products', calendar: 'Calendar', content: 'Website Content', 'payment-settings': 'Settings/Payments', 'fresh-announcement': 'Products' }[saved.type]; } } catch {}
   try { const saved = JSON.parse(sessionStorage.getItem(pendingKey) || 'null'); if (/^[a-f0-9-]{32,48}$/.test(saved?.id || '')) pending = { id: saved.id, form: editing }; } catch {}
+  navigation = studioHistory({ workspace, path: initial.studioPath, read: route, apply: applyRoute, canLeave, home: homeRoute, views: [...primary, ...secondary, 'Settings/Payments', 'Settings/Help'] });
   render(); await refresh();
   setInterval(() => { if (!document.hidden && !busy && !disposed) void refresh(); }, 5000);
 }
