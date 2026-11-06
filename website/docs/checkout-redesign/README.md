@@ -37,3 +37,24 @@ Final local results: **328 automated cases passed**, with zero unresolved failur
 | Studio navigation/Help browser matrix | 15 |
 
 The final checkout matrix was rerun after adding the submitting button's `aria-busy` attribute and passed all 20 cases. Initial verification used an outdated installed WebKit bundle and an older assertion for the pending button label; the matching browser was installed and the assertion now checks the visible submitting action. All final suites pass. Read-only live desktop/mobile basket and Roost rendering also passed without JavaScript errors; the order action stayed disabled with `checkoutEnabled=false` and `orderingPaused=true`.
+
+## Production release
+
+The complete redesign is live at [rise-and-roost.com/cart](https://rise-and-roost.com/cart).
+
+| Release item | Value |
+| --- | --- |
+| Branch | `feature/checkout-visual-redesign` |
+| Tested/deployed implementation | `09a6bb9fed80d37b99b6f8310b96998bd59ee532` |
+| Worker | `rise-roost-website-production` |
+| Active version, 100% traffic | `a96c86d3-f3f7-48a2-b1a7-a5d463398089` |
+| Deployment ID | `db266e2a-d15a-4146-b1b1-983ac7f70d8b` |
+| Retained previous version | `bfd42207-f4c8-476c-b13c-9c0a0d617373` |
+| Checkout and ordering | `REAL_CHECKOUT_ENABLED=false`, `orderingPaused=true`, unchanged |
+| Review | [Draft PR #17](https://github.com/joshuamaziarz1-ux/rise-and-roost-register/pull/17), stacked on the deployed Roost branch; no merge |
+
+Immediately before activation, both remote branch SHAs and the existing production deployment still matched the inspected baseline. Every original row fingerprint across all 13 application tables, the complete schema, Access applications/policies and public site/settings fingerprints matched before and after activation. The final candidate's Worker module etag, bindings, asset/runtime settings and exported handlers exactly matched the original version. The downloaded active executable matches the original tested bytes, and 12 public JS/CSS assets match the committed source, including both redesigned assets. No migration, database write, Access/DNS/route change, ordering activation, or real test order/payment occurred.
+
+Safe live desktop/mobile checks rendered the populated basket and anonymous Roost page without JavaScript errors or horizontal overflow. Only browser-local basket state was supplied; all production network actions were GET/HEAD. The order button stayed disabled. Studio and its private management API still return the original HTTP 302 Access challenge; no owner's session was borrowed. Real customer passkeys, return credits and Studio server functionality retain the exact deployed executable. The local browser regressions confirm signed-in and guest checkout, pickup cards, every provider, deep links/QRs and manual verification. Real provider payments and physical-device biometric prompts were not exercised.
+
+Changed files are `website/public/app.mjs`, `website/public/customer.css`, `website/tests/browser/checkout-pickup.spec.mjs`, this report, and four before/after PNGs in this directory. Private configuration, raw database fingerprints, deployment receipts, logs and live screenshots remain outside Git in `/workspace/checkout-audit`; detailed synthetic state screenshots remain under ignored `website/qa-results/checkout/`. This release report is a documentation-only follow-up to the deployed implementation.
