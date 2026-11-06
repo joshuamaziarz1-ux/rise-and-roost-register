@@ -1,3 +1,4 @@
+import { dollarsToCents, centsToDollars } from './credit-money.mjs';
 import { requestedPickupLabel, providers, defaultCalendar, paymentDestination, configuredPayments } from './commerce.mjs';
 import { h, button, field, request as apiRequest, notify } from './dom.mjs';
 import { clone, money, pickupLabel, orderByLabel, customerTimestamp, customerTime, localInstant, isOrderingPickup } from './model.mjs';
@@ -178,7 +179,7 @@ export async function start(root, initial, newAccessKey) {
   }
   function form(title, children, save, label) {
     const changedElsewhere = formChanged();
-    return h('form', { class: 'ms-panel ms-edit', onsubmit: async e => { e.preventDefault(); for (const input of e.currentTarget.elements) bindings.get(input)?.(); await save(); } }, h('h2', {}, title), h('div', { id: 'management-conflict', class: 'ms-warning', hidden: !changedElsewhere }, h('p', {}, 'New changes were saved while this form was open. Your unsaved fields are still here.'), button('Review latest and keep my edits', rebase, { class: 'ms-secondary', disabled: !!pending })), children, actions(save, label));
+    return h('form', { class: 'ms-panel ms-edit', onsubmit: async e => { e.preventDefault(); for (const input of e.currentTarget.elements) bindings.get(input)?.(); try { await save(); } catch (problem) { error = problem.message; render(); } } }, h('h2', {}, title), h('div', { id: 'management-conflict', class: 'ms-warning', hidden: !changedElsewhere }, h('p', {}, 'New changes were saved while this form was open. Your unsaved fields are still here.'), button('Review latest and keep my edits', rebase, { class: 'ms-secondary', disabled: !!pending })), children, actions(save, label));
   }
   const panel = (title, ...children) => h('section', { class: 'ms-panel' }, h('h2', {}, title), children);
   const empty = message => h('p', { class: 'ms-empty' }, message);
@@ -259,7 +260,7 @@ export async function start(root, initial, newAccessKey) {
     return h('div', {},
       h('div', { class: 'ms-heading' }, h('h1', {}, o.orderNumber), pill(fulfillmentLabels[o.status])),
       attentionPills(o),
-      panel('Payment', h('h3', {}, o.customer?.name || 'Guest customer'), h('strong', {}, 'Order total: ' + money(o.total)), pill(paymentLabels[o.paymentStatus] || 'Awaiting Payment'), h('p', {}, 'Selected method: ' + (providers[o.selectedPaymentMethod] || providers[o.verification?.method] || o.verification?.method || 'Not chosen yet')),
+      panel('Payment', h('h3', {}, o.customer?.name || 'Guest customer'), h('strong', {}, 'Remaining payment: ' + money(o.total)), o.creditApplied ? h('p', {}, 'Order subtotal: ' + money(o.subtotal) + ' · Return credit: ' + money(o.creditApplied) + ' (' + o.returnCredit.status + ')') : null, pill(paymentLabels[o.paymentStatus] || 'Awaiting Payment'), h('p', {}, 'Selected method: ' + (providers[o.selectedPaymentMethod] || providers[o.verification?.method] || o.verification?.method || 'Not chosen yet')),
         o.total > 0 && !o.paymentVerifiedAt && o.status !== 'canceled' && !o.resolution ? button('Verify payment', () => edit('payment', { orderId: o.id, orderVersion: o.version, method: o.selectedPaymentMethod || 'paypal', evidence: '', independentlyVerified: false }), { class: 'ms-primary' }) : null,
         o.paymentVerifiedAt ? h('p', {}, 'Verified ' + stamp(o.paymentVerifiedAt)) : null,
         o.paymentVerifiedAt ? button('Correct a mistaken verification', () => edit('payment-correction', { orderId: o.id, orderVersion: o.version, reason: '', independentlyChecked: false }), { class: 'ms-text' }) : null,
@@ -375,14 +376,35 @@ export async function start(root, initial, newAccessKey) {
     const members = data.management.members.filter(m => [m.profile.name, m.profile.email, m.profile.phone].join(' ').toLowerCase().includes(search.toLowerCase()));
     const selected = data.management.members.find(m => m.id === selection);
     if (selected) {
-      const credits = selected.benefits.filter(b => b.kind !== 'bottle_return').reduce((n, b) => n + (b.kind === 'credit' ? b.amount : -b.amount), 0);
       return h('div', {}, h('h1', {}, selected.profile.name), panel('Contact details', h('p', {}, selected.profile.email || 'No email saved'), h('p', {}, selected.profile.phone || 'No phone saved'), h('p', {}, 'Joined ' + stamp(selected.createdAt))),
-        panel('Returns & recorded credits', h('strong', {}, money(credits)), h('p', { class: 'ms-note' }, 'Recorded credits are separate from payments. Checkout redemption and rewards are not activated.'), button('Record return / credit adjustment', () => edit('benefit', { memberId: selected.id, kind: 'bottle_return', amount: '', reason: '' }), { class: 'ms-primary' }), selected.benefits.map(b => h('p', {}, b.kind.replace(/_/g, ' ') + ' · ' + (b.kind === 'bottle_return' ? b.amount + ' bottles' : money(b.amount)) + ' · ' + stamp(b.at) + ' · ' + b.reason))),
+        panel('Return Credits', h('strong', {}, money(selected.credits.available) + ' available'), h('p', {}, money(selected.credits.reserved) + ' reserved'), button('Manage return credits', () => go('The Roost/Return Credits', selected.id), { class: 'ms-primary' }), selected.benefits.length ? h('details', {}, h('summary', {}, 'Legacy recorded returns and credits'), selected.benefits.map(b => h('p', {}, b.kind + ' · ' + b.amount + ' · ' + b.reason))) : null),
         panel('Order history', orderCards(data.orders.filter(o => o.customer?.memberId === selected.id))));
     }
-    return h('div', {}, h('h1', {}, 'The Roost'), h('p', {}, 'Optional customer memberships at Rise & Roost.'), field('Search members', search, v => { search = v; renderMemberRows(); }, { type: 'search' }), h('div', { id: 'ms-members' }, members.map(memberCard)));
+    return h('div', {}, h('h1', {}, 'The Roost'), h('p', {}, 'Optional customer memberships at Rise & Roost.'), button('Return Credits', () => go('The Roost/Return Credits'), { class: 'ms-primary' }), field('Search members', search, v => { search = v; renderMemberRows(); }, { type: 'search' }), h('div', { id: 'ms-members' }, members.map(memberCard)));
     function memberCard(m) { return button([h('strong', {}, m.profile.name), h('span', {}, m.profile.email || m.profile.phone || 'No contact saved'), pill(m.orderCount + ' orders')], () => go('The Roost', m.id), { class: 'ms-menu' }); }
     function renderMemberRows() { root.querySelector('#ms-members')?.replaceChildren(...data.management.members.filter(m => [m.profile.name, m.profile.email, m.profile.phone].join(' ').toLowerCase().includes(search.toLowerCase())).map(memberCard)); }
+  }
+  function returnCredits() {
+    const program = data.management.returnCredits;
+    const selected = data.management.members.find(m => m.id === selection);
+    const transactions = selected ? program.transactions.filter(t => t.memberId === selected.id) : [];
+    const memberButtons = query => data.management.members.filter(m => [m.profile.name, m.profile.email, m.profile.phone].join(' ').toLowerCase().includes(query.toLowerCase())).map(m => button(m.profile.name + ' · ' + (m.profile.email || m.profile.phone || m.id.slice(0, 8)), () => go('The Roost/Return Credits', m.id), { class: 'ms-menu' }));
+    return h('div', {}, h('h1', {}, 'Return Credits'), h('p', {}, 'The Roost → Return Credits'),
+      panel('Return program', h('strong', {}, program.enabled ? 'Enabled' : 'Paused'), h('p', {}, 'Dollar credits only. No items are eligible until you add and enable them. Existing balances never expire automatically.'),
+        !program.enabled ? h('p', {}, 'Before activation, review applicable store-credit, unclaimed-property, tax and accounting requirements with your adviser. No legal policy has been assumed for you.') : null,
+        button('Review program settings', () => edit('credit-settings', { enabled: program.enabled, termsReviewed: false, confirmed: false }), { class: 'ms-secondary' })),
+      panel('Returnable items', button('Add return item', () => edit('credit-item', { name: '', dollars: '', status: 'active', confirmed: false }), { class: 'ms-primary' }),
+        ['active', 'inactive', 'retired'].map(status => h('section', {}, h('h3', {}, status.charAt(0).toUpperCase() + status.slice(1)),
+          program.items.filter(i => i.status === status).map(i => h('div', { class: 'ms-audit' }, h('strong', {}, i.name + ' · ' + money(i.cents)), button('Edit ' + i.name, () => edit('credit-item', { ...i, dollars: centsToDollars(i.cents), confirmed: false }), { class: 'ms-secondary' }))),
+          !program.items.some(i => i.status === status) ? h('p', {}, 'No ' + status + ' items.') : null))),
+      panel('Find a customer', field('Search Roost accounts', '', value => root.querySelector('#credit-members')?.replaceChildren(...memberButtons(value)), { type: 'search' }), h('div', { id: 'credit-members' }, memberButtons(''))),
+      selected ? panel(selected.profile.name + ' — Return Credits', h('strong', {}, money(selected.credits.available) + ' available'), h('p', {}, money(selected.credits.reserved) + ' reserved for pending orders'),
+        button('Record customer return', () => edit('credit-return', { memberId: selected.id, customerName: selected.profile.name, lines: program.items.filter(i => i.status === 'active').map(i => ({ id: i.id, version: i.version, name: i.name, cents: i.cents, qty: 0 })), confirmed: false }), { class: 'ms-primary', disabled: !program.enabled || !program.items.some(i => i.status === 'active' && i.cents > 0) }),
+        button('Correct balance', () => edit('credit-adjust', { memberId: selected.id, direction: 'add', dollars: '', reason: '', confirmed: false }), { class: 'ms-secondary' }),
+        [...transactions].reverse().map(t => h('article', { class: 'ms-audit' }, h('strong', {}, t.kind + ' · ' + money(t.amount)), h('p', {}, t.description), h('p', {}, stamp(t.at) + ' · ' + (t.actor?.name || 'Order checkout')),
+          ['earned', 'adjusted'].includes(t.kind) && !program.transactions.some(r => r.reversalOf === t.id) ? button('Reverse this transaction', () => edit('credit-reverse', { memberId: selected.id, transactionId: t.id, reason: '', confirmed: false }), { class: 'ms-secondary' }) : null)),
+        data.orders.filter(o => o.customer?.memberId === selected.id && o.returnCredit?.status === 'reserved').map(o => h('div', {}, h('p', {}, o.orderNumber + ' · ' + money(o.creditApplied) + ' reserved · pickup deadline ' + stamp(o.pickupDeadline)),
+          Date.parse(o.pickupDeadline) < Date.parse(data.now) ? button('Review expired reservation', () => edit('credit-expire', { orderId: o.id, orderVersion: o.version, reason: '', confirmed: false }), { class: 'ms-secondary' }) : h('p', {}, 'To cancel an abandoned order, use Orders → Update fulfillment → Canceled.')))) : null);
   }
   function comments() {
     const items = data.management.comments.filter(c => (filter === 'all' || c.status === filter) && [c.name, c.body].join(' ').toLowerCase().includes(search.toLowerCase()));
@@ -399,7 +421,7 @@ export async function start(root, initial, newAccessKey) {
     const row = (label, value) => h('div', { class: 'ms-row ms-report-row' }, h('span', {}, label), h('strong', {}, value));
     return h('div', {}, h('h1', {}, 'Sales Reports'), rangeControls(), panel(r.range.start + ' through ' + r.range.end,
       row('Verified payments', money(r.verifiedSales)), row('Recorded refunds', money(r.refunds)), row('Verification corrections', money(r.verificationCorrections)), row('Net verified receipts', money(r.netVerifiedReceipts)),
-      row('Order value placed', money(r.orderValue)), row('Orders placed', r.ordersPlaced), row('Outstanding payments', money(r.outstandingValue)), row('Canceled orders', r.canceledOrders), row('Canceled order value', money(r.canceledOrderValue)), row('Returning Roost members', r.returningMembers)),
+      row('Order value placed', money(r.orderValue)), row('Return credit used on these orders', money(r.returnCreditUsed || 0)), row('Orders placed', r.ordersPlaced), row('Outstanding payments', money(r.outstandingValue)), row('Canceled orders', r.canceledOrders), row('Canceled order value', money(r.canceledOrderValue)), row('Returning Roost members', r.returningMembers)),
       panel('Sales by payment method', (r.salesByPaymentMethod || []).map(p => row(providers[p.method] || p.method, money(p.value)))),
       panel('Popular products · verified orders', r.popularProducts.map(p => row(p.name + ' · ' + p.variant, p.quantity + ' · ' + money(p.value)))),
       panel('How totals work', h('p', {}, 'Verified payments use the date an owner checked an independent payment record. Order value uses the order date. Voided verification records are excluded from verified payments; correction totals are disclosed separately and never deducted twice. Refunds use the date the external refund was recorded. Cancellation does not automatically issue or record a refund. Net verified receipts subtract recorded refunds. Returning customers counts identified Roost members; guest identities are not guessed. Roadside Register sales are excluded.'),
@@ -465,6 +487,26 @@ export async function start(root, initial, newAccessKey) {
   }
   function editForm() {
     const e = editing, v = e.values;
+    if (e.type === 'credit-settings') return form('Return program settings', [
+      h('p', {}, 'Enabling this program permits confirmed returns and member checkout redemption. It does not activate ordering. No credit expiration, cash redemption, transfer or automatic forfeiture policy is introduced.'),
+      check('Enable return credits', v, 'enabled'), check('I reviewed applicable legal and accounting requirements for this program', v, 'termsReviewed'), check('I confirm this program change', v, 'confirmed')
+    ], () => send('credit-settings', { ...v, ledgerVersion: e.ledgerVersion }), 'Save return program');
+    if (e.type === 'credit-item') return form(v.id ? 'Edit return item' : 'Add return item', [
+      f('Return item name', v, 'name', { required: true, maxlength: 80 }), f('Credit value ($)', v, 'dollars', { inputmode: 'decimal', required: true }),
+      f('Eligibility', v, 'status', { choices: [{ value: 'active', label: 'Active — currently eligible' }, { value: 'inactive', label: 'Inactive — temporarily disabled' }, { value: 'retired', label: 'Retired — kept in history' }] }),
+      h('p', {}, 'Values apply to future returns only. Choose Active to reactivate an inactive or retired item. Historical returns are always kept.'), check('I confirm the name, value and eligibility', v, 'confirmed')
+    ], () => send('credit-item', { id: v.id, itemVersion: v.version, name: v.name, cents: dollarsToCents(v.dollars), status: v.status, confirmed: v.confirmed, ledgerVersion: e.ledgerVersion }), 'Save return item');
+    if (e.type === 'credit-return') {
+      const total = () => v.lines.reduce((sum, l) => sum + l.cents * (Number.isSafeInteger(l.qty) ? l.qty : 0), 0);
+      const controls = v.lines.map(l => { const node = f(l.name + ' — ' + money(l.cents) + ' each', l, 'qty', { type: 'number', min: 0, max: 100, step: 1 }); node.querySelector('input').addEventListener('input', () => { const review = root.querySelector('#return-review-total'); if (review) review.textContent = 'Credit to add: ' + money(total()); }); return node; });
+      return form('Record customer return', [h('h2', {}, v.customerName), controls, h('strong', { id: 'return-review-total' }, 'Credit to add: ' + money(total())), h('p', {}, 'Review the customer, accepted containers, quantities and total before confirming.'), check('I accepted these items and confirm this credit', v, 'confirmed')],
+        () => send('credit-return', { memberId: v.memberId, lines: v.lines.filter(l => l.qty > 0).map(({ id, version, qty }) => ({ id, version, qty })), confirmed: v.confirmed, ledgerVersion: e.ledgerVersion }), 'Confirm return credit');
+    }
+    if (['credit-adjust', 'credit-reverse', 'credit-expire'].includes(e.type)) return form(e.type === 'credit-expire' ? 'Review expired reservation' : e.type === 'credit-reverse' ? 'Reverse return-credit transaction' : 'Correct return-credit balance', [
+      h('p', {}, e.type === 'credit-expire' ? 'Check independent payment records and customer communications first. Confirmation cancels this expired unpaid order, releases its credit and inventory, and records your reason. It does not issue an external refund.' : 'Original transactions are retained. Corrections cannot reduce the available balance below zero or consume reserved credit.'),
+      e.type === 'credit-adjust' ? [f('Correction direction', v, 'direction', { choices: [{ value: 'add', label: 'Add credit' }, { value: 'subtract', label: 'Reduce credit' }] }), f('Correction amount ($)', v, 'dollars', { inputmode: 'decimal', required: true })] : null,
+      f('Recorded reason', v, 'reason', { required: true, minlength: 5, maxlength: 500 }), check('I reviewed the records and confirm this correction', v, 'confirmed')
+    ], () => send(e.type, { memberId: v.memberId, transactionId: v.transactionId, id: v.orderId, orderVersion: v.orderVersion, ...(e.type === 'credit-adjust' ? { delta: dollarsToCents(v.dollars) * (v.direction === 'subtract' ? -1 : 1) } : {}), reason: v.reason, confirmed: v.confirmed, ledgerVersion: e.ledgerVersion }), 'Confirm correction');
     if (e.type === 'product') {
       const p = v.product, method = sellingMethod(p), dualLimits = inventoryMode(p) === 'legacy';
       const setMethod = value => { p.sellingMethod = value; p.inventoryMode = value === 'preorder' ? 'production' : 'physical'; p.channel = value === 'in-store' ? 'store' : 'preorder'; p.soldOut = false; marked(); render(); };
@@ -543,7 +585,7 @@ export async function start(root, initial, newAccessKey) {
   function render() {
     if (reauth) { root.replaceChildren(h('main', { class: 'ms-loading' }, h('h1', {}, initial.previewPinAccess ? 'Studio is locked' : initial.previewDirectAccess ? 'Testing access needs verification' : 'Sign-in required'), h('p', {}, initial.previewPinAccess ? 'Enter your owner PIN in another tab, then check the connection here. Your unsaved form is kept here.' : initial.previewDirectAccess ? 'Reopen Studio in another tab to verify your Cloudflare Access session. Your unsaved form is kept here.' : 'Your unsaved form is kept in this tab. Sign in to this exact website in a new tab, then check the connection.'), h('a', { href: initial.studioPath, target: '_blank', rel: 'noopener' }, initial.previewPinAccess ? 'Unlock Studio' : initial.previewDirectAccess ? 'Reopen Website Studio' : 'Sign in to this website'), button('Check connection', () => refresh()))); return; }
     if (!data.management) { root.replaceChildren(h('main', { class: 'ms-loading' }, 'Opening Rise & Roost Website Studio…')); return; }
-    const page = editing ? editForm() : view === 'Home' ? home() : view === 'Orders' ? orders() : view === 'Products' ? products() : view === 'Calendar' ? calendar() : view === 'The Roost' ? members() : view === 'Website Content' ? content() : view === 'Customer Comments' ? comments() : view === 'Sales Reports' ? reports() : view === 'Settings/Help' ? helpGuide() : view === 'Settings/Payments' ? payments() : view === 'Settings' ? settings() : h('div', {}, h('h1', {}, 'More'), secondary.map(label => menu(label, label)));
+    const page = editing ? editForm() : view === 'Home' ? home() : view === 'Orders' ? orders() : view === 'Products' ? products() : view === 'Calendar' ? calendar() : view === 'The Roost/Return Credits' ? returnCredits() : view === 'The Roost' ? members() : view === 'Website Content' ? content() : view === 'Customer Comments' ? comments() : view === 'Sales Reports' ? reports() : view === 'Settings/Help' ? helpGuide() : view === 'Settings/Payments' ? payments() : view === 'Settings' ? settings() : h('div', {}, h('h1', {}, 'More'), secondary.map(label => menu(label, label)));
     root.replaceChildren(h('div', { class: 'management' },
       h('aside', { class: 'ms-sidebar' }, h('a', { href: initial.studioPath, class: 'ms-brand' }, h('img', { src: '/assets/logo.webp', alt: 'Rise & Roost' }), h('span', {}, 'Rise & Roost', h('small', {}, 'Website Studio'))),
         h('nav', { 'aria-label': 'Studio navigation' }, primary.filter(v => v !== 'More').map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view.startsWith('Settings/') ? 'page' : undefined })), h('details', { open: true }, h('summary', {}, 'More'), secondary.map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view.startsWith('Settings/') ? 'page' : undefined })))), h('a', { href: initial.publishedPath, target: '_blank', rel: 'noopener', class: 'ms-secondary' }, 'View website')),
@@ -559,10 +601,10 @@ export async function start(root, initial, newAccessKey) {
   window.addEventListener('online', () => refresh());
   window.addEventListener('focus', () => refresh());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) void refresh(); });
-  try { const target = decodeURIComponent(location.hash.slice(1)); if ([...primary, ...secondary, 'Settings/Payments', 'Settings/Help'].includes(target)) view = target; } catch {}
+  try { const target = decodeURIComponent(location.hash.slice(1)); if ([...primary, ...secondary, 'Settings/Payments', 'Settings/Help', 'The Roost/Return Credits'].includes(target)) view = target; } catch {}
   try { const saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null'); if (saved?.type && ['product', 'calendar', 'content', 'payment-settings', 'fresh-announcement'].includes(saved.type)) { editing = saved; view = { product: 'Products', calendar: 'Calendar', content: 'Website Content', 'payment-settings': 'Settings/Payments', 'fresh-announcement': 'Products' }[saved.type]; } } catch {}
   try { const saved = JSON.parse(sessionStorage.getItem(pendingKey) || 'null'); if (/^[a-f0-9-]{32,48}$/.test(saved?.id || '')) pending = { id: saved.id, form: editing }; } catch {}
-  navigation = studioHistory({ workspace, path: initial.studioPath, read: route, apply: applyRoute, canLeave, home: homeRoute, views: [...primary, ...secondary, 'Settings/Payments', 'Settings/Help'] });
+  navigation = studioHistory({ workspace, path: initial.studioPath, read: route, apply: applyRoute, canLeave, home: homeRoute, views: [...primary, ...secondary, 'Settings/Payments', 'Settings/Help', 'The Roost/Return Credits'] });
   render(); await refresh();
   setInterval(() => { if (!document.hidden && !busy && !disposed) void refresh(); }, 5000);
 }

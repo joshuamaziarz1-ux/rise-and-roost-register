@@ -23,6 +23,7 @@ export async function restoreBusinessBackup({ db, row, input, fingerprint, actor
     statements.push(db.prepare("INSERT INTO roost_members(id,workspace_id,profile_json,recovery_hash,created_at) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM workspaces WHERE id=? AND json_extract(ledger_json,'$.management.restoreClaim')=?)")
       .bind(id, row.id, JSON.stringify(profile), await hash('restored-contact:' + token()), Number(member.created_at) || now, row.id, claim));
   }
+  if (restoredLedger.returnCredits?.transactions?.length) fail('Monetary credit history requires a verified full-database recovery preserving account ownership. Do not import it as a new contact-only copy.');
   const orderIds = new Set();
   for (const o of restoredLedger.orders) {
     if (!/^[a-f0-9-]{16,48}$/.test(o.id || '') || orderIds.has(o.id) || !Number.isSafeInteger(o.total) || o.total < 0 || !Array.isArray(o.lines) || o.lines.length > 50 || !o.pickup || !['pending', 'preparing', 'ready', 'picked-up', 'canceled'].includes(o.status)) fail('Check restored order records.');

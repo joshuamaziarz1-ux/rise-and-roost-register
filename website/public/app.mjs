@@ -1,3 +1,4 @@
+import { dollarsToCents, centsToDollars } from './credit-money.mjs';
 import { POLICY_VERSION, POLICY_TITLE, POLICY, providers } from './commerce.mjs';
 import { h, button, notify, request, guard } from "./dom.mjs";
 import { money, localInstant, pickupLabel, orderByLabel } from "./model.mjs";
@@ -31,6 +32,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
   let commerceEnabled = false, policyAccepted = false, paymentDestinations = {}, checkoutPaymentMethod = '', productionMode = false, checkoutEnabled = true;
   let automaticCalendar = false, serverOffset = 0, calendarTimer;
   const calendarNow = () => Date.now() + serverOffset;
+  let creditChoice = 0;
   let experience = false, customer, customerWorkspace = "", checkoutMode = "guest";
   let checkoutProfile = { name: "", email: "", phone: "" };
   let orderSubmitting = false;
@@ -185,6 +187,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
           cardPrice,
           link("/product/" + p.id, "↗", "round-link"),
         ),
+        experience ? customer?.favoriteButton(p.id) : null,
         inStore ? h('p', { class: 'availability-status', 'data-availability': soldOut(p) ? 'sold-out' : 'in-store' }, availabilityLabel(p)) : experience ? h("div", { class: "quick-add" },
           p.variants.length > 1 ? h("select", { "aria-label": "Choose variety for " + p.name, onchange: e => { selected = p.variants.find(v => v.id === e.target.value); cardPrice.textContent = money(p.price + selected.extra); } }, p.variants.map(v => h("option", { value: v.id }, v.name + (v.extra ? " · +" + money(v.extra) : "")))) : null,
           button(soldOut(p) ? 'Sold Out' : "Add to basket", () => add(p, selected), { class: "primary-link", disabled: soldOut(p) || isPreview || editing, "aria-label": soldOut(p) ? p.name + " is sold out" : "Add " + p.name + " to basket" })) : null,
@@ -481,6 +484,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
             orderByLabel(receipt.pickup),
         ) : null,
         h("h2", {}, money(receipt.total)),
+        receipt.creditApplied ? h('p', {}, 'Subtotal: ' + money(receipt.subtotal) + ' · Return credit: −' + money(receipt.creditApplied) + ' · Remaining payment: ' + money(receipt.total)) : null,
         h(
           "p",
           {},
@@ -504,6 +508,8 @@ if (!location.pathname.startsWith('/studio/preview/') && (
       (n, l) => n + l.qty * (l.p.price + l.v.extra),
       0,
     );
+    const appliedCredit = checkoutMode === 'member' && customer?.member && customer.credits.enabled ? Math.min(creditChoice, customer.credits.available, total) : 0;
+    const remainingDue = total - appliedCredit;
     const invalidBasket = cart.lines.length !== lines.length || lines.some(l =>
       !visibleProduct(l.p) || sellingMethod(l.p) === 'in-store' || soldOut(l.p) ||
       lines.filter(other => other.productId === l.productId).reduce((n, other) => n + other.qty, 0) > l.p.stock);
@@ -553,7 +559,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
       ...[["Name", "name", "text", "name"], ["Email (optional)", "email", "email", "email"], ["Phone (optional)", "phone", "tel", "tel"]].map(([label, key, type, autocomplete]) => h("label", { class: "field" }, label,
         h("input", { name: "checkout-" + key, type, autocomplete, required: key === "name", maxlength: key === "name" ? 80 : key === "phone" ? 32 : 254, value: checkoutProfile[key], oninput: e => { checkoutProfile[key] = e.target.value; updateActionValidity(); } })))) : null;
     const checkoutInvalid = () => orderSubmitting || !checkoutEnabled || doc.orderingPaused || !chosen || pickupClosed(chosen) || invalidBasket || !lines.length || isPreview || editing ||
-      commerceEnabled && (!policyAccepted || total > 0 && !paymentDestinations[checkoutPaymentMethod]) ||
+      commerceEnabled && (!policyAccepted || remainingDue > 0 && !paymentDestinations[checkoutPaymentMethod]) ||
       emailOptIn && !emailInput.checkValidity() ||
       experience && (!checkoutProfile.name.trim() || [...customerFields.querySelectorAll('input')].some(input => !input.checkValidity()));
     const updateActionValidity = () => { action.disabled = checkoutInvalid(); };
@@ -563,7 +569,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
         if (orderSubmitting) return;
         if (invalidBasket) throw new Error('Some items are no longer available for online ordering. Please update your basket before continuing.');
         if (!checkoutEnabled || doc.orderingPaused || !chosen || pickupClosed(chosen)) throw new Error('Ordering is unavailable for this pickup. Please choose another available date.');
-        if (commerceEnabled && total > 0 && !paymentDestinations[checkoutPaymentMethod]) throw new Error('Ordering is paused while payment options are being set up.');
+        if (commerceEnabled && remainingDue > 0 && !paymentDestinations[checkoutPaymentMethod]) throw new Error('Ordering is paused while payment options are being set up.');
         if (commerceEnabled && !policyAccepted) throw new Error("Please read and acknowledge the pickup policy.");
         if (emailOptIn && !emailInput.reportValidity()) return;
         if (experience) {
@@ -593,7 +599,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
             email: checkoutEmail,
             total,
             ...(commerceEnabled ? { policyAccepted, policyVersion: POLICY_VERSION, paymentMethod: checkoutPaymentMethod || undefined } : {}),
-            ...(experience ? { checkoutMode, customerDetails: checkoutProfile } : {}),
+            ...(experience ? { checkoutMode, customerDetails: checkoutProfile, creditCents: appliedCredit } : {}),
             lines: lines.map((l) => ({
               productId: l.productId,
               variantId: l.variantId,
@@ -607,6 +613,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
           }
           cart = { lines: [], pickupId: "", requestId: crypto.randomUUID() };
           saveCart();
+          creditChoice = 0;
           if (experience) void customer.refresh(false);
           render();
         } finally {
@@ -737,12 +744,18 @@ if (!location.pathname.startsWith('/studio/preview/') && (
                 h("span", {}, experience ? "Total" : "Demo total"),
                 h("strong", {}, money(total)),
               ),
+              checkoutMode === 'member' && customer?.member && customer.credits.enabled ? h('section', { 'aria-label': 'Return credit at checkout' },
+                h('h2', {}, 'Use return credit'), h('p', {}, money(customer.credits.available) + ' available'),
+                h('label', { class: 'field' }, h('input', { type: 'checkbox', checked: appliedCredit > 0, onchange: e => { creditChoice = e.target.checked ? Math.min(total, customer.credits.available) : 0; render(); } }), 'Apply my return credit'),
+                appliedCredit > 0 ? h('label', { class: 'field' }, 'Credit amount ($)', h('input', { type: 'text', inputmode: 'decimal', value: centsToDollars(appliedCredit), onchange: e => { try { const next = dollarsToCents(e.target.value); if (next > Math.min(total, customer.credits.available)) throw new Error('Credit cannot exceed your available balance or order subtotal.'); creditChoice = next; render(); } catch (problem) { e.target.value = centsToDollars(appliedCredit); notify(problem.message, true); } } })) : null,
+                h('p', {}, 'Credit applied: −' + money(appliedCredit)), h('strong', {}, 'Remaining amount due: ' + money(remainingDue)),
+                h('p', { class: 'small-note' }, remainingDue === 0 ? 'Fully covered by return credit. No external payment is needed.' : 'Credit is reserved when your order is saved and used after Danielle verifies the remaining payment. Canceled reservations are released.')) : null,
               !experience || notificationsEnabled ? h("label", { class: "field" }, h("span", {}, "Email for order updates (optional)"), emailInput) : null,
               !experience || notificationsEnabled ? h("label", { class: "field" }, h("span", {}, "Email me order receipt, verified payment, preparation, and pickup readiness"), emailConsent) : null,
               h("p", { class: "small-note" }, notificationsEnabled
                 ? "Transactional updates only. Provider acceptance is shown on your private tracking page; inbox delivery is not guaranteed."
                 : experience ? "Your confirmation includes a private order tracking link." : "Email is not connected for this beta site. You will receive a private order tracking link instead."),
-              commerceEnabled && total > 0 ? h('section', { 'aria-label': 'Checkout payment options' }, h('h2', {}, 'Payment options'),
+              commerceEnabled && remainingDue > 0 ? h('section', { 'aria-label': 'Checkout payment options' }, h('h2', {}, 'Payment options'),
                 Object.entries(providers).filter(([method]) => paymentDestinations[method]).map(([method,label]) => button(label, () => { checkoutPaymentMethod = method; render(); }, { class: 'secondary-button', 'aria-pressed': checkoutPaymentMethod === method })),
                 h('p', { role: 'status' }, Object.keys(paymentDestinations).length ? 'Choose an available method. Danielle verifies payment after you pay.' : 'Ordering is paused while Danielle finishes payment setup. Please check back soon.')) : null,
               commerceEnabled ? h('div', {}, h('p', {}, POLICY[0]), h('details', {}, h('summary', {}, POLICY_TITLE), POLICY.map((paragraph, i) => h('p', {}, i === 2 ? h('strong', {}, paragraph) : paragraph))),
@@ -919,8 +932,8 @@ if (!location.pathname.startsWith('/studio/preview/') && (
   function ensureCustomer() {
     if (experience && workspace && customerWorkspace !== workspace) {
       customerWorkspace = workspace;
-      customer = createCustomerExperience({ workspaceId: workspace, link, navigate, render, readOnly: isPreview || editing,
-        onMember: member => { checkoutMode = member ? "member" : "guest"; checkoutProfile = member ? { ...member.profile } : { name: "", email: "", phone: "" }; } });
+      customer = createCustomerExperience({ workspaceId: workspace, link, navigate, render, getDocument: () => doc, productCard: card, readOnly: isPreview || editing,
+        onMember: member => { creditChoice = 0; checkoutMode = member ? "member" : "guest"; checkoutProfile = member ? { ...member.profile } : { name: "", email: "", phone: "" }; } });
       void customer.refresh();
     }
   }

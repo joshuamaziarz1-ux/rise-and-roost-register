@@ -1,3 +1,4 @@
+import { customerCredits } from './return-credits.mjs';
 import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } from '@simplewebauthn/server';
 import { customerOrder, emailAddress } from './orders.mjs';
 import { customerSession, renewCustomerSession, customerCookie, sessionStatements, RECENT_AUTH } from './customer-sessions.mjs';
@@ -18,7 +19,9 @@ export function customerProfile(input) {
   if (!name || name.length > 80 || /[\x00-\x1f]/.test(name)) fail('Enter a name of up to 80 characters.');
   if (email && !emailAddress(email)) fail('Enter a valid email address or leave it blank.');
   if (phone.length > 32 || (phone && !/^[+()\d .-]{5,32}$/.test(phone))) fail('Enter a valid phone number or leave it blank.');
-  return { name, email, phone };
+  const preferredName = typeof input.preferredName === 'string' ? input.preferredName.trim() : '';
+  if (preferredName.length > 40 || /[\x00-\x1f]/.test(preferredName)) fail('Use a preferred name of up to 40 characters.');
+  return { name, email, phone, ...(preferredName ? { preferredName } : {}) };
 }
 export async function memberFor(request, db, workspaceId, now, required = false) {
   const member = await customerSession(request, db, workspaceId, now);
@@ -43,9 +46,27 @@ export async function roostApi({ request, db, now, input, path, json, rateLimit 
     if (!renewed) return response({ member: null }, cookieValue(request, 'rr_roost_' + workspaceId) ? [customerCookie(request, workspaceId, '', 0)] : []);
     const member = renewed.member;
     const row = await first(db, 'SELECT ledger_json FROM workspaces WHERE id=?', workspaceId);
-    const orders = JSON.parse(row.ledger_json).orders.filter(o => o.customer?.memberId === member.id).map(o => customerOrder(o, workspaceId));
+    const ledger = JSON.parse(row.ledger_json);
+    const orders = ledger.orders.filter(o => o.customer?.memberId === member.id).map(o => customerOrder(o, workspaceId, ledger.management?.settings, now));
     const devices = await list(db, "SELECT json_group_array(json_object('id',d.id,'label',d.label,'lastSeen',d.last_seen,'current',s.hash=?)) AS items FROM roost_sessions s JOIN roost_session_details d ON d.hash=s.hash WHERE s.workspace_id=? AND s.member_id=? AND s.expires>? AND d.absolute_expires>?", member.session_hash, workspaceId, member.id, now, now);
-    return response({ member: safeMember(member), orders, devices }, [renewed.cookie]);
+    return response({ member: safeMember(member), orders, devices, credits: customerCredits(ledger, member.id), favorites: ledger.roostFavorites?.[member.id] || [] }, [renewed.cookie]);
+  }
+  if (path === '/api/roost/favorite' && request.method === 'POST') {
+    const member = await memberFor(request, db, workspaceId, now, true);
+    if (typeof input.productId !== 'string' || typeof input.saved !== 'boolean') fail('Choose a product to save or remove.');
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const row = await first(db, 'SELECT ledger_json,ledger_version,published_json FROM workspaces WHERE id=?', workspaceId);
+      const ledger = JSON.parse(row.ledger_json), products = JSON.parse(row.published_json).products;
+      const favorites = ledger.roostFavorites?.[member.id] || [];
+      if (input.saved && !products.some(p => p.id === input.productId && p.active && !p.archived)) fail('This product is currently unavailable.', 409);
+      if (!input.saved && !favorites.includes(input.productId)) return response({ favorites });
+      ledger.roostFavorites ||= {};
+      ledger.roostFavorites[member.id] = input.saved ? [...new Set([...favorites, input.productId])].slice(0, 60) : favorites.filter(id => id !== input.productId);
+      if (new TextEncoder().encode(JSON.stringify(ledger)).length > 1200000) fail('Account storage is full. No favorites were changed.', 409);
+      const saved = await run(db, 'UPDATE workspaces SET ledger_json=?,ledger_version=ledger_version+1 WHERE id=? AND ledger_version=?', JSON.stringify(ledger), workspaceId, row.ledger_version);
+      if (saved.meta.changes === 1) return response({ favorites: ledger.roostFavorites[member.id] });
+    }
+    fail('Another save arrived. Please try again.', 409);
   }
   if (path === '/api/roost/revoke-device' && request.method === 'POST') {
     const member = await memberFor(request, db, workspaceId, now, true);

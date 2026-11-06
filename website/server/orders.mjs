@@ -17,7 +17,7 @@ export function enqueue(order, event, at, makeToken) {
 export function customerOrder(order, workspaceId, settings = {}, now = Date.now()) {
   // Never return customer email, verification evidence, request IDs, internal audit,
   // provider credentials, or another customer's order in a tracking response.
-  const fields = ["id", "orderNumber", "at", "lines", "total", "pickup", "status",
+  const fields = ["id", "orderNumber", "at", "lines", "total", "subtotal", "creditApplied", "returnCredit", "pickup", "status",
     "paymentStatus", "simulated", "paymentReportedAt", "paymentVerifiedAt",
     "selectedPaymentMethod", "pickupDeadline", "policyAcceptance", "originalPickup", "extension", "resolution", "commerceEnabled", "preparingAt", "readyAt", "pickedUpAt", "canceledAt", "paidReceipt", 'paymentCorrectedAt'];
   const result = Object.fromEntries(fields.filter((k) => order[k] !== undefined).map((k) => [k, order[k]]));

@@ -28,9 +28,13 @@ test('Studio-only Back/Home, all sections, form protection and browser history',
     async function controls() {
       await expect(historyNav.getByRole('button')).toHaveText(['Home', 'Back']);
       await expect(historyNav.locator('svg[aria-hidden=true]')).toHaveCount(2);
-      const left = await home.boundingBox(), right = await back.boundingBox();
-      expect(left.x + left.width).toBeLessThanOrEqual(right.x);
-      for (const box of [left, right]) { expect(box.height).toBeGreaterThanOrEqual(44); expect(box.width).toBeGreaterThanOrEqual(44); }
+      // Poll all geometry assertions in one DOM snapshot. A background
+      // refresh may replace the header between separate layout reads.
+      await expect.poll(() => historyNav.evaluateAll(nodes => {
+        if (nodes.length !== 1) return false;
+        const boxes = [...nodes[0].querySelectorAll('button')].map(b => b.getBoundingClientRect());
+        return boxes.length === 2 && boxes.every(b => b.height >= 44 && b.width >= 44) && boxes[0].x + boxes[0].width <= boxes[1].x;
+      })).toBe(true);
     }
     await controls();
     const sectionHeader = await page.locator('.ms-top').boundingBox();
