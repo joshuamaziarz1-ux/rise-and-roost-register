@@ -1,3 +1,5 @@
+> Historical preflight, superseded by [the resumed implementation report](ROOST-CUSTOMER-ACCOUNTS.md). The production source blocker has been resolved.
+
 # Customer accounts: blocked production preflight
 
 Inspected 2026-11-06 UTC. **No customer email authentication was implemented or deployed.** No production writes, emails, orders, payment actions, or schema changes were made.

@@ -1,3 +1,4 @@
+import { customerEmailApi } from './customer-email.mjs';
 import { POLICY_VERSION, pickupDeadline, defaultCalendar, providers, configuredPayments, paymentReadiness } from '../public/commerce.mjs';
 import * as css from "css-tree";
 import { customerOrder, emailAddress, enqueue } from "./orders.mjs";
@@ -434,7 +435,7 @@ export function inspectImage(bytes, mime) {
     );
   return true;
 }
-export async function api(request, db, now = Date.now(), { publicWorkspaceId = "", emailEnabled = false, customerExperienceEnabled = false, reviewBuild = false, studioManagementEnabled = false, previewGrant, previewPinMode = false, commerceEnabled = false, productionContext } = {}) {
+export async function api(request, db, now = Date.now(), { publicWorkspaceId = "", emailEnabled = false, customerExperienceEnabled = false, reviewBuild = false, studioManagementEnabled = false, previewGrant, previewPinMode = false, commerceEnabled = false, productionContext, customerEmailEnv = {}, sendCustomerCode } = {}) {
   const url = new URL(request.url),
     path = url.pathname;
   const first = (sql, ...args) =>
@@ -566,6 +567,10 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       studioPath: productionContext || previewGrant ? '/studio' : "/studio?workspace=" + row.id,
       mainStudioPath: previewGrant ? '/studio' : publicWorkspaceId ? "/studio?workspace=" + publicWorkspaceId : "",
     });
+    if (customerExperienceEnabled && path.startsWith("/api/roost/email/")) {
+      if (productionContext && (request.method === "GET" ? url.searchParams.get("workspace") : input.workspaceId) !== publicWorkspaceId) fail("Page not found.", 404);
+      return await customerEmailApi({ request, db, now, input, path, json, env: customerEmailEnv, sendCode: sendCustomerCode });
+    }
     if (customerExperienceEnabled && path.startsWith("/api/roost/"))
       return await roostApi({ request, db, now, input, path, json, rateLimit });
     if (customerExperienceEnabled && (path === "/api/comments" || path === "/api/studio-comments"))

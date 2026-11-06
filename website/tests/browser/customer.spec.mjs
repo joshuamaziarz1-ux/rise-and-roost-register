@@ -128,7 +128,7 @@ test.describe('isolated customer experience', () => {
       await reopened.close(); await nav.bringToFront();
       const options = nav.locator('.home-choices');
       await options.getByRole('link', { name: 'The Roost', exact: true }).click();
-      await expect(nav.getByRole('heading', { name: 'Make yourself at home.' })).toBeVisible();
+      await expect(nav.getByRole('heading', { name: 'Join The Roost', exact: true })).toBeVisible();
       await expect(nav.locator('nav [aria-current="page"]')).toHaveText('The Roost');
       await nav.getByRole('link', { name: 'Rise & Roost home', exact: true }).click();
       await options.getByRole('link', { name: 'Leave a Comment', exact: true }).click();
@@ -148,6 +148,7 @@ test.describe('isolated customer experience', () => {
     const errors = []; page.on('pageerror', e => errors.push(e.message));
     await authenticator(page, info);
     await page.goto(fixture.origin+'/roost');
+    await page.getByRole('button', { name: 'Existing passkey membership', exact: true }).click();
     await page.getByLabel('Name', { exact: true }).fill('Returning Neighbor');
     await page.getByLabel('Email (optional)', { exact: true }).fill('neighbor@example.test');
     await page.getByLabel('Phone (optional)', { exact: true }).fill('555-0101');
@@ -191,7 +192,8 @@ test.describe('isolated customer experience', () => {
       expect((await restored.request.get(fixture.origin+'/api/studio')).status()).toBe(401);
     } finally { await restored.close(); }
     await page.getByRole('button', { name: 'Sign out of The Roost', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Make yourself at home.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Join The Roost', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Existing passkey membership', exact: true }).click();
     await page.getByRole('button', { name: 'Sign in with a passkey', exact: true }).click();
     await expect(page.locator('.member-order')).toHaveCount(1);
     expect(errors).toEqual([]);

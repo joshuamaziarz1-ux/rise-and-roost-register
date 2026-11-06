@@ -1,3 +1,4 @@
+import { emailMemberFor, requireEmailCsrf } from './customer-email.mjs';
 import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } from '@simplewebauthn/server';
 import { customerOrder, emailAddress } from './orders.mjs';
 
@@ -20,6 +21,11 @@ export function customerProfile(input) {
   return { name, email, phone };
 }
 export async function memberFor(request, db, workspaceId, now, required = false) {
+  const emailMember = await emailMemberFor(request, db, workspaceId, now);
+  if (emailMember) {
+    if (required && request.method !== 'GET') await requireEmailCsrf(request, workspaceId);
+    return emailMember;
+  }
   const raw = cookieValue(request, 'rr_roost_' + workspaceId);
   const member = /^[a-f0-9]{48}$/.test(raw || '') && await first(db,
     'SELECT m.*,s.expires FROM roost_members m JOIN roost_sessions s ON s.member_id=m.id AND s.workspace_id=m.workspace_id WHERE s.hash=? AND s.workspace_id=? AND s.expires>?',
@@ -52,6 +58,7 @@ export async function roostApi({ request, db, now, input, path, json, rateLimit 
   }
   if (path === '/api/roost/profile' && request.method === 'POST') {
     const member = await memberFor(request, db, workspaceId, now, true), profile = customerProfile(input.profile);
+    if (member.verified_email) profile.email = member.verified_email;
     await run(db, 'UPDATE roost_members SET profile_json=? WHERE id=? AND workspace_id=?', JSON.stringify(profile), member.id, workspaceId);
     return response({ member: safeMember({ ...member, profile_json: JSON.stringify(profile) }) });
   }

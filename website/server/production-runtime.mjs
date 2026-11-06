@@ -3,8 +3,8 @@ import { productionConfiguration, productionOwner, productionContext } from './p
 import { PRODUCTION_DATABASE_ID, PRODUCTION_WORKSPACE_ID } from './production-preparation.mjs';
 
 const response = (error, status) => new Response(JSON.stringify({ error, productionOwnerAccessRequired: status === 401 || status === 403 }), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, private', 'CDN-Cache-Control': 'no-store' } });
-const publicApi = (path, method) => method === 'GET' && (['/api/site', '/api/comments', '/api/roost/me'].includes(path) || /^\/api\/assets\/[a-f0-9]{48}$/.test(path) || /^\/api\/order-tracking\/[a-f0-9]{48}\/[a-f0-9]{48}$/.test(path)) ||
-  method === 'POST' && (['/api/orders', '/api/comments', '/api/roost/profile', '/api/roost/logout', '/api/roost/options', '/api/roost/verify', '/api/roost/recover', '/api/roost/claim-order'].includes(path) || /^\/api\/order-tracking\/[a-f0-9]{48}\/[a-f0-9]{48}\/(?:message|payment-method)$/.test(path));
+const publicApi = (path, method) => method === 'GET' && (['/api/site', '/api/comments', '/api/roost/me', '/api/roost/email/me', '/api/roost/email/status'].includes(path) || /^\/api\/assets\/[a-f0-9]{48}$/.test(path) || /^\/api\/order-tracking\/[a-f0-9]{48}\/[a-f0-9]{48}$/.test(path)) ||
+  method === 'POST' && (['/api/roost/email/request', '/api/roost/email/verify', '/api/roost/email/profile', '/api/roost/email/logout', '/api/orders', '/api/comments', '/api/roost/profile', '/api/roost/logout', '/api/roost/options', '/api/roost/verify', '/api/roost/recover', '/api/roost/claim-order'].includes(path) || /^\/api\/order-tracking\/[a-f0-9]{48}\/[a-f0-9]{48}\/(?:message|payment-method)$/.test(path));
 
 // All production owner traffic lives below /studio, so one Access application
 // protects the page AND its APIs. Unprotected legacy owner URLs are closed.
@@ -40,6 +40,6 @@ export async function productionFetch(request, env, now = Date.now()) {
     url.pathname = path;
     const rewritten = new Request(url, request);
     return await api(rewritten, env.DB, now, { publicWorkspaceId: PRODUCTION_WORKSPACE_ID, customerExperienceEnabled: true, studioManagementEnabled: true, commerceEnabled: true,
-      productionContext: productionContext(owner, env.REAL_CHECKOUT_ENABLED === 'true') });
+      customerEmailEnv: env, productionContext: productionContext(owner, env.REAL_CHECKOUT_ENABLED === 'true') });
   } catch { return response('The website is temporarily unavailable. No successful save is confirmed; keep your order link and retry.', 503); }
 }

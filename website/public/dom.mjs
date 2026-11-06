@@ -1,3 +1,5 @@
+let customerCsrf = '';
+export function setCustomerCsrf(value = '') { customerCsrf = value; }
 export function h(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs)) {
@@ -32,6 +34,7 @@ export function notify(message, error = false) {
 }
 export async function request(path, data, { workspaceId } = {}) {
   const headers = workspaceId ? { "X-RR-Workspace": workspaceId } : {};
+  if (data !== undefined && customerCsrf && path.startsWith("/api/")) headers["X-RR-CSRF"] = customerCsrf;
   const response = await fetch(
     path,
     data === undefined

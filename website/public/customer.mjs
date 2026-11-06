@@ -1,3 +1,5 @@
+import { createEmailRoost } from './email-roost.mjs';
+import { setCustomerCsrf } from './dom.mjs';
 import { h, button, field, notify, guard, request } from './dom.mjs';
 import { money, pickupLabel } from './model.mjs';
 import { paymentLabels, fulfillmentLabels } from './orders.mjs';
@@ -27,7 +29,8 @@ async function passkey(options, register) {
 export function createCustomerExperience({ workspaceId, link, navigate, render, onMember, readOnly = false }) {
   let member = null, orders = [], recoveryKey = '', error = '', busy = false, loaded = false, pending;
   const joinProfile = { name: '', email: '', phone: '' };
-  let profileDraft;
+  let profileDraft, emailAvailable = false, emailStatusLoaded = false, legacyMode = false;
+  const emailRoost = createEmailRoost({ api: (...args) => api(...args), render, refresh: (...args) => refresh(...args), action: fn => action(fn), link, getMember: () => member, getOrders: () => orders, available: () => emailAvailable, legacy: () => { legacyMode = true; render(); }, readOnly });
   const api = (path, data) => request(path + (data === undefined ? '?workspace=' + workspaceId : ''), data === undefined ? undefined : { ...data, workspaceId });
   const action = fn => async () => {
     if (busy) return;
@@ -41,11 +44,16 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     if (pending) return pending;
     pending = (async () => {
       try {
-        const result = await api('/api/roost/me');
+        if (!emailStatusLoaded) { emailAvailable = (await api('/api/roost/email/status')).available; emailStatusLoaded = true; }
+        let result = emailAvailable ? await api('/api/roost/email/me') : { member: null };
+        setCustomerCsrf(result.csrf || '');
+        if (!result.member) result = await api('/api/roost/me');
         const changed = member?.id !== result.member?.id;
-        const viewChanged = !loaded || changed || JSON.stringify(orders) !== JSON.stringify(result.orders || []);
+        const profileChanged = JSON.stringify(member?.profile) !== JSON.stringify(result.member?.profile);
+        const viewChanged = !loaded || changed || profileChanged || JSON.stringify(orders) !== JSON.stringify(result.orders || []);
         member = result.member; orders = result.orders || []; loaded = true;
-        if (changed) { profileDraft = member ? { ...member.profile } : undefined; onMember(member); }
+        if (changed) profileDraft = member ? { ...member.profile } : undefined;
+        if (changed || profileChanged) onMember(member);
         if (rerender && viewChanged) render();
         return viewChanged;
       } catch (e) { error = e.message; loaded = true; if (rerender) render(); }
@@ -75,6 +83,12 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
   }
   function roost() {
     if (!loaded) return h('main', { class: 'section-inner roost-page' }, h('h1', {}, 'The Roost'), h('p', { role: 'status' }, 'Opening your Roost…'));
+    if (member?.emailVerified || (!member && !legacyMode)) {
+      const page = emailRoost();
+      if (error) page.prepend(h('p', { role: 'alert', class: 'form-error' }, error));
+      if (busy) { page.setAttribute('aria-busy', 'true'); page.querySelectorAll('button,input').forEach(el => el.disabled = true); page.append(h('p', { role: 'status' }, 'Please wait…')); }
+      return page;
+    }
     const heading = h('div', { class: 'page-intro' }, h('h1', {}, member ? 'Welcome back, ' + member.profile.name.split(' ')[0] + '.' : 'Make yourself at home.'),
       h('p', {}, member ? 'Your orders and pickups, all in one place.' : 'The Roost keeps your pickup details and orders together. Joining is always optional.'));
     const result = h('main', { class: 'section-inner roost-page' }, heading, error ? h('p', { role: 'alert', class: 'form-error' }, error) : null, recoveryCard());
@@ -125,6 +139,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
               h('button', { type: 'submit', class: 'secondary-button', disabled: busy || readOnly }, 'Recover my Roost'))),
           h('div', { class: 'guest-reminder' }, h('p', {}, 'Just here for something delicious?'), link('/shop', 'Shop as a guest', 'secondary-button')))));
     }
+    if (!member) result.append(button('Use email sign-in', () => { legacyMode = false; render(); }, { class: 'text-button' }));
     if (busy) result.append(h('p', { role: 'status', class: 'small-note' }, 'Please finish the sign-in prompt.'));
     return result;
   }

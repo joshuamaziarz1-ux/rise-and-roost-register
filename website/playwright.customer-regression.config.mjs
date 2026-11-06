@@ -1,0 +1,2 @@
+import base from './playwright.config.mjs';
+export default { ...base, testDir: './tests', testMatch: [/browser\/(?:customer|checkout-pickup|help|navigation|phase3|management)\.spec\.mjs$/, /(?:production-browser|commerce-browser)\/.*\.spec\.mjs$/], webServer: undefined, reporter: [['list']], outputDir: './qa-results/customer-regression', projects: base.projects.filter(p => ['desktop-chromium', 'iphone-webkit'].includes(p.name)) };
