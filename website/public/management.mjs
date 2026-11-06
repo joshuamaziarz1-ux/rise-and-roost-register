@@ -341,6 +341,8 @@ export async function start(root, initial, newAccessKey) {
   }
   function calendar() {
     const date = selection || data.management.today.range.start, list = data.management.pickups.slice().sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
+    const upcoming = list.filter(p => futurePickup(p) && isOrderingPickup(p));
+    const olderRecords = list.filter(p => futurePickup(p) && !isOrderingPickup(p));
     const orders = data.orders.filter(o => o.pickup.date === date && !o.resolution && !['canceled', 'picked-up'].includes(o.status));
     const totals = new Map(); for (const o of orders) for (const l of o.lines) { const k = l.productId + ':' + l.variantId; const v = totals.get(k) || { name: l.name, variant: l.variant, qty: 0 }; v.qty += l.qty; totals.set(k, v); }
     const card = p => {
@@ -356,7 +358,9 @@ export async function start(root, initial, newAccessKey) {
       h('div', { class: 'ms-actions' },
         button(data.published.orderingPaused ? 'Resume ordering' : 'Pause new ordering', () => { if (confirm(data.published.orderingPaused ? 'Resume new website orders?' : 'Pause new website orders? Existing confirmed orders will stay intact.')) send('calendar', { revision: data.revision, ledgerVersion: data.ledgerVersion, pickups: data.published.pickups, paused: !data.published.orderingPaused, confirmExistingOrders: true }); }, { class: 'ms-secondary' })),
       data.published.orderingPaused ? h('p', { role: 'status', class: 'ms-warning' }, 'New ordering is paused. Existing orders are protected.') : null,
-      h('div', { class: 'ms-calendar-list' }, list.filter(futurePickup).map(card)), !list.some(futurePickup) ? empty('No future pickup dates. Add a pickup when you’re ready.') : null,
+      h('div', { class: 'ms-calendar-list', role: 'region', 'aria-label': 'Upcoming pickup dates' }, upcoming.map(card)), !upcoming.length ? empty('No future pickup dates. Add a pickup when you’re ready.') : null,
+      olderRecords.length ? h('details', { class: 'ms-panel' }, h('summary', {}, 'Older pickup records'),
+        h('p', { class: 'ms-note' }, 'These older dates are excluded from customer ordering. Records and any existing customer commitments are kept for reference.'), olderRecords.map(card)) : null,
       list.some(p => !futurePickup(p)) ? h('details', { class: 'ms-panel' }, h('summary', {}, 'Past pickup dates'), list.filter(p => !futurePickup(p)).map(card)) : null,
       panel('Pickup & production lists', field('List date', date, v => { selection = v; render(); }, { type: 'date' }),
         h('div', { class: 'ms-print-list' }, h('h3', {}, date), h('h3', {}, 'Production totals'), [...totals.values()].map(v => h('p', {}, v.qty + ' × ' + v.name + ' · ' + v.variant)),
