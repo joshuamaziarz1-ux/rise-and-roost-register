@@ -15,7 +15,7 @@ test.describe('remembered testing PIN Studio',()=>{
   await page.goto(fixture.origin+'/studio?workspace='+'b'.repeat(48));await absentLegacy(page);
   await expect(page.getByRole('heading',{name:'Website Studio',exact:true})).toBeVisible();
   expect((await page.request.get(fixture.origin+'/api/manage/snapshot')).status()).toBe(401);
-  await setup(page);await expect(page).toHaveURL(fixture.origin+'/studio');
+  await setup(page);await expect(page).toHaveURL(fixture.origin+'/studio#Home');
   await mkdir('qa-results/pin-preview',{recursive:true});await page.screenshot({path:`qa-results/pin-preview/dashboard-${info.project.name}.png`,fullPage:true});
   const context=await browser.newContext({...info.project.use});
   try{
@@ -25,7 +25,7 @@ test.describe('remembered testing PIN Studio',()=>{
     const visitor=await customer.newPage();await visitor.goto(fixture.origin+'/shop');expect((await customer.request.get(fixture.origin+'/api/studio')).status()).toBe(401);
     await nav(page,'Products').click();await page.locator('.ms-product').first().getByRole('button',{name:'Edit product',exact:true}).click();await page.getByLabel('Product name',{exact:true}).fill('Synthetic remembered-PIN loaf');await page.getByRole('button',{name:'Save product live',exact:true}).click();
     await expect(visitor.getByRole('heading',{name:'Synthetic remembered-PIN loaf',exact:true})).toBeVisible();await nav(second,'Products').click();await expect(second.getByRole('heading',{name:'Synthetic remembered-PIN loaf',exact:true})).toBeVisible();
-    await context.setExtraHTTPHeaders({'CF-Connecting-IP':'2001:db8::123'});await second.reload();await expect(second.getByRole('heading',{name:'Hi, Danielle!',exact:true})).toBeVisible();
+    await context.setExtraHTTPHeaders({'CF-Connecting-IP':'2001:db8::123'});await second.reload();await expect(second.getByRole('heading',{name:'Hi, Danielle!',exact:true})).toBeVisible();await expect(second).toHaveURL(fixture.origin+'/studio#Home');
     const cookies=await context.cookies();expect(cookies.find(c=>c.name==='rr_pin_loopback').httpOnly).toBe(true);expect(cookies.some(c=>c.name.startsWith('rr_studio'))).toBe(false);
     await page.getByRole('button',{name:'Lock Studio',exact:true}).click();await expect(page.getByLabel('Owner PIN',{exact:true})).toBeVisible();await absentLegacy(page);await page.screenshot({path:`qa-results/pin-preview/pin-${info.project.name}.png`,fullPage:true});
     expect((await page.request.get(fixture.origin+'/api/manage/snapshot')).status()).toBe(401);expect((await second.request.get(fixture.origin+'/api/manage/snapshot')).status()).toBe(200);

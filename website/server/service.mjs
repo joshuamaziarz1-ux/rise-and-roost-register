@@ -9,6 +9,7 @@ import { managementApi, holdsInventory, productionLimit, structure } from './man
 import { isPreviewGrant } from './preview-access.mjs';
 import { isProductionContext } from './production-access.mjs';
 import { sellingMethods, sellingMethod, inventoryMode, normalizeSellingMethod } from '../public/selling.mjs';
+import { reserveCredit } from './return-credits.mjs';
 import { calendarPickups } from './pickup-calendar.mjs';
 
 const encoder = new TextEncoder();
@@ -880,7 +881,11 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           );
         const ledger = JSON.parse(row.ledger_json),
           prior = ledger.orders.find((o) => o.requestId === input.requestId);
-        if (prior) return json(customerOrder(prior, row.id, ledger.management?.settings, now));
+        if (prior) {
+          // An idempotency key must not disclose a different customer's order.
+          if (prior.customer?.memberId && prior.customer.memberId !== checkoutMember?.id) fail('Sign in to the account that placed this order.', 403);
+          return json(customerOrder(prior, row.id, ledger.management?.settings, now));
+        }
         if (input.revision !== row.published_revision)
           fail(
             "The published site changed. Refresh your basket and review the latest prices and deadlines.",
@@ -911,7 +916,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         if (productionContext && !JSON.parse(row.published_json).business.pickupAddress?.street?.trim()) fail('Pickup details are not ready yet. Please check back soon.', 409);
         const quoted = quote(JSON.parse(row.published_json), ledger, input, now, { recurring: studioManagementEnabled });
         let selectedPaymentMethod;
-        if (commerceEnabled && quoted.total > 0) {
+        if (commerceEnabled && quoted.total - (input.creditCents || 0) > 0) {
           const active = configuredPayments(ledger.management?.settings);
           if (!Object.keys(active).length) fail('Ordering is paused while Danielle finishes payment setup. Please check back soon.',409);
           selectedPaymentMethod = input.paymentMethod ?? Object.keys(active)[0];
@@ -934,6 +939,8 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           at: new Date(now).toISOString(),
           audit: [{ action: productionContext ? 'Order received' : "Demo request", at: new Date(now).toISOString() }],
         };
+        order.orderNumber = "RR-" + order.id.slice(0, 16).toUpperCase();
+        if (input.creditCents !== undefined) reserveCredit(ledger, order, input.creditCents, now);
         if (commerceEnabled) {
           const settings = ledger.management?.settings || {};
           order.commerceEnabled = true;
@@ -942,9 +949,9 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           order.pickupDeadline = pickupDeadline(order.pickup, order.policyAcceptance.calendar);
           order.originalPickup = copy(order.pickup);
         }
-        order.orderNumber = "RR-" + order.id.slice(0, 16).toUpperCase();
         enqueue(order, "received", order.at, token);
         ledger.orders.unshift(order);
+        if (new TextEncoder().encode(JSON.stringify(ledger)).length > 1200000) fail('The order ledger needs a storage expansion. No order or credits were changed.', 409);
         const result = await run(
           "UPDATE workspaces SET ledger_json=?,ledger_version=ledger_version+1 WHERE id=? AND ledger_version=? AND published_revision=?",
           JSON.stringify(ledger),

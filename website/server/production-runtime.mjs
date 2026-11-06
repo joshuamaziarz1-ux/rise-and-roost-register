@@ -4,7 +4,7 @@ import { PRODUCTION_DATABASE_ID, PRODUCTION_WORKSPACE_ID } from './production-pr
 
 const response = (error, status) => new Response(JSON.stringify({ error, productionOwnerAccessRequired: status === 401 || status === 403 }), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, private', 'CDN-Cache-Control': 'no-store' } });
 const publicApi = (path, method) => method === 'GET' && (['/api/site', '/api/comments', '/api/roost/me'].includes(path) || /^\/api\/assets\/[a-f0-9]{48}$/.test(path) || /^\/api\/order-tracking\/[a-f0-9]{48}\/[a-f0-9]{48}$/.test(path)) ||
-  method === 'POST' && (['/api/orders', '/api/comments', '/api/roost/profile', '/api/roost/logout', '/api/roost/options', '/api/roost/verify', '/api/roost/recover', '/api/roost/claim-order', '/api/roost/revoke-device'].includes(path) || /^\/api\/order-tracking\/[a-f0-9]{48}\/[a-f0-9]{48}\/(?:message|payment-method)$/.test(path));
+  method === 'POST' && (['/api/orders', '/api/comments', '/api/roost/profile', '/api/roost/logout', '/api/roost/options', '/api/roost/verify', '/api/roost/recover', '/api/roost/claim-order', '/api/roost/revoke-device', '/api/roost/favorite'].includes(path) || /^\/api\/order-tracking\/[a-f0-9]{48}\/[a-f0-9]{48}\/(?:message|payment-method)$/.test(path));
 
 // All production owner traffic lives below /studio, so one Access application
 // protects the page AND its APIs. Unprotected legacy owner URLs are closed.

@@ -1,5 +1,5 @@
 import { h, button, field, notify, guard, request } from './dom.mjs';
-import { money, pickupLabel } from './model.mjs';
+import { money, pickupLabel, localInstant } from './model.mjs';
 import { paymentLabels, fulfillmentLabels } from './orders.mjs';
 
 const decode = value => Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
@@ -24,10 +24,11 @@ async function passkey(options, register) {
   return { id: credential.id, rawId: encode(credential.rawId), type: credential.type, response, clientExtensionResults: credential.getClientExtensionResults(), authenticatorAttachment: credential.authenticatorAttachment };
 }
 
-export function createCustomerExperience({ workspaceId, link, navigate, render, onMember, readOnly = false }) {
+export function createCustomerExperience({ workspaceId, link, navigate, render, onMember, getDocument = () => ({}), productCard, readOnly = false }) {
   let member = null, orders = [], devices = [], recoveryKey = '', error = '', busy = false, loaded = false, pending, generation = 0;
+  let credits = { available: 0, reserved: 0, enabled: false, items: [], transactions: [] }, favorites = [];
   const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('rr-roost-' + workspaceId) : null;
-  const joinProfile = { name: '', email: '', phone: '' };
+  const joinProfile = { name: '', preferredName: '', email: '', phone: '' };
   let profileDraft;
   const api = (path, data) => request(path + (data === undefined ? '?workspace=' + workspaceId : ''), data === undefined ? undefined : { ...data, workspaceId });
   const action = fn => async () => {
@@ -38,8 +39,8 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     finally { busy = false; render(); }
   };
   function clearPrivate() {
-    generation++; member = null; orders = []; devices = []; recoveryKey = ''; profileDraft = undefined;
-    Object.assign(joinProfile, { name: '', email: '', phone: '' });
+    generation++; member = null; orders = []; devices = []; favorites = []; credits = { available: 0, reserved: 0, enabled: false, items: [], transactions: [] }; recoveryKey = ''; profileDraft = undefined;
+    Object.assign(joinProfile, { name: '', preferredName: '', email: '', phone: '' });
     Object.assign(commentDraft, { name: '', body: '', consent: false }); onMember(null);
   }
   channel?.addEventListener('message', () => { clearPrivate(); loaded = false; render(); void refresh(); });
@@ -56,7 +57,8 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
         if (started !== generation) return false;
         const changed = member?.id !== result.member?.id;
         if (!result.member && member) { clearPrivate(); }
-        const viewChanged = !loaded || changed || JSON.stringify(orders) !== JSON.stringify(result.orders || []) || JSON.stringify(devices) !== JSON.stringify(result.devices || []);
+        const viewChanged = !loaded || changed || JSON.stringify(orders) !== JSON.stringify(result.orders || []) || JSON.stringify(devices) !== JSON.stringify(result.devices || []) || JSON.stringify(credits) !== JSON.stringify(result.credits || { available: 0, reserved: 0, enabled: false, items: [], transactions: [] }) || JSON.stringify(favorites) !== JSON.stringify(result.favorites || []);
+        credits = result.credits || { available: 0, reserved: 0, enabled: false, items: [], transactions: [] }; favorites = result.favorites || [];
         member = result.member; orders = result.orders || []; devices = result.devices || []; loaded = true;
         if (changed) { profileDraft = member ? { ...member.profile } : undefined; onMember(member); }
         if (rerender && viewChanged) render();
@@ -82,6 +84,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     await refresh(false, true); channel?.postMessage('changed');
   }
   const profileFields = (profile, suffix = '') => h('div', { class: 'customer-fields' },
+    field('Preferred name (optional)' + suffix, profile.preferredName || '', v => profile.preferredName = v, { name: 'customer-preferred-name', maxlength: 40 }),
     field('Name' + suffix, profile.name, v => profile.name = v, { name: 'customer-name', autocomplete: 'name', required: true, maxlength: 80 }),
     field('Email (optional)' + suffix, profile.email, v => profile.email = v, { name: 'customer-email', autocomplete: 'email', type: 'email', maxlength: 254 }),
     field('Phone (optional)' + suffix, profile.phone, v => profile.phone = v, { name: 'customer-phone', autocomplete: 'tel', type: 'tel', maxlength: 32 }));
@@ -96,24 +99,24 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
   }
   function roost() {
     if (!loaded) return h('main', { class: 'section-inner roost-page' }, h('h1', {}, 'The Roost'), h('p', { role: 'status' }, 'Opening your Roost…'));
-    const heading = h('div', { class: 'page-intro' }, h('h1', {}, member ? 'Welcome back, ' + member.profile.name.split(' ')[0] + '.' : 'Make yourself at home.'),
-      h('p', {}, member ? 'Your orders and pickups, all in one place.' : 'The Roost keeps your pickup details and orders together. Joining is always optional.'));
+    const heading = h('div', { class: 'page-intro' }, h('h1', {}, member ? greeting() + ', ' + (member.profile.preferredName || member.profile.name.split(' ')[0]) + '.' : 'Make yourself at home.'),
+      h('p', {}, member ? 'Welcome back to The Roost.' : 'The Roost keeps your pickup details and orders together. Joining is always optional.'));
     const result = h('main', { class: 'section-inner roost-page' }, heading, error ? h('p', { role: 'alert', class: 'form-error' }, error) : null, recoveryCard());
     if (member) {
       const profile = profileDraft ||= { ...member.profile };
       const form = h('form', { class: 'roost-profile', onsubmit: async e => {
         e.preventDefault();
-        profile.name = form.elements['customer-name'].value; profile.email = form.elements['customer-email'].value; profile.phone = form.elements['customer-phone'].value;
+        profile.preferredName = form.elements['customer-preferred-name'].value; profile.name = form.elements['customer-name'].value; profile.email = form.elements['customer-email'].value; profile.phone = form.elements['customer-phone'].value;
         await action(async () => { await api('/api/roost/profile', { profile }); await refresh(false, true); onMember(member); notify('Your pickup details are saved.'); })();
       } }, h('h2', {}, 'Your pickup details'), profileFields(profile), h('button', { type: 'submit', class: 'primary-link', disabled: busy }, 'Save my details'));
-      result.append(h('div', { class: 'roost-layout' },
-        h('section', { class: 'member-orders', 'aria-label': 'Your Roost orders' },
+      result.append(dashboard(), h('div', { class: 'roost-layout' },
+        h('section', { id: 'my-orders', class: 'member-orders', 'aria-label': 'Your Roost orders' },
           h('div', { class: 'panel-heading' }, h('h2', {}, 'My Orders'), button('Refresh orders', action(() => refresh(false, true)), { class: 'text-button', disabled: busy })),
           orders.length ? orders.map(order => h('article', { class: 'member-order' },
             h('div', {}, h('h3', {}, order.orderNumber), h('p', {}, pickupLabel(order.pickup))),
             h('p', {}, order.lines.map(l => `${l.qty} × ${l.name}`).join(', ')),
             h('p', { class: 'order-state' }, paymentLabels[order.paymentStatus || 'not_collected'], ' · ', fulfillmentLabels[order.status || 'pending']),
-            h('div', { class: 'member-order-bottom' }, h('strong', {}, money(order.total)), h('a', { href: order.trackingPath, class: 'primary-link' }, 'Track order'))))
+            h('div', { class: 'member-order-bottom' }, h('strong', {}, money(order.total)), h('a', { href: order.trackingPath, class: 'primary-link' }, 'Track order')), h('div', { class: 'reorder-links' }, order.lines.map(l => getDocument().products?.some(p => p.id === l.productId) ? link('/product/' + l.productId, 'Reorder ' + l.name, 'text-button') : h('span', { class: 'small-note' }, l.name + ' is currently unavailable')))))
             : h('div', { class: 'gentle-empty' }, h('h3', {}, 'Something good is waiting.'), h('p', {}, 'Orders you place while signed in will appear here.'), link('/shop', 'Start Shopping', 'primary-link')),
           h('details', { class: 'claim-order' }, h('summary', {}, 'Add an order placed as a guest'),
             h('p', {}, 'Paste the complete private tracking link from your order confirmation.'),
@@ -130,11 +133,12 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
           button('Log Out', action(async () => {
             await api('/api/roost/logout', {}); clearPrivate(); channel?.postMessage('changed');
           }), { class: 'text-button', disabled: busy })))));
+      result.append(creditPanel(), favoritesPanel());
     } else {
       const profile = joinProfile;
       const form = h('form', { class: 'join-roost', onsubmit: async e => {
         e.preventDefault();
-        profile.name = form.elements['customer-name'].value; profile.email = form.elements['customer-email'].value; profile.phone = form.elements['customer-phone'].value;
+        profile.preferredName = form.elements['customer-preferred-name'].value; profile.name = form.elements['customer-name'].value; profile.email = form.elements['customer-email'].value; profile.phone = form.elements['customer-phone'].value;
         await action(() => authenticate('register', profile))();
       } }, h('h2', {}, 'A little place of your own'), h('p', {}, 'Save your details, see past orders, and keep track of your next pickup.'), profileFields(profile),
         h('button', { type: 'submit', class: 'primary-link', disabled: busy || readOnly }, busy ? 'Opening passkeys…' : 'Join with a passkey'),
@@ -151,6 +155,39 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     }
     if (busy) result.append(h('p', { role: 'status', class: 'small-note' }, 'Please finish the sign-in prompt.'));
     return result;
+  }
+  function greeting() {
+    const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Indiana/Indianapolis', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
+    return hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  }
+  const jump = target => () => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  function dashboard() {
+    const upcoming = orders.filter(o => !['canceled', 'picked-up'].includes(o.status) && !o.resolution && localInstant(o.pickup.date, o.pickup.end) > Date.now()).sort((a,b) => localInstant(a.pickup.date, a.pickup.start) - localInstant(b.pickup.date, b.pickup.start))[0];
+    return h('div', { class: 'roost-dashboard' },
+      h('section', {}, h('h2', {}, 'Upcoming Pickup'), upcoming ? [h('strong', {}, pickupLabel(upcoming.pickup)), h('p', {}, upcoming.orderNumber + ' · ' + fulfillmentLabels[upcoming.status || 'pending']), h('a', { href: upcoming.trackingPath, class: 'primary-link' }, 'View order details')] : [h('p', {}, 'Your next pickup will be right here.'), link('/shop', 'Find something fresh', 'primary-link')]),
+      h('section', {}, h('h2', {}, 'Fresh at The Roost!'), h('p', {}, getDocument().freshAnnouncement || 'See what Danielle has available today.'), link('/shop', 'Browse available products', 'primary-link')),
+      h('section', {}, h('h2', {}, 'Your Return Credit: ' + money(credits.available)), credits.reserved ? h('p', {}, money(credits.reserved) + ' reserved for pending orders') : null, button('View credit history and return items', jump('my-return-credits'), { class: 'text-button' })),
+      h('nav', { class: 'roost-shortcuts', 'aria-label': 'My Roost' }, button('My Orders', jump('my-orders'), { class: 'secondary-button' }), button('Favorites', jump('my-favorites'), { class: 'secondary-button' })));
+  }
+  function creditPanel() {
+    return h('section', { id: 'my-return-credits', class: 'roost-credit-panel' }, h('h2', {}, 'My Return Credits'), h('strong', { class: 'credit-balance' }, money(credits.available) + ' available'),
+      credits.reserved ? h('p', {}, money(credits.reserved) + ' reserved for pending orders. Danielle releases reservations when an order is canceled after review.') : null,
+      !credits.enabled ? h('p', {}, 'The return program is currently paused. Your credit history and balance are kept.') : h('p', {}, 'Danielle confirms eligible returns in person. Choose available credit at member checkout.'),
+      credits.transactions.length ? h('details', {}, h('summary', {}, 'Credit history (' + credits.transactions.length + ')'), [...credits.transactions].reverse().map(t => h('article', { class: 'credit-transaction' }, h('strong', {}, t.kind.charAt(0).toUpperCase() + t.kind.slice(1) + ' · ' + (['adjusted', 'reversed'].includes(t.kind) ? (t.availableDelta < 0 ? '−' : '+') : '') + money(t.amount)), h('p', {}, t.description), h('time', { datetime: t.at }, new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Indiana/Indianapolis' }).format(new Date(t.at)))))) : h('p', {}, 'Accepted returns will appear here.'),
+      h('h3', {}, 'What Can I Return?'), credits.items.length ? credits.items.map(item => h('p', {}, item.name + ' — ' + money(item.cents) + ' credit')) : h('p', {}, 'There are no eligible return items listed right now.'));
+  }
+  function favoriteButton(productId) {
+    if (!member) return null;
+    const saved = favorites.includes(productId);
+    return button(saved ? 'Remove favorite' : 'Save favorite', action(async () => { await api('/api/roost/favorite', { productId, saved: !saved }); await refresh(false, true); }), { class: 'text-button', disabled: busy || readOnly, 'aria-pressed': saved });
+  }
+  function favoritesPanel() {
+    const products = getDocument().products || [];
+    return h('section', { id: 'my-favorites', class: 'roost-favorites' }, h('h2', {}, 'Favorites'), h('p', {}, 'Your familiar favorites, with today’s prices and availability.'),
+      favorites.length ? h('div', { class: 'product-grid' }, favorites.map(id => {
+        const product = products.find(p => p.id === id && p.active && !p.archived);
+        return product ? productCard(product) : h('article', { class: 'gentle-empty' }, h('p', {}, 'This saved product is currently unavailable.'), favoriteButton(id));
+      })) : h('p', {}, 'Save a favorite while browsing the shop and it will be waiting here.'), link('/shop', 'Browse the shop', 'primary-link'));
   }
   let comments = null, commentError = '', commentSent = false, commentsLoading, commentsNeedRender = false;
   const commentDraft = { name: '', body: '', consent: false };
@@ -183,5 +220,5 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
         h('section', { class: 'neighbor-notes', 'aria-label': 'Comments from our neighbors' }, h('h2', {}, 'Around the farmhouse table'),
           comments?.length ? comments.map(c => h('blockquote', {}, h('p', {}, c.body), h('cite', {}, c.name))) : h('p', {}, 'There’s always room for a good conversation.'))));
   }
-  return { refresh, roost, commentPage, refreshComments: loadComments, get member() { return member; } };
+  return { refresh, roost, commentPage, refreshComments: loadComments, favoriteButton, get credits() { return credits; }, get member() { return member; } };
 }

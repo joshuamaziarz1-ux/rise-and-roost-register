@@ -99,10 +99,10 @@ test('hosted HTTPS guest and member shopping, private tracking, remembered sessi
     await page.getByLabel('Name', { exact: true }).fill('Synthetic Member Neighbor');
     await page.getByLabel('Email (optional)', { exact: true }).fill('qa@example.test');
     await page.getByRole('button', { name: 'Join with a passkey', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Welcome back, Synthetic.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Synthetic\./ })).toBeVisible();
     await page.getByRole('button', { name: 'I saved my recovery key', exact: true }).click();
     await page.reload();
-    await expect(page.getByRole('heading', { name: 'Welcome back, Synthetic.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Synthetic\./ })).toBeVisible();
     expect((await page.request.get(origin+'/api/studio')).status()).toBe(401);
     await page.goto(origin+prefix+'/shop');
     await page.getByRole('button', { name: 'Add A dozen little sunrises to basket', exact: true }).click();

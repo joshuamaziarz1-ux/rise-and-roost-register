@@ -178,6 +178,7 @@ export async function start(root) {
         h('details', {}, h('summary', {}, POLICY_TITLE), POLICY.map((paragraph,i) => h('p', {}, i === 2 ? h('strong', {}, paragraph) : paragraph))),
         h("h2", {}, "Your order"),
         h("div", { role: "group", "aria-label": "Order items" }, order.lines.map((line) => h("p", {}, `${line.qty} × ${line.name} (${line.variant}) · ${money(line.qty * line.unitPrice)}`))),
+        order.creditApplied ? h('div', {}, h('p', {}, 'Order subtotal: ' + money(order.subtotal)), h('p', {}, 'Return credit: −' + money(order.creditApplied) + ' · ' + order.returnCredit.status), order.total === 0 ? h('p', {}, 'Covered by return credit. No external payment is needed.') : null) : null,
         h("p", {}, h("strong", {}, "Total: " + money(order.total))));
       if (order.paidReceipt) {
         const receipt = order.paidReceipt;

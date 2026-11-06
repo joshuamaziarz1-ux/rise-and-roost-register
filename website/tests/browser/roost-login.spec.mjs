@@ -13,7 +13,7 @@ test.describe('customer remembered login', () => {
     await page.screenshot({ path: `qa-results/roost-signin-${info.project.name}.png`, fullPage: true, scale: 'css' });
     await page.getByLabel('Name', { exact: true }).fill('Remembered Neighbor');
     await page.getByRole('button', { name: 'Join with a passkey', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Welcome back, Remembered.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Remembered\./ })).toBeVisible();
     const recovery = await page.getByLabel('Roost recovery key', { exact: true }).inputValue();
     await page.getByRole('button', { name: 'I saved my recovery key', exact: true }).click();
     return recovery;
@@ -30,7 +30,7 @@ test.describe('customer remembered login', () => {
     try {
       await page.context().close();
       const returning = await remembered.newPage(); await returning.goto(f.origin + '/roost');
-      await expect(returning.getByRole('heading', { name: 'Welcome back, Remembered.' })).toBeVisible();
+      await expect(returning.getByRole('heading', { name: /Good (morning|afternoon|evening), Remembered\./ })).toBeVisible();
       await returning.getByRole('link', { name: 'Shop', exact: true }).click();
       await returning.getByRole('link', { name: 'The Roost', exact: true }).click();
       await returning.getByRole('button', { name: 'Log Out', exact: true }).click();
@@ -64,7 +64,7 @@ test.describe('customer remembered login', () => {
       await other.getByText('Another way to sign in / recover my membership', { exact: true }).click();
       await other.getByLabel('Saved recovery key', { exact: true }).fill(recovery);
       await other.getByRole('button', { name: 'Recover my Roost', exact: true }).click();
-      await expect(other.getByRole('heading', { name: 'Welcome back, Remembered.' })).toBeVisible();
+      await expect(other.getByRole('heading', { name: /Good (morning|afternoon|evening), Remembered\./ })).toBeVisible();
       expect(await other.getByLabel('Roost recovery key', { exact: true }).inputValue()).not.toBe(recovery);
       expect((await (await other.request.get(f.origin + '/api/roost/me?workspace=' + f.id)).json()).member.id).toBe(account);
       await other.getByRole('button', { name: 'I saved my recovery key', exact: true }).click();
@@ -73,10 +73,10 @@ test.describe('customer remembered login', () => {
       await installTestPasskey(replacement, info, f.origin);
       await replacement.goto(f.origin + '/roost');
       await replacement.getByRole('button', { name: 'Add a passkey on this device', exact: true }).click();
-      await expect(replacement.getByRole('heading', { name: 'Welcome back, Remembered.' })).toBeVisible();
+      await expect(replacement.getByRole('heading', { name: /Good (morning|afternoon|evening), Remembered\./ })).toBeVisible();
       await replacement.getByRole('button', { name: 'Log Out', exact: true }).click();
       await replacement.getByRole('button', { name: 'Sign in with a passkey', exact: true }).click();
-      await expect(replacement.getByRole('heading', { name: 'Welcome back, Remembered.' })).toBeVisible();
+      await expect(replacement.getByRole('heading', { name: /Good (morning|afternoon|evening), Remembered\./ })).toBeVisible();
       await replacement.evaluate(() => window.scrollTo(0, 0));
       await replacement.screenshot({ path: `qa-results/roost-${info.project.name}.png`, fullPage: true, scale: 'css' });
       expect(await replacement.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
@@ -85,7 +85,7 @@ test.describe('customer remembered login', () => {
   test('cross-tab logout and restored history never retain private account fields', async ({ page, context }, info) => {
     await join(page, info);
     const tab = await context.newPage(); await tab.goto(f.origin + '/roost');
-    await expect(tab.getByRole('heading', { name: 'Welcome back, Remembered.' })).toBeVisible();
+    await expect(tab.getByRole('heading', { name: /Good (morning|afternoon|evening), Remembered\./ })).toBeVisible();
     await page.getByRole('button', { name: 'Log Out', exact: true }).click();
     await expect(tab.getByRole('heading', { name: 'Make yourself at home.' })).toBeVisible();
     await expect(tab.getByLabel('Name', { exact: true })).toHaveValue('');

@@ -46,7 +46,12 @@ export async function primaryFixture({ experience = false, management = false, c
   };
   try {
     for (let attempt = 0; attempt < 100; attempt++) {
-      try { if ((await fetch('http://' + hostname + ':' + port + '/api/site', { headers: authority ? { 'Cf-Access-Jwt-Assertion': authority.token } : {} })).ok) return { id, key, authority, setupToken, origin: 'http://' + hostname + ':' + port, close }; } catch {}
+      try {
+        const response = await fetch('http://' + hostname + ':' + port + '/api/site', { headers: authority ? { 'Cf-Access-Jwt-Assertion': authority.token } : {} });
+        // A different test may already own the requested port. Never treat its
+        // successful response as readiness for this fixture's database.
+        if (response.ok && (await response.json()).id === id) return { id, key, authority, setupToken, origin: 'http://' + hostname + ':' + port, close };
+      } catch {}
       if (child.exitCode !== null) throw new Error('Isolated publishing fixture exited before readiness.');
       await new Promise((resolve) => setTimeout(resolve, 50));
     }

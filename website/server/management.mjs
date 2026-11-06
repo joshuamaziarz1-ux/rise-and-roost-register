@@ -1,3 +1,4 @@
+import { creditProgram, creditBalance, manageCredits, finalizeCredit, cancelCredit, reopenCredit } from './return-credits.mjs';
 import { defaultCalendar, calendarConfig, paymentDestination, providers, pickupDeadline, orderAttention, paymentReadiness } from '../public/commerce.mjs';
 import { ZONE, localInstant, clone } from '../public/model.mjs';
 import { trackingPath } from '../public/orders.mjs';
@@ -50,9 +51,9 @@ export function financialReport(orders, range) {
   const counts = new Map();
   for (const o of orders.filter(o => o.status !== 'canceled' && o.customer?.memberId)) counts.set(o.customer.memberId, (counts.get(o.customer.memberId) || 0) + 1);
   return { range, verifiedSales, salesByPaymentMethod: [...methods].map(([method, value]) => ({ method, value })), refunds, verificationCorrections: corrected, netVerifiedReceipts: verifiedSales - refunds,
-    orderValue: placed.reduce((n, o) => n + o.total, 0), ordersPlaced: placed.length,
+    orderValue: placed.reduce((n, o) => n + (o.subtotal ?? o.total), 0), returnCreditUsed: placed.filter(o => o.returnCredit?.status === 'used').reduce((n, o) => n + o.creditApplied, 0), ordersPlaced: placed.length,
     canceledOrders: placed.filter(o => o.status === 'canceled').length,
-    canceledOrderValue: placed.filter(o => o.status === 'canceled').reduce((n, o) => n + o.total, 0),
+    canceledOrderValue: placed.filter(o => o.status === 'canceled').reduce((n, o) => n + (o.subtotal ?? o.total), 0),
     reportedValue: placed.filter(o => o.paymentStatus === 'reported' && o.status !== 'canceled').reduce((n, o) => n + o.total, 0),
     outstandingValue: placed.filter(o => !o.paymentVerifiedAt && o.status !== 'canceled' && !o.resolution).reduce((n, o) => n + o.total, 0),
     popularProducts: [...products.values()].sort((a, b) => b.quantity - a.quantity),
@@ -104,8 +105,8 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     const products = doc.products.map(p => ({ ...p, booked: bookedUnits(ledger, p.id), available: Math.max(0, p.stock - bookedUnits(ledger, p.id)), availableToOrder: remaining.get(p.id) || 0 }));
     const contentOnly = document => { const d = clone(document); delete d.products; delete d.pickups; delete d.pickupSchedule; delete d.orderingPaused; delete d.freshAnnouncement; return d; };
     return { ...ownerResult(source), hasContentDraft: canonical(contentOnly(JSON.parse(source.draft_json))) !== canonical(contentOnly(doc)), orders: ownerResult(source).orders.map(o => ({ ...o, businessDate: businessDay(o.at), attention: orderAttention(o, now) })), ledgerVersion: source.ledger_version, actor, layoutLocked: true, now: at,
-      management: { pickups: calendarPickups(doc, now, ledger, { includeHistory: true }), pickupSchedule: pickupSchedule(doc), paymentReadiness: paymentReadiness(m.settings), settings: m.settings || { calendar: defaultCalendar(), payments: {} }, reports: financialReport(ledger.orders, range), today, products,
-        members: members.map(m => ({ id: m.id, profile: JSON.parse(m.profile_json), createdAt: m.created_at,
+      management: { returnCredits: creditProgram(ledger), pickups: calendarPickups(doc, now, ledger, { includeHistory: true }), pickupSchedule: pickupSchedule(doc), paymentReadiness: paymentReadiness(m.settings), settings: m.settings || { calendar: defaultCalendar(), payments: {} }, reports: financialReport(ledger.orders, range), today, products,
+        members: members.map(m => ({ credits: creditBalance(ledger, m.id), id: m.id, profile: JSON.parse(m.profile_json), createdAt: m.created_at,
           orderCount: ledger.orders.filter(o => o.customer?.memberId === m.id).length,
           benefits: (ledger.management?.benefits || []).filter(b => b.memberId === m.id) })), comments,
         audit: (m.audit || []).slice(0, 500), benefits: m.benefits || [],
@@ -166,7 +167,18 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     if (input.orderVersion !== (o.version || 1)) bad('This order changed on another device. Refresh it before trying again.', 409);
     o.audit ||= []; return o;
   };
-  if (['/api/manage/payment-destination','/api/manage/payment-test-start','/api/manage/payment-test-confirm'].includes(path)) {
+  if (path.startsWith('/api/manage/credit-')) {
+    if (input.ledgerVersion !== row.ledger_version) bad('Credit settings, a balance, or an order changed. Refresh and review before confirming.', 409);
+    if (path === '/api/manage/credit-expire') {
+      const o = order();
+      if (input.confirmed !== true || o.returnCredit?.status !== 'reserved' || o.paymentVerifiedAt || o.resolution || o.contact?.unresolved || o.dispute?.open || !o.pickupDeadline || Date.parse(o.pickupDeadline) > now) bad('Only an expired, unverified credit reservation can be released here. Review payment records first.');
+      const reason = text(input.reason, 500, 'the expiry review reason', true);
+      if (reason.length < 5) bad('Record a clear expiry review reason.');
+      cancelCredit(ledger, o, now, actor); o.status = 'canceled'; o.keepInventory = false; o.canceledAt = at; o.version = (o.version || 1) + 1;
+      o.audit.push({ action: 'Expired order canceled after owner review: ' + reason, at, author: actor.name });
+      description = 'Expired order canceled and reserved credit released: ' + reason; result = { orderId: o.id };
+    } else ({ description, result } = await manageCredits({ ledger, input, action: path.slice('/api/manage/'.length), now, actor, db, workspaceId: row.id }));
+  } else if (['/api/manage/payment-destination','/api/manage/payment-test-start','/api/manage/payment-test-confirm'].includes(path)) {
     const provider = input.provider;
     if (!Object.hasOwn(providers,provider)) bad('Choose PayPal, Venmo or Cash App.');
     m.settings ||= { calendar: defaultCalendar(), payments: {} }; m.settings.payments ||= {};
@@ -241,6 +253,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     description = input.open ? 'Payment dispute recorded for review' : 'Payment dispute resolved'; o.audit.push({ action: description + ': ' + reason, at, author: actor.name }); result = { orderId: o.id };
   } else if (path === '/api/manage/resolve-pickup') {
     const o = order(), reason = text(input.reason, 500, 'the owner pickup review', true);
+    if (o.returnCredit?.status === 'reserved') bad('Verify the remaining payment or cancel the order to release credit before resolving this pickup.', 409);
     if (input.confirmed !== true || !['forfeited','reviewed'].includes(input.resolution)) bad('Confirm an owner-reviewed resolution.');
     if (o.contact?.unresolved || o.dispute?.open) bad('Resolve customer communications and any payment dispute before recording a pickup resolution.', 409);
     if (['canceled','picked-up'].includes(o.status) || o.resolution) bad('This order already has a final resolution.', 409);
@@ -391,6 +404,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     if (o.status === 'canceled') bad('Check cancellation and payment records before verifying a canceled order.');
     const evidence = text(input.evidence || '', 500, 'the optional transaction reference');
     if (input.independentlyVerified !== true || !['paypal', 'venmo', 'cashapp', 'bank_record', 'cash_record', 'external_record'].includes(input.method)) bad('Confirm that you checked your payment account and received the full order total.');
+    finalizeCredit(ledger, o, now);
     o.paymentStatus = 'verified'; o.paymentVerifiedAt = at;
     o.verifications ||= []; o.verifications.push({ id: opaque(), at, amount: o.total, actor, method: input.method, evidence });
     delete o.paymentCorrectedAt;
@@ -451,6 +465,8 @@ export async function managementApi({ request, db, now, row, actor, input, path,
       }
     }
     const previous = o.status;
+    if (target === 'canceled') cancelCredit(ledger, o, now, actor);
+    else if (previous === 'canceled') reopenCredit(ledger, o, now);
     if (target === 'canceled') o.keepInventory = input.releaseInventory !== true;
     o.status = target;
     const stamp = { preparing: 'preparingAt', ready: 'readyAt', 'picked-up': 'pickedUpAt', canceled: 'canceledAt' }[target];
@@ -473,6 +489,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     if (!input.preferences || keys.some(k => typeof input.preferences[k] !== 'boolean')) bad('Check notification preferences.');
     m.notificationPreferences = Object.fromEntries(keys.map(k => [k, input.preferences[k]])); description = 'Studio notification preferences saved';
   } else if (path === '/api/manage/benefit') {
+    if (ledger.returnCredits) bad('Use The Roost → Return Credits for monetary transactions. Legacy records are retained.', 409);
     if (!await first('SELECT id FROM roost_members WHERE id=? AND workspace_id=?', input.memberId, row.id)) bad('Choose a member of this workspace.');
     if (!['bottle_return', 'credit', 'debit', 'reversal'].includes(input.kind)) bad('Choose a return or credit adjustment.');
     if (!cents(input.amount, input.kind === 'bottle_return' ? 10000 : 1000000) || input.amount <= 0) bad('Use a positive quantity or credit amount.');

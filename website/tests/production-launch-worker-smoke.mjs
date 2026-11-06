@@ -90,5 +90,34 @@ try {
   s = await mutation('calendar-date', { pickup: { ...pickup, closed: true }, confirmExistingOrders: true });
   assert.deepEqual(s.orders[0].pickup, order.pickup);
   assert.equal(s.published.pickups.length, 1); assert.equal(s.published.pickups[0].closed, true);
-  console.log(JSON.stringify({ actualProductionWorkerdD1: true, customerPasskeysSessionsRecoveryAndRevocation: true, individualSignedOwnerIdentity: true, privateApiAuthorization: true, manualPaymentVerification: true, duplicateVerificationPrevented: true, atomicInventoryRace: true, trackingAndFulfillment: true, automaticCalendar: true, calendarExceptionPreservesOrder: true, remoteRequests: 0, remoteWrites: 0 }));
+  // Exercise monetary events through the compiled production routes and D1.
+  options = (await customer('options', { kind: 'login' })).options;
+  await customer('verify', { response: replacement.login(options, origin) });
+  await customer('favorite', { productId: p.id, saved: true });
+  assert.deepEqual((await customer('me')).favorites, [p.id]);
+  await mutation('credit-settings', { enabled: true, termsReviewed: true, confirmed: true });
+  const returnItem = await mutation('credit-item', { name: 'Synthetic approved bottle', cents: 1000, status: 'active', confirmed: true });
+  const item = returnItem.management.returnCredits.items[0];
+  await mutation('credit-return', { memberId: joined.member.id, lines: [{ id: item.id, version: item.version, qty: 1 }], confirmed: true });
+  // Separate synthetic stock and pickup capacity for member checkout; existing
+  // completed guest records above stay in this disposable database.
+  const next = (await snapshot()).published; next.products[0].stock = 5; next.pickups = []; next.pickupSchedule.capacity = 10;
+  await db.prepare('UPDATE workspaces SET published_json=?,draft_json=?,published_revision=published_revision+1,revision=revision+1 WHERE id=?').bind(JSON.stringify(next), JSON.stringify(next), PRODUCTION_WORKSPACE_ID).run();
+  const memberSite = await (await call('/api/site')).json();
+  const memberInput = { ...input, revision: memberSite.revision, pickupId: memberSite.document.pickups[0].id, checkoutMode: 'member', creditCents: 700, requestId: crypto.randomUUID() };
+  const memberHeaders = { Cookie: [...cookies].map(([k,v]) => k+'='+v).join('; ') };
+  const creditedResponse = await call('/api/orders', memberInput, false, memberHeaders); assert.equal(creditedResponse.status, 201, await creditedResponse.clone().text());
+  const credited = await creditedResponse.json(); assert.equal(credited.total, 200); assert.equal(credited.returnCredit.status, 'reserved');
+  assert.equal((await customer('me')).credits.available, 300); assert.equal((await customer('me')).credits.reserved, 700);
+  const duplicate = await call('/api/orders', memberInput, false, memberHeaders); assert.equal((await duplicate.json()).id, credited.id);
+  s = await mutation('verify-payment', { id: credited.id, orderVersion: 1, method: 'paypal', independentlyVerified: true });
+  assert.equal((await customer('me')).credits.reserved, 0);
+  s = await mutation('fulfillment', { id: credited.id, orderVersion: s.orders.find(o => o.id === credited.id).version, status: 'canceled', confirmCancellation: true, releaseInventory: true, reason: 'Synthetic credit cancellation' });
+  assert.equal((await customer('me')).credits.available, 1000);
+  const full = await call('/api/orders', { ...memberInput, requestId: crypto.randomUUID(), creditCents: 900 }, false, memberHeaders);
+  assert.equal(full.status, 201, await full.clone().text()); const fullOrder = await full.json(); assert.equal(fullOrder.total, 0); assert.equal(fullOrder.returnCredit.status, 'used'); assert.equal(fullOrder.paymentStatus, 'not_required');
+  assert.equal((await customer('me')).credits.available, 100);
+  assert.equal((await call('/api/orders', { ...memberInput, requestId: crypto.randomUUID(), creditCents: 200 }, false, memberHeaders)).status, 409);
+  assert.equal((await call('/studio/api/manage/credit-adjust', { memberId: joined.member.id, delta: 999999, operationId: crypto.randomUUID(), confirmed: true, reason: 'forged' }, false, memberHeaders)).status, 401);
+  console.log(JSON.stringify({ actualProductionWorkerdD1: true, returnCreditsFavoritesReservationFinalizationCancellationAndZeroDue: true, customerPasskeysSessionsRecoveryAndRevocation: true, individualSignedOwnerIdentity: true, privateApiAuthorization: true, manualPaymentVerification: true, duplicateVerificationPrevented: true, atomicInventoryRace: true, trackingAndFulfillment: true, automaticCalendar: true, calendarExceptionPreservesOrder: true, remoteRequests: 0, remoteWrites: 0 }));
 } finally { await mf.dispose(); }

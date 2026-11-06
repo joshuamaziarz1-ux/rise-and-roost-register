@@ -129,3 +129,8 @@
   .experience .basket-link { padding: 8px; }
 }
 @media (prefers-reduced-motion: reduce) { .experience * { scroll-behavior: auto !important; transition: none !important; } }
+
+/* The Roost uses the existing colors, type and controls. */
+.roost-dashboard{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;margin:1.5rem 0}.roost-dashboard section,.roost-credit-panel,.roost-favorites{background:var(--surface,#fffdf8);border:1px solid var(--border,#ddd6c9);border-radius:var(--radius,16px);padding:1.25rem}.experience .roost-dashboard h2{font-size:1.25rem;margin-top:0}.roost-shortcuts{grid-column:1/-1;display:flex;gap:.75rem;flex-wrap:wrap}.roost-credit-panel,.roost-favorites{margin-top:1.5rem;scroll-margin-top:1rem}.credit-balance{font-size:1.5rem}.credit-transaction{border-bottom:1px solid #ddd6c9;padding:.75rem 0}.credit-transaction p{margin:.4rem 0}.credit-transaction time{font-size:.85rem}.reorder-links{display:flex;flex-wrap:wrap;gap:.5rem}.roost-favorites .product-grid{margin:1rem 0}.roost-page .product-card{min-width:0}.roost-page section{min-width:0}.roost-page input{max-width:100%}@media(max-width:760px){.roost-dashboard{grid-template-columns:1fr}.roost-dashboard section{padding:1rem}.roost-shortcuts>*{flex:1}.roost-favorites .product-grid{grid-template-columns:1fr}}
+
+.experience .roost-dashboard h2{font-size:22px;letter-spacing:-.5px;margin:0 0 12px}.experience .roost-dashboard p,.experience .roost-credit-panel p,.experience .roost-favorites>p{font-size:15px}.experience .roost-credit-panel h2,.experience .roost-favorites>h2{font-size:28px;letter-spacing:-.6px}.experience .credit-balance{font-size:24px}
