@@ -1563,7 +1563,7 @@ export async function start(root) {
   try {
     const info = await apiRequest("/api/studio-info");
     if (info.productionOwnerAccess) {
-      history.replaceState({}, '', '/studio' + location.hash);
+      history.replaceState(history.state, '', '/studio' + location.hash);
       try {
         const initial = await apiRequest('/studio/api/studio');
         await (await import('./management.mjs')).start(root, initial);

@@ -135,3 +135,10 @@
 .ms-help :is(summary, button, input):focus-visible { outline: 3px solid #83613e; outline-offset: 3px; }
 @media (max-width: 600px) { .ms-help-category { padding: 1rem; } .ms-help-topic ol { padding-left: 1.4rem; } }
 .ms-help [hidden] { display: none !important; }
+
+.management .ms-history { display:flex; gap:6px; margin-right:auto; }
+.management .ms-history button { min-height:44px; padding:8px 10px; font-size:13px; white-space:nowrap; }
+@media(max-width:899px) {
+  .management .ms-top { flex-wrap:wrap; }
+  .management .ms-history { order:2; flex-basis:100%; }
+}

@@ -3,7 +3,7 @@ import { searchHelp } from './help-content.mjs';
 
 // Only the results change while typing, preserving focus and cursor position.
 // Local view state survives Studio's background snapshot refreshes.
-export function createHelpGuide(back) {
+export function createHelpGuide() {
   let query = '';
   const expanded = new Set();
   return function renderHelpGuide() {
@@ -26,7 +26,7 @@ export function createHelpGuide(back) {
       if (!count) results.append(h('p', { class: 'ms-empty' }, 'No help topics match your search. Try fewer words, or clear your search to see the full guide.'));
     }
     update();
-    return h('div', { class: 'ms-help' }, button('← Settings', back, { class: 'ms-text' }), h('h1', { tabindex: '-1' }, 'Studio Help Guide'),
+    return h('div', { class: 'ms-help' }, h('h1', { tabindex: '-1' }, 'Studio Help Guide'),
       h('p', {}, 'Your Rise & Roost owner’s manual. Find everyday answers here, Danielle.'),
       h('div', { class: 'ms-panel' }, input, clear, status), results);
   };

@@ -5,6 +5,7 @@ import { productionFixture, installProductionTestKeys } from './production-fixtu
 import worker from '../server/worker.mjs';
 
 export async function productionBrowserFixture() {
+  const originalFetch = globalThis.fetch;
   installProductionTestKeys();
   const h = await productionFixture(), root = resolve(new URL('../public/', import.meta.url).pathname);
   const mime = { '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.webmanifest': 'application/manifest+json', '.html': 'text/html' };
@@ -33,5 +34,5 @@ export async function productionBrowserFixture() {
   return { ...h, origin, setOwnerToken(owner, token) {
     if (!['a', 'b'].includes(owner)) throw Error('Unknown synthetic owner.');
     h[owner === 'a' ? 'ownerA' : 'ownerB'] = token;
-  }, close: async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); h.sql.close(); } };
+  }, close: async () => { try { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); h.sql.close(); } finally { globalThis.fetch = originalFetch; } } };
 }
