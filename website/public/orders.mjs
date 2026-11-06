@@ -1,4 +1,6 @@
 export const paymentLabels = {
+  awaiting_cash: 'Awaiting Cash at Pickup',
+  closed_unpaid: 'Closed Unpaid / Not Picked Up',
   not_required: 'No payment required',
   not_collected: "Awaiting Payment Verification",
   reported: "Awaiting Payment Verification",

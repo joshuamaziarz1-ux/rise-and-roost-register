@@ -1,3 +1,4 @@
+import { CASH_METHOD, outstandingCash, requireCash } from './cash-pickup.mjs';
 import { creditProgram, creditBalance, manageCredits, finalizeCredit, cancelCredit, reopenCredit } from './return-credits.mjs';
 import { defaultCalendar, calendarConfig, paymentDestination, providers, pickupDeadline, orderAttention, paymentReadiness } from '../public/commerce.mjs';
 import { ZONE, localInstant, clone } from '../public/model.mjs';
@@ -106,7 +107,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     const contentOnly = document => { const d = clone(document); delete d.products; delete d.pickups; delete d.pickupSchedule; delete d.orderingPaused; delete d.freshAnnouncement; return d; };
     return { ...ownerResult(source), hasContentDraft: canonical(contentOnly(JSON.parse(source.draft_json))) !== canonical(contentOnly(doc)), orders: ownerResult(source).orders.map(o => ({ ...o, businessDate: businessDay(o.at), attention: orderAttention(o, now) })), ledgerVersion: source.ledger_version, actor, layoutLocked: true, now: at,
       management: { returnCredits: creditProgram(ledger), pickups: calendarPickups(doc, now, ledger, { includeHistory: true }), pickupSchedule: pickupSchedule(doc), paymentReadiness: paymentReadiness(m.settings), settings: m.settings || { calendar: defaultCalendar(), payments: {} }, reports: financialReport(ledger.orders, range), today, products,
-        members: members.map(m => ({ credits: creditBalance(ledger, m.id), id: m.id, profile: JSON.parse(m.profile_json), createdAt: m.created_at,
+        members: members.map(m => ({ cashPrivilege: ledger.management?.cashPrivileges?.[m.id] || { allowed: true, reason: '' }, credits: creditBalance(ledger, m.id), id: m.id, profile: JSON.parse(m.profile_json), createdAt: m.created_at,
           orderCount: ledger.orders.filter(o => o.customer?.memberId === m.id).length,
           benefits: (ledger.management?.benefits || []).filter(b => b.memberId === m.id) })), comments,
         audit: (m.audit || []).slice(0, 500), benefits: m.benefits || [],
@@ -167,7 +168,44 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     if (input.orderVersion !== (o.version || 1)) bad('This order changed on another device. Refresh it before trying again.', 409);
     o.audit ||= []; return o;
   };
-  if (path.startsWith('/api/manage/credit-')) {
+  if (path === '/api/manage/cash-settings' || path === '/api/manage/cash-privilege') {
+    if (input.ledgerVersion !== row.ledger_version) bad('Cash settings or orders changed. Refresh and review before saving.', 409);
+    if (path.endsWith('cash-settings')) {
+      if (typeof input.enabled !== 'boolean') bad('Choose whether Cash at Pickup is enabled.');
+      m.settings ||= {}; m.settings.cashPickupEnabled = input.enabled;
+      description = 'Cash at Pickup ' + (input.enabled ? 'enabled for eligible Roost members' : 'disabled for new orders');
+    } else {
+      if (typeof input.allowed !== 'boolean' || !await first('SELECT id FROM roost_members WHERE id=? AND workspace_id=?', input.memberId, row.id)) bad('Choose an actual Roost member and cash privilege.');
+      m.cashPrivileges ||= {};
+      const before = clone(m.cashPrivileges[input.memberId] || { allowed: true });
+      m.cashPrivileges[input.memberId] = { allowed: input.allowed, reason: text(input.reason || '', 500, 'the optional internal reason'), at, actor };
+      m.audit.unshift({ id: opaque(), kind: 'cash-privilege-history', memberId: input.memberId, before, after: clone(m.cashPrivileges[input.memberId]), at, actor });
+      description = 'Member Cash at Pickup privilege ' + (input.allowed ? 'restored' : 'disabled');
+    }
+  } else if (path === '/api/manage/cash-received' || path === '/api/manage/cash-unpaid') {
+    const o = order();
+    if (!outstandingCash(o)) bad('Choose an unresolved, unpaid Cash at Pickup order.', 409);
+    if (input.confirmed !== true || input.amount !== o.total) bad('Confirm the exact remaining cash amount.');
+    if (path.endsWith('cash-received')) {
+      finalizeCredit(ledger, o, now);
+      o.paymentStatus = 'verified'; o.paymentVerifiedAt = at;
+      o.verifications ||= []; o.verifications.push({ id: opaque(), at, amount: o.total, actor, method: CASH_METHOD });
+      delete o.paymentCorrectedAt;
+      o.verification = { method: CASH_METHOD, at, author: actor.name, actorId: actor.id };
+      o.paidReceipt = { number: 'RR-PAID-' + o.id.slice(0, 16).toUpperCase() + '-' + o.verifications.length, orderNumber: o.orderNumber, issuedAt: at, paidAt: at, total: o.total, currency: 'USD', lines: clone(o.lines), verification: 'An authorized owner confirmed cash received', merchant: o.merchant, beta: o.environment !== 'production', websiteProcessedPayment: false };
+      description = 'Cash received: ' + o.total + ' cents; return credit finalized'; enqueue(o, 'verified', at, opaque);
+    } else {
+      const reason = text(input.reason, 500, 'the unpaid-order review reason', true);
+      if (reason.length < 5) bad('Record a clear reason for closing this unpaid order.');
+      if (o.contact?.unresolved || o.dispute?.open) bad('Resolve customer communications and disputes before closing this order.', 409);
+      if (!orderAttention(o, now).overdue) bad('Use cancellation before the pickup deadline. Closing as not picked up requires a passed deadline.', 409);
+      cancelCredit(ledger, o, now, actor);
+      o.resolution = { kind: 'unpaid_not_picked_up', reason, at, actor, deadline: o.pickupDeadline }; o.archivedAt = at;
+      o.paymentStatus = 'closed_unpaid';
+      description = 'Closed as Unpaid / Not Picked Up: ' + reason + '; reserved return credit released; no fee or collection';
+    }
+    o.version = (o.version || 1) + 1; o.audit.push({ action: description, at, author: actor.name }); result = { orderId: o.id };
+  } else if (path.startsWith('/api/manage/credit-')) {
     if (input.ledgerVersion !== row.ledger_version) bad('Credit settings, a balance, or an order changed. Refresh and review before confirming.', 409);
     if (path === '/api/manage/credit-expire') {
       const o = order();
@@ -253,6 +291,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     description = input.open ? 'Payment dispute recorded for review' : 'Payment dispute resolved'; o.audit.push({ action: description + ': ' + reason, at, author: actor.name }); result = { orderId: o.id };
   } else if (path === '/api/manage/resolve-pickup') {
     const o = order(), reason = text(input.reason, 500, 'the owner pickup review', true);
+    if (outstandingCash(o)) bad('Use Close as Unpaid / Not Picked Up or cancel this cash order.', 409);
     if (o.returnCredit?.status === 'reserved') bad('Verify the remaining payment or cancel the order to release credit before resolving this pickup.', 409);
     if (input.confirmed !== true || !['forfeited','reviewed'].includes(input.resolution)) bad('Confirm an owner-reviewed resolution.');
     if (o.contact?.unresolved || o.dispute?.open) bad('Resolve customer communications and any payment dispute before recording a pickup resolution.', 409);
@@ -398,6 +437,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     description = path.endsWith('restore-content') ? 'Website content restored' : 'Website content published';
   } else if (path === '/api/manage/verify-payment') {
     const o = order();
+    if (o.selectedPaymentMethod === CASH_METHOD) bad('Use Mark Cash Received and confirm the cash amount.', 409);
     if (o.total === 0) bad('This order does not require payment.');
     if (o.paymentVerifiedAt && !o.paymentCorrectedAt) return json({ ...await snapshot(), duplicate: true });
     if (o.resolution) bad('Review the pickup resolution before verifying payment.');
@@ -418,6 +458,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     const o = order();
     if (!o.paymentVerifiedAt || input.independentlyChecked !== true) bad('Check independent records and confirm this mistaken-verification correction.');
     if ((o.refunds || []).reduce((n, r) => n + r.amount, 0)) bad('This payment has refund records. Review both payment and refund records with the operator before voiding verification.');
+    if (o.selectedPaymentMethod === CASH_METHOD && ledger.orders.some(other => other.id !== o.id && other.customer?.memberId === o.customer?.memberId && outstandingCash(other))) bad('Resolve the member’s other cash order before correcting this payment.', 409);
     const reason = text(input.reason, 500, 'the correction reason', true); if (reason.length < 5) bad('Give a clear correction reason of at least five characters.');
     o.verifications ||= [{ id: opaque(), at: o.paymentVerifiedAt, amount: o.paidReceipt?.total ?? o.total, actor: { name: o.verification?.author || 'Previous owner' } }];
     const payment = o.verifications.findLast(v => !v.voidedAt);
@@ -426,7 +467,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     o.paymentCorrections ||= []; o.paymentCorrections.push({ id: opaque(), at, amount: payment.amount, reason, actor });
     o.receiptHistory ||= []; if (o.paidReceipt) o.receiptHistory.push({ ...o.paidReceipt, voidedAt: at, voidReason: reason });
     delete o.paidReceipt; delete o.paymentVerifiedAt; delete o.verification;
-    o.paymentStatus = o.paymentReportedAt ? 'reported' : 'not_collected'; o.paymentCorrectedAt = at;
+    o.paymentStatus = o.selectedPaymentMethod === CASH_METHOD ? 'awaiting_cash' : o.paymentReportedAt ? 'reported' : 'not_collected'; o.paymentCorrectedAt = at;
     o.version = (o.version || 1) + 1; description = 'Mistaken payment verification voided; original record retained';
     o.audit.push({ action: description + ': ' + reason, author: actor.name, at }); result = { orderId: o.id };
   } else if (path === '/api/manage/refund') {
@@ -453,6 +494,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     const reason = text(input.reason || '', 500, 'the status reason', correction || target === 'canceled');
     if (correction && reason.length < 5) bad('Give a correction reason of at least five characters.');
     if (o.status === 'canceled' && target !== 'canceled') {
+      if (o.selectedPaymentMethod === CASH_METHOD && !o.paymentVerifiedAt) requireCash(ledger, o.customer?.memberId, o.id);
       const pickups = calendarPickups(published, now, ledger, { includeHistory: true });
       const pickup = pickups.find(p => p.id === o.pickupId);
       if (!pickup || pickup.closed) bad('This canceled order cannot be reopened into a closed or removed pickup.');

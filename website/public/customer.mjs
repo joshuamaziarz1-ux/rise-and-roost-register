@@ -30,6 +30,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
   const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('rr-roost-' + workspaceId) : null;
   const joinProfile = { name: '', preferredName: '', email: '', phone: '' };
   let profileDraft;
+  let cashPickup = {};
   const api = (path, data) => request(path + (data === undefined ? '?workspace=' + workspaceId : ''), data === undefined ? undefined : { ...data, workspaceId });
   const action = fn => async () => {
     if (busy) return;
@@ -39,7 +40,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     finally { busy = false; render(); }
   };
   function clearPrivate() {
-    generation++; member = null; orders = []; devices = []; favorites = []; credits = { available: 0, reserved: 0, enabled: false, items: [], transactions: [] }; recoveryKey = ''; profileDraft = undefined;
+    generation++; cashPickup = {}; member = null; orders = []; devices = []; favorites = []; credits = { available: 0, reserved: 0, enabled: false, items: [], transactions: [] }; recoveryKey = ''; profileDraft = undefined;
     Object.assign(joinProfile, { name: '', preferredName: '', email: '', phone: '' });
     Object.assign(commentDraft, { name: '', body: '', consent: false }); onMember(null);
   }
@@ -57,9 +58,9 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
         if (started !== generation) return false;
         const changed = member?.id !== result.member?.id;
         if (!result.member && member) { clearPrivate(); }
-        const viewChanged = !loaded || changed || JSON.stringify(orders) !== JSON.stringify(result.orders || []) || JSON.stringify(devices) !== JSON.stringify(result.devices || []) || JSON.stringify(credits) !== JSON.stringify(result.credits || { available: 0, reserved: 0, enabled: false, items: [], transactions: [] }) || JSON.stringify(favorites) !== JSON.stringify(result.favorites || []);
+        const viewChanged = JSON.stringify(cashPickup) !== JSON.stringify(result.cashPickup || {}) || !loaded || changed || JSON.stringify(orders) !== JSON.stringify(result.orders || []) || JSON.stringify(devices) !== JSON.stringify(result.devices || []) || JSON.stringify(credits) !== JSON.stringify(result.credits || { available: 0, reserved: 0, enabled: false, items: [], transactions: [] }) || JSON.stringify(favorites) !== JSON.stringify(result.favorites || []);
         credits = result.credits || { available: 0, reserved: 0, enabled: false, items: [], transactions: [] }; favorites = result.favorites || [];
-        member = result.member; orders = result.orders || []; devices = result.devices || []; loaded = true;
+        cashPickup = result.cashPickup || {}; member = result.member; orders = result.orders || []; devices = result.devices || []; loaded = true;
         if (changed) { profileDraft = member ? { ...member.profile } : undefined; onMember(member); }
         if (rerender && viewChanged) render();
         return viewChanged;
@@ -115,6 +116,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
           orders.length ? orders.map(order => h('article', { class: 'member-order' },
             h('div', {}, h('h3', {}, order.orderNumber), h('p', {}, pickupLabel(order.pickup))),
             h('p', {}, order.lines.map(l => `${l.qty} × ${l.name}`).join(', ')),
+            order.selectedPaymentMethod === 'cash_pickup' ? h('p', {}, 'Cash at Pickup · Cash Due: ' + money(order.paymentVerifiedAt || order.status === 'canceled' || order.resolution ? 0 : order.total)) : null,
             h('p', { class: 'order-state' }, paymentLabels[order.paymentStatus || 'not_collected'], ' · ', fulfillmentLabels[order.status || 'pending']),
             h('div', { class: 'member-order-bottom' }, h('strong', {}, money(order.total)), h('a', { href: order.trackingPath, class: 'primary-link' }, 'Track order')), h('div', { class: 'reorder-links' }, order.lines.map(l => getDocument().products?.some(p => p.id === l.productId) ? link('/product/' + l.productId, 'Reorder ' + l.name, 'text-button') : h('span', { class: 'small-note' }, l.name + ' is currently unavailable')))))
             : h('div', { class: 'gentle-empty' }, h('h3', {}, 'Something good is waiting.'), h('p', {}, 'Orders you place while signed in will appear here.'), link('/shop', 'Start Shopping', 'primary-link')),
@@ -220,5 +222,5 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
         h('section', { class: 'neighbor-notes', 'aria-label': 'Comments from our neighbors' }, h('h2', {}, 'Around the farmhouse table'),
           comments?.length ? comments.map(c => h('blockquote', {}, h('p', {}, c.body), h('cite', {}, c.name))) : h('p', {}, 'There’s always room for a good conversation.'))));
   }
-  return { refresh, roost, commentPage, refreshComments: loadComments, favoriteButton, get credits() { return credits; }, get member() { return member; } };
+  return { refresh, roost, commentPage, refreshComments: loadComments, favoriteButton, get cashPickup() { return cashPickup; }, get credits() { return credits; }, get member() { return member; } };
 }

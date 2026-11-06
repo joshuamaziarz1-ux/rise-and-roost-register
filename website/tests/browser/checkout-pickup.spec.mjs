@@ -149,8 +149,8 @@ test('payment cards expose availability, retain keyboard focus, and fit narrow s
     const p = (await f.call('/api/site')).data.document.products[0];
     await basket(page, f, [p]);
     const payments = page.getByRole('group', {name:'Choose payment method', exact:true});
-    await expect(payments.getByRole('button', {name:'Venmo',exact:true})).toBeDisabled();
-    await expect(payments.getByRole('button', {name:'Cash App',exact:true})).toBeDisabled();
+    await expect(payments.getByRole('button', {name:'Venmo',exact:true})).toHaveCount(0);
+    await expect(payments.getByRole('button', {name:'Cash App',exact:true})).toHaveCount(0);
     await expect(payments.getByRole('button', {name:'PayPal',exact:true})).toHaveAttribute('aria-pressed','true');
     await mkdir('qa-results/checkout', {recursive:true});
     await page.screenshot({path:`qa-results/checkout/unavailable-${info.project.name}.png`,fullPage:true});
@@ -173,8 +173,10 @@ test('payment cards expose availability, retain keyboard focus, and fit narrow s
       const box=await card.boundingBox();expect(box.height).toBeGreaterThanOrEqual(44);expect(box.width).toBeGreaterThanOrEqual(44);
       await page.screenshot({path:`qa-results/checkout/${name.replace(' ','-')}-${info.project.name}.png`,fullPage:true});
     }
-    // The next Tab reaches the policy disclosure, rather than restarting the page.
+    // Guest members invitation precedes the policy disclosure in keyboard order.
     await payments.getByRole('button',{name:'Cash App',exact:true}).press('Tab');
+    await expect(page.getByRole('link',{name:'Join The Roost to pay cash at pickup.'})).toBeFocused();
+    await page.getByRole('link',{name:'Join The Roost to pay cash at pickup.'}).press('Tab');
     await expect(page.locator('.checkout-policy summary')).toBeFocused();
     const originalViewport=page.viewportSize();
     for (const width of [320,375,390,768,1440]) {
