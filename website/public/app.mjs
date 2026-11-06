@@ -554,7 +554,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     });
     emailInput.required = emailOptIn;
     const customerFields = experience ? h("div", { class: "checkout-details" },
-      h("h2", {}, "Your pickup details"),
+      h("h2", {}, "Contact information"),
       h("p", { class: "small-note" }, "We’ll know who your order is for."),
       ...[["Name", "name", "text", "name"], ["Email (optional)", "email", "email", "email"], ["Phone (optional)", "phone", "tel", "tel"]].map(([label, key, type, autocomplete]) => h("label", { class: "field" }, label,
         h("input", { name: "checkout-" + key, type, autocomplete, required: key === "name", maxlength: key === "name" ? 80 : key === "phone" ? 32 : 254, value: checkoutProfile[key], oninput: e => { checkoutProfile[key] = e.target.value; updateActionValidity(); } })))) : null;
@@ -562,9 +562,13 @@ if (!location.pathname.startsWith('/studio/preview/') && (
       commerceEnabled && (!policyAccepted || remainingDue > 0 && !paymentDestinations[checkoutPaymentMethod]) ||
       emailOptIn && !emailInput.checkValidity() ||
       experience && (!checkoutProfile.name.trim() || [...customerFields.querySelectorAll('input')].some(input => !input.checkValidity()));
-    const updateActionValidity = () => { action.disabled = checkoutInvalid(); };
+    const updateActionValidity = () => {
+      action.disabled = checkoutInvalid();
+      action.textContent = orderSubmitting ? 'Placing your order…' : experience ? 'Place preorder' : doc.ui.checkout;
+      action.setAttribute('aria-busy', String(orderSubmitting));
+    };
     const action = button(
-      experience ? "Place preorder" : doc.ui.checkout,
+      orderSubmitting ? "Placing your order…" : experience ? "Place preorder" : doc.ui.checkout,
       guard(async () => {
         if (orderSubmitting) return;
         if (invalidBasket) throw new Error('Some items are no longer available for online ordering. Please update your basket before continuing.');
@@ -625,11 +629,12 @@ if (!location.pathname.startsWith('/studio/preview/') && (
         class: "primary-link",
         type: experience ? "submit" : "button",
         disabled: checkoutInvalid(),
+        "aria-busy": orderSubmitting,
       },
     );
     return h(
       "main",
-      { class: "section-inner cart-page" },
+      { class: "section-inner cart-page checkout-page" },
       h("h1", {}, doc.ui.cart),
       invalidBasket ? h('div', { class: 'basket-availability-warning', role: 'status' },
         h('p', {}, 'Some items are no longer available for online ordering. Remove unavailable items or lower their quantities before continuing.'),
@@ -651,10 +656,38 @@ if (!location.pathname.startsWith('/studio/preview/') && (
           )
         : h(
             experience ? "form" : "div",
-            { class: "cart-layout", onsubmit: e => e.preventDefault() },
+            { class: "cart-layout checkout-redesign", onsubmit: e => e.preventDefault() },
             h(
               "div",
               {},
+              customerFields,
+              h('section', { class: 'checkout-pickup', 'aria-label': 'Pickup details' },
+                h("h2", {}, doc.ui.pickup),
+                eligiblePickups.length ? pickupChoices : h('p', { class: 'pickup-empty', role: 'status' },
+                  doc.orderingPaused ? 'Ordering is currently paused. No pickup dates are available. Please check back soon.' : 'No eligible pickup dates are available for all items in your basket. Please check back soon or update your basket.'),
+                experience ? pickupLocation(doc.business) : null,
+                chosen
+                  ? h(
+                      "div",
+                      { class: "deadline" },
+                      h("strong", {}, doc.ui.orderBy),
+                      h(
+                        "p",
+                        {},
+                        orderByLabel(chosen),
+                      ),
+                    )
+                  : null,
+                !experience ? h("p", {}, doc.ui.policy) : null,
+              ),
+            ),
+            h(
+              "aside",
+              { class: "order-summary" },
+              !experience ? h("span", { class: "eyebrow" }, "SIMULATION ONLY") : null,
+              h('h2', {}, 'Your order'),
+              chosen ? h('p', { class: 'checkout-selected-pickup' }, h('strong', {}, 'Pickup · '), pickupLabel(chosen)) : null,
+              h('div', { class: 'checkout-products' },
               lines.map((l) =>
                 h(
                   "div",
@@ -715,33 +748,11 @@ if (!location.pathname.startsWith('/studio/preview/') && (
                   h("strong", {}, money(l.qty * (l.p.price + l.v.extra))),
                 ),
               ),
-              customerFields,
-            ),
-            h(
-              "aside",
-              { class: "order-summary" },
-              !experience ? h("span", { class: "eyebrow" }, "SIMULATION ONLY") : null,
-              h("h2", {}, doc.ui.pickup),
-              eligiblePickups.length ? pickupChoices : h('p', { class: 'pickup-empty', role: 'status' },
-                doc.orderingPaused ? 'Ordering is currently paused. No pickup dates are available. Please check back soon.' : 'No eligible pickup dates are available for all items in your basket. Please check back soon or update your basket.'),
-              experience ? pickupLocation(doc.business) : null,
-              chosen
-                ? h(
-                    "div",
-                    { class: "deadline" },
-                    h("strong", {}, doc.ui.orderBy),
-                    h(
-                      "p",
-                      {},
-                      orderByLabel(chosen),
-                    ),
-                  )
-                : null,
-              !experience ? h("p", {}, doc.ui.policy) : null,
+              ),
               h(
                 "div",
                 { class: "total" },
-                h("span", {}, experience ? "Total" : "Demo total"),
+                h("span", {}, experience ? appliedCredit > 0 ? "Subtotal" : "Amount due" : "Demo total"),
                 h("strong", {}, money(total)),
               ),
               checkoutMode === 'member' && customer?.member && customer.credits.enabled ? h('section', { 'aria-label': 'Return credit at checkout' },
@@ -756,9 +767,13 @@ if (!location.pathname.startsWith('/studio/preview/') && (
                 ? "Transactional updates only. Provider acceptance is shown on your private tracking page; inbox delivery is not guaranteed."
                 : experience ? "Your confirmation includes a private order tracking link." : "Email is not connected for this beta site. You will receive a private order tracking link instead."),
               commerceEnabled && remainingDue > 0 ? h('section', { 'aria-label': 'Checkout payment options' }, h('h2', {}, 'Payment options'),
-                Object.entries(providers).filter(([method]) => paymentDestinations[method]).map(([method,label]) => button(label, () => { checkoutPaymentMethod = method; render(); }, { class: 'secondary-button', 'aria-pressed': checkoutPaymentMethod === method })),
+                h('div', { class: 'checkout-payments', role: 'group', 'aria-label': 'Choose payment method' },
+                  Object.entries(providers).map(([method, label]) => button(
+                    [h('strong', { class: 'provider-name' }, label), h('span', { class: 'payment-state', 'aria-hidden': 'true' }, !paymentDestinations[method] ? 'Unavailable' : checkoutPaymentMethod === method ? '✓ Selected' : 'Select')],
+                    () => { checkoutPaymentMethod = method; render(); root.querySelector('[data-payment="' + method + '"]')?.focus({ preventScroll: true }); },
+                    { class: 'checkout-payment', 'data-payment': method, 'aria-label': label, 'aria-pressed': checkoutPaymentMethod === method, disabled: orderSubmitting || !paymentDestinations[method] }))),
                 h('p', { role: 'status' }, Object.keys(paymentDestinations).length ? 'Choose an available method. Danielle verifies payment after you pay.' : 'Ordering is paused while Danielle finishes payment setup. Please check back soon.')) : null,
-              commerceEnabled ? h('div', {}, h('p', {}, POLICY[0]), h('details', {}, h('summary', {}, POLICY_TITLE), POLICY.map((paragraph, i) => h('p', {}, i === 2 ? h('strong', {}, paragraph) : paragraph))),
+              commerceEnabled ? h('div', { class: 'checkout-policy' }, h('h3', {}, 'Pickup policy'), h('p', {}, POLICY[0]), h('details', {}, h('summary', {}, POLICY_TITLE), POLICY.map((paragraph, i) => h('p', {}, i === 2 ? h('strong', {}, paragraph) : paragraph))),
                 h('label', { class: 'field' }, h('input', { type: 'checkbox', checked: policyAccepted, required: true, onchange: e => { policyAccepted = e.target.checked; updateActionValidity(); }, 'aria-label': 'I have read and acknowledge the Rise & Roost Pickup Policy' }), 'I have read and acknowledge the Rise & Roost Pickup Policy')) : null,
               action,
               h(

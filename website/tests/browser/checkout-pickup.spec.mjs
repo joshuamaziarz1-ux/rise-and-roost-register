@@ -77,7 +77,7 @@ test('date taps persist, validate fields and payment choices, and submit the exa
     await expect.poll(() => submissions).toBe(1);
     // A background availability refresh must not unlock a pending order.
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-    await expect(action(page)).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Placing your order…', exact: true })).toBeDisabled();
     release();
     await expect(page.getByRole('heading', {name:'Thank you. Your preorder is in.',exact:true})).toBeVisible();
     expect(payload.pickupId).toBe(pickup.id);
@@ -137,6 +137,52 @@ test('production activation and ordering pause remain enforced with a clear empt
     await page.reload();
     await expect(page.getByRole('status').filter({hasText:'Ordering is currently paused'})).toBeVisible();
     await expect(choices(page)).toHaveCount(0); await expect(action(page)).toBeDisabled();
+    expect((await f.snapshot()).orders).toHaveLength(0);
+  } finally { await f.close(); }
+});
+
+test('payment cards expose availability, retain keyboard focus, and fit narrow screens', async ({ page }, info) => {
+  const f = await productionBrowserFixture();
+  try {
+    await f.configure();
+    f.env.REAL_CHECKOUT_ENABLED = 'true';
+    const p = (await f.call('/api/site')).data.document.products[0];
+    await basket(page, f, [p]);
+    const payments = page.getByRole('group', {name:'Choose payment method', exact:true});
+    await expect(payments.getByRole('button', {name:'Venmo',exact:true})).toBeDisabled();
+    await expect(payments.getByRole('button', {name:'Cash App',exact:true})).toBeDisabled();
+    await expect(payments.getByRole('button', {name:'PayPal',exact:true})).toHaveAttribute('aria-pressed','true');
+    await mkdir('qa-results/checkout', {recursive:true});
+    await page.screenshot({path:`qa-results/checkout/unavailable-${info.project.name}.png`,fullPage:true});
+    for (const [method,url] of [['venmo','https://venmo.com/u/SyntheticCheckout'],['cashapp','https://cash.app/$SyntheticCheckout']]) await f.configure(method,url);
+    await page.reload();
+    await page.getByLabel('Name',{exact:true}).fill('Synthetic Keyboard Customer');
+    await page.getByLabel('Email (optional)',{exact:true}).fill('invalid');
+    await expect(action(page)).toBeDisabled();
+    await page.getByLabel('Email (optional)',{exact:true}).evaluate(el=>el.reportValidity());
+    await page.screenshot({path:`qa-results/checkout/validation-${info.project.name}.png`,fullPage:true});
+    await page.getByLabel('Email (optional)',{exact:true}).fill('');
+    await page.getByLabel(policy,{exact:true}).check();
+    for (const name of ['PayPal','Venmo','Cash App']) {
+      const card=payments.getByRole('button',{name,exact:true});
+      await card.focus();await card.press('Space');
+      await expect(card).toBeFocused();
+      await expect(card).toHaveAttribute('aria-pressed','true');
+      await expect(payments.locator('[aria-pressed="true"]')).toHaveCount(1);
+      await expect(action(page)).toBeEnabled();
+      const box=await card.boundingBox();expect(box.height).toBeGreaterThanOrEqual(44);expect(box.width).toBeGreaterThanOrEqual(44);
+      await page.screenshot({path:`qa-results/checkout/${name.replace(' ','-')}-${info.project.name}.png`,fullPage:true});
+    }
+    // The next Tab reaches the policy disclosure, rather than restarting the page.
+    await payments.getByRole('button',{name:'Cash App',exact:true}).press('Tab');
+    await expect(page.locator('.checkout-policy summary')).toBeFocused();
+    const originalViewport=page.viewportSize();
+    for (const width of [320,375,390,768,1440]) {
+      await page.setViewportSize({width,height:900});
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+    }
+    await page.setViewportSize(originalViewport);
+    await page.screenshot({path:`qa-results/checkout/ready-${info.project.name}.png`,fullPage:true});
     expect((await f.snapshot()).orders).toHaveLength(0);
   } finally { await f.close(); }
 });
