@@ -57,7 +57,7 @@ test.describe('customer remembered login', () => {
       await other.addInitScript(() => { Object.defineProperty(window, 'PublicKeyCredential', { value: undefined, configurable: true }); });
       await other.goto(f.origin + '/roost');
       await other.getByRole('button', { name: 'Sign In', exact: true }).click();
-      await other.getByRole('button', { name: 'Sign In Securely', exact: true }).click();
+      await other.getByRole('button', { name: 'Sign in with a Passkey', exact: true }).click();
       await expect(other.getByRole('alert')).toContainText('Use your saved recovery key');
       await other.getByText('Need help signing in?', { exact: true }).click();
       await other.getByLabel('Saved recovery key', { exact: true }).fill('a'.repeat(48));
@@ -77,7 +77,7 @@ test.describe('customer remembered login', () => {
       await expect(replacement.getByRole('heading', { name: /Good (morning|afternoon|evening), Remembered\./ })).toBeVisible();
       await replacement.getByRole('button', { name: 'Log Out', exact: true }).click();
       await replacement.getByRole('button', { name: 'Sign In', exact: true }).click();
-      await replacement.getByRole('button', { name: 'Sign In Securely', exact: true }).click();
+      await replacement.getByRole('button', { name: 'Sign in with a Passkey', exact: true }).click();
       await expect(replacement.getByRole('heading', { name: /Good (morning|afternoon|evening), Remembered\./ })).toBeVisible();
       await replacement.evaluate(() => window.scrollTo(0, 0));
       await replacement.screenshot({ path: `qa-results/roost-${info.project.name}.png`, fullPage: true, scale: 'css' });

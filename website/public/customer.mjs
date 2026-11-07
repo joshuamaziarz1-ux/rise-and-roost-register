@@ -171,7 +171,8 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
           link('/shop', 'Continue as a Guest', 'entry-guest'))));
     } else if (entryView === 'signin') {
       panel.append(h('section', { class: 'roost-signin' },
-        button('Sign In Securely', action(() => authenticate('login')), { class: 'primary-link', disabled: busy || readOnly }),
+        !simpleLoginEnabled ? h('p', {}, 'Email and phone sign-in are not available yet. Use a passkey, your saved recovery key, or continue as a guest.') : null,
+        button('Sign in with a Passkey', action(() => authenticate('login')), { class: 'primary-link', disabled: busy || readOnly }),
         h('details', { open: helpOpen, ontoggle: e => { helpOpen = e.currentTarget.open; } },
           h('summary', {}, 'Need help signing in?'),
           h('p', {}, 'Use the recovery key you saved when you joined. Recovery signs out remembered devices and removes old passkeys. Save your replacement key, then add a new passkey.'),

@@ -33,9 +33,9 @@ test('welcome, exclusive forms, back, recovery, cancellation and guest navigatio
   if(!navigator.credentials)Object.defineProperty(navigator,'credentials',{value:{}});
   Object.defineProperty(navigator.credentials,'get',{configurable:true,value:async()=>{throw new DOMException('Canceled','NotAllowedError');}});
  });
- await page.getByRole('button',{name:'Sign In Securely',exact:true}).click();
+ await page.getByRole('button',{name:'Sign in with a Passkey',exact:true}).click();
  await expect(page.getByRole('alert')).toContainText('canceled');
- await expect(page.getByRole('button',{name:'Sign In Securely',exact:true})).toBeEnabled();await exclusive();
+ await expect(page.getByRole('button',{name:'Sign in with a Passkey',exact:true})).toBeEnabled();await exclusive();
  await page.getByRole('button',{name:'Back',exact:true}).click();
  await page.getByRole('link',{name:'Continue as a Guest',exact:true}).click();
  await expect(page).toHaveURL(f.origin+'/shop');expect(errors).toEqual([]);

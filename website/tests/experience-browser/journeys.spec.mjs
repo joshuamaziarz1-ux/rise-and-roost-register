@@ -123,7 +123,7 @@ test('hosted HTTPS guest and member shopping, private tracking, remembered sessi
     await page.getByRole('button', { name: 'Sign out of The Roost', exact: true }).click();
     await expect(page.getByLabel('Name', { exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Sign In', exact: true }).click();
-      await page.getByRole('button', { name: 'Sign In Securely', exact: true }).click();
+      await page.getByRole('button', { name: 'Sign in with a Passkey', exact: true }).click();
     await expect(page.locator('.member-order')).toHaveCount(1);
     const orders = await (await owner.request.get(origin+'/api/studio', { headers: { 'X-RR-Workspace': site.id } })).json();
     expect(orders.orders).toHaveLength(2);

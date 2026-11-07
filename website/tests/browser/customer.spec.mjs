@@ -159,14 +159,14 @@ test.describe('isolated customer experience', () => {
     await expect(page.getByLabel('Roost recovery key', { exact: true })).toHaveCount(0);
     await expect(page.getByLabel('Name', { exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Sign In', exact: true }).click();
-      await page.getByRole('button', { name: 'Sign In Securely', exact: true }).click();
+      await page.getByRole('button', { name: 'Sign in with a Passkey', exact: true }).click();
     await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Returning\./ })).toBeVisible();
     await page.getByLabel('Phone (optional)', { exact: true }).fill('555-0102');
     await page.getByRole('button', { name: 'Save my details', exact: true }).click();
     await expect(page.locator('#notice')).toHaveText('Your pickup details are saved.');
     await page.reload();
     await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Returning\./ })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Sign In Securely', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Sign in with a Passkey', exact: true })).toHaveCount(0);
     await expect(page.getByLabel('Phone (optional)', { exact: true })).toHaveValue('555-0102');
     await page.goto(fixture.origin+'/shop');
     await page.getByRole('button', { name: 'Add A dozen little sunrises to basket', exact: true }).click();
@@ -194,7 +194,7 @@ test.describe('isolated customer experience', () => {
     await page.getByRole('button', { name: 'Log Out', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Welcome to The Roost' })).toBeVisible();
     await page.getByRole('button', { name: 'Sign In', exact: true }).click();
-      await page.getByRole('button', { name: 'Sign In Securely', exact: true }).click();
+      await page.getByRole('button', { name: 'Sign in with a Passkey', exact: true }).click();
     await expect(page.locator('.member-order')).toHaveCount(1);
     expect(errors).toEqual([]);
   });
