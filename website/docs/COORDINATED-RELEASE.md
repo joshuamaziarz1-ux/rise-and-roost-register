@@ -39,3 +39,17 @@ Checkout, customer order emails, Cash at Pickup, return credits and marketing ca
 ## Validation
 
 Results and deployment identifiers are recorded in the final release receipt. All fixtures use isolated databases and synthetic identities. Browser WebKit/iPhone profiles are emulation, not a physical iPhone Safari claim. No live customer email, marketing campaign, test order, member or payment was created in production.
+
+### Reviewed candidate evidence
+
+Application commit: `3ab008b676ecb8345179ee59025554cb068a54a4`. Compiled Worker SHA-256: `ff5f9ab8f99d73ef38d4f73fd5caf481426aeeeea1fbc24638d3932154dba9b9`. All 65 server/public file hashes were frozen and rechecked unchanged.
+
+- 351 backend/security tests passed, including seven coordinated-release cases.
+- New responsive component/Studio workflow checks have passing results on desktop Chromium, desktop WebKit, iPhone WebKit, Android Chromium and tablet Chromium: 15 distinct cases. Tests cover actual guest request → Studio approval → tracking update, drafts/previews and subscriber suppression, as well as default-unchecked consent and form width.
+- Eight commerce browser tests and ten production-isolation browser tests passed.
+- Both exact-bundle native workerd/D1 authentication checks passed, with mocked Resend, zero remote requests and zero remote writes.
+- Read-only live baseline: Home, Shop, Roost and Cart passed on all five profiles (20 page checks); checkout was false and unauthenticated Studio redirected to Access. No form was submitted.
+- Initial WebKit launches lacked the Playwright-matched executable. The matching official WebKit bundle was installed and all affected checks rerun successfully using the existing user-space libraries. Physical iPhone Safari was not tested.
+- New integration-test setup initially selected a desktop-hidden mobile order card, shared an unnecessary fixed-port fixture and asserted a missing flag as literal false. These test assumptions were corrected to use visible controls, avoid the unnecessary fixture and explicitly set the disabled-email scenario. The actual responsive journey now passes on all five profiles.
+
+The broad browser suite and deployment receipt are recorded separately when complete. Its first Chromium legacy-recovery case timed out while a prior authentication ceremony was settling; the same unmodified case passed in isolation. No customer-authentication behavior was changed to mask that timeout.
