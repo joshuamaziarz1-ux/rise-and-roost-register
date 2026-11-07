@@ -21,6 +21,7 @@ test('production schema is compatible with the application, empty, and excludes 
     db.exec(readFileSync(new URL('../migrations/0003_customer_remembered_sessions.sql', import.meta.url), 'utf8'));
     db.exec(readFileSync(new URL('../migrations/0010-roost-contact-login.sql', import.meta.url), 'utf8'));
     db.exec(readFileSync(new URL('../migrations/0011-roost-password-login.sql', import.meta.url), 'utf8'));
+    db.exec(readFileSync(new URL('../migrations/0012-roost-email-login.sql', import.meta.url), 'utf8'));
     const baseline = new DatabaseSync(':memory:'); baseline.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
     for (const { name } of baseline.prepare("SELECT name FROM sqlite_master WHERE type='table'").all()) assert.deepEqual(db.prepare('PRAGMA table_info("' + name + '")').all(), baseline.prepare('PRAGMA table_info("' + name + '")').all());
     baseline.close();

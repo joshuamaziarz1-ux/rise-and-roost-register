@@ -1,0 +1,39 @@
+{
+  "unitTests": {
+    "passed": 342,
+    "failed": 0
+  },
+  "broadBrowserInitial": {
+    "passed": 274,
+    "failed": 1,
+    "failedCase": "Existing Studio desktop WebKit navigation timeout",
+    "isolatedRetryPassed": true
+  },
+  "newAuthBrowser": {
+    "passed": 10,
+    "profiles": [
+      "desktop-chromium",
+      "desktop-webkit",
+      "iphone-webkit",
+      "android-chromium",
+      "tablet-chromium"
+    ]
+  },
+  "commerce": {
+    "serialPassed": 8,
+    "earlierParallelSetupFailure": true
+  },
+  "productionIsolation": {
+    "passed": 10
+  },
+  "nativeWorkerD1": {
+    "passed": true,
+    "mockedResend": true,
+    "remoteRequests": 0
+  },
+  "productionDeploymentChanged": false,
+  "productionMigrationApplied": false,
+  "liveAuthEmailsSent": 0,
+  "physicalIPhoneTested": false,
+  "activationApproved": false
+}

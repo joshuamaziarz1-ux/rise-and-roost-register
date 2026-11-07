@@ -440,7 +440,7 @@ export function inspectImage(bytes, mime) {
     );
   return true;
 }
-export async function api(request, db, now = Date.now(), { publicWorkspaceId = "", emailEnabled = false, customerExperienceEnabled = false, reviewBuild = false, studioManagementEnabled = false, previewGrant, previewPinMode = false, commerceEnabled = false, productionContext, contactLoginEnv = {}, contactSend } = {}) {
+export async function api(request, db, now = Date.now(), { publicWorkspaceId = "", emailEnabled = false, customerExperienceEnabled = false, reviewBuild = false, studioManagementEnabled = false, previewGrant, previewPinMode = false, commerceEnabled = false, productionContext, contactLoginEnv = {}, contactSend, authSend } = {}) {
   const url = new URL(request.url),
     path = url.pathname;
   const first = (sql, ...args) =>
@@ -573,7 +573,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       mainStudioPath: previewGrant ? '/studio' : publicWorkspaceId ? "/studio?workspace=" + publicWorkspaceId : "",
     });
     if (customerExperienceEnabled && path.startsWith("/api/roost/"))
-      return await roostApi({ request, db, now, input, path, json, rateLimit, contactLoginEnv, contactSend });
+      return await roostApi({ request, db, now, input, path, json, rateLimit, contactLoginEnv, contactSend, authSend });
     if (customerExperienceEnabled && (path === "/api/comments" || path === "/api/studio-comments"))
       { if (studioManagementEnabled && path === '/api/studio-comments' && request.method === 'POST') fail('Use Website Studio comment management so changes are audited.', 403); return await commentsApi({ request, db, now, input, path, json, rateLimit, owner, publicWorkspaceId }); }
     if (studioManagementEnabled && request.method === 'POST' && ['/api/draft', '/api/publish', '/api/restore', '/api/order-payment', '/api/order-status', '/api/order-fulfillment'].includes(path)) {

@@ -32,12 +32,23 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
   const joinProfile = { name: '', preferredName: '', email: '', phone: '' };
   let profileDraft;
   let entryView = 'welcome', helpOpen = false;
+  let emailLoginEnabled = false, emailNotice = '';
+  const emailLink = /^#auth=(verify|reset)\.([a-f0-9]{48})$/.exec(location.hash);
+  let emailAction = emailLink?.[1], emailToken = emailLink?.[2];
+  window.addEventListener('hashchange', () => {
+    const incoming = /^#auth=(verify|reset)\.([a-f0-9]{48})$/.exec(location.hash);
+    if (!incoming) return;
+    emailAction = incoming[1]; emailToken = incoming[2]; emailNotice = ''; entryView = 'welcome';
+    history.replaceState(null, '', location.pathname + location.search); render();
+  });
+  if (emailLink) history.replaceState(null, '', location.pathname + location.search);
   let passwordLoginEnabled = false;
   const passwordDraft = { username: '', password: '', name: '', currentPassword: '', recoveryKey: '' };
   let simpleLoginEnabled = false, contactDraft = '', codeDraft = '', preferredDraft = '', contactStep = 'contact', linkContact = false, resendAt = 0;
   function showEntry(view) {
     if (busy) return;
     passwordDraft.password = ''; passwordDraft.currentPassword = ''; passwordDraft.recoveryKey = '';
+    emailAction = null; emailToken = null;
     entryView = view; helpOpen = false; error = ''; render();
     document.querySelector('.roost-entry h1')?.focus();
   }
@@ -69,6 +80,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
       try {
         const result = await api('/api/roost/me');
         if (started !== generation) return false;
+        emailLoginEnabled = result.emailLoginEnabled === true;
         passwordLoginEnabled = result.passwordLoginEnabled === true;
         simpleLoginEnabled = result.simpleLoginEnabled === true;
         const changed = member?.id !== result.member?.id;
@@ -108,13 +120,14 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     if (!recoveryKey) return null;
     return h('section', { class: 'recovery-card', 'aria-label': 'Save your recovery key' },
       h('h2', {}, passwordLoginEnabled ? 'Save your recovery code' : 'Keep a way back in'),
-      passwordLoginEnabled && member?.username ? h('p', {}, 'Username: ' + member.username) : null,
-      h('p', {}, passwordLoginEnabled ? 'Save this recovery code in a safe place or your password manager. You will need it if you forget your password. It is shown only now; we cannot send an email or text to reset your password.' : 'Save this recovery key in your password manager. Use it if you lose access to your passkeys. It is shown only now.'),
+      passwordLoginEnabled && member?.username && !member.verifiedEmail ? h('p', {}, 'Username: ' + member.username) : null,
+      h('p', {}, member?.verifiedEmail ? 'Save this replacement recovery code somewhere safe. Email password recovery is also available.' : passwordLoginEnabled ? 'Save this recovery code in a safe place or your password manager. You will need it if you forget your password. It is shown only now; we cannot send an email or text to reset your password.' : 'Save this recovery key in your password manager. Use it if you lose access to your passkeys. It is shown only now.'),
       h('input', { value: recoveryKey, readonly: true, 'aria-label': 'Roost recovery key', autocomplete: 'off' }),
       button('Copy recovery key', guard(async () => { await navigator.clipboard.writeText(recoveryKey); notify('Recovery key copied. Save it in your password manager.'); }), { class: 'secondary-button' }),
       button('I saved my recovery key', () => { recoveryKey = ''; render(); }, { class: 'primary-link' }));
   }
   function roost() {
+    if (emailLoginEnabled && emailAction) return emailEntry();
     if (!loaded) return h('main', { class: 'section-inner roost-page' }, h('h1', {}, 'The Roost'), h('p', { role: 'status' }, 'Opening your Roost…'));
     if (!member) return entry();
     const heading = h('div', { class: 'page-intro' }, h('h1', {}, member ? greeting() + ', ' + (member.profile.preferredName || member.profile.name.split(' ')[0]) + '.' : 'Make yourself at home.'),
@@ -145,10 +158,10 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
               h('button', { type: 'submit', class: 'secondary-button', disabled: busy }, 'Add my order')))),
         h('aside', {}, form, h('section', { class: 'account-controls' },
           h('h2', {}, 'Account Settings'), h('p', {}, 'Welcome back to The Roost! This personal device stays signed in for about 30 days after your last visit, for at most 90 days. Log out on shared computers.'),
-          passwordLoginEnabled ? passwordSettings() : simpleLoginEnabled ? contactSettings() : null,
+          emailLoginEnabled ? emailSettings() : passwordLoginEnabled ? passwordSettings() : simpleLoginEnabled ? contactSettings() : null,
           button('Sign out of all devices', action(async () => { await api('/api/roost/logout-all', {}); clearPrivate(); channel?.postMessage('changed'); }), { class: 'text-button', disabled: busy }),
-          h('p', { class: 'small-note' }, passwordLoginEnabled ? 'Your username and password keep your account secure. Your pickup contact details do not grant account access.' : 'Your passkey verifies your Roost membership. Contact details are for pickup, never proof of account ownership.'),
-          button('Add a passkey on this device', action(() => authenticate('add')), { class: 'secondary-button', disabled: busy }),
+          h('p', { class: 'small-note' }, emailLoginEnabled ? 'Verify your sign-in email in Account Settings. Pickup details do not change your verified email.' : passwordLoginEnabled ? 'Your username and password keep your account secure. Your pickup contact details do not grant account access.' : 'Your passkey verifies your Roost membership. Contact details are for pickup, never proof of account ownership.'),
+          !member.verifiedEmail ? button('Add a passkey on this device', action(() => authenticate('add')), { class: 'secondary-button', disabled: busy }) : null,
           h('details', { class: 'remembered-devices' }, h('summary', {}, 'Remembered devices'),
             devices.map(device => h('div', { class: 'remembered-device' }, h('p', {}, device.label, device.current ? ' · This device' : ''),
               !device.current ? button('Log out ' + device.label, action(async () => { await api('/api/roost/revoke-device', { deviceId: device.id }); await refresh(false, true); }), { class: 'text-button', disabled: busy }) : null))),
@@ -157,10 +170,11 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
           }), { class: 'text-button', disabled: busy })))));
       result.append(creditPanel(), favoritesPanel());
     }
-    if (busy) result.append(h('p', { role: 'status', class: 'small-note' }, 'Please finish the sign-in prompt.'));
+    if (busy) result.append(h('p', { role: 'status', class: 'small-note' }, emailLoginEnabled ? 'Please wait…' : 'Please finish the sign-in prompt.'));
     return result;
   }
   function entry() {
+    if (emailLoginEnabled && !['legacy', 'signin', 'password-recover'].includes(entryView)) return emailEntry();
     if (passwordLoginEnabled && entryView !== 'signin') return passwordEntry();
     if (simpleLoginEnabled && entryView !== 'signin') return simpleEntry();
     const title = entryView === 'signin' ? 'Welcome Back!' : entryView === 'join' ? 'Join The Roost' : 'Welcome to The Roost';
@@ -199,8 +213,59 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
         h('button', { type: 'submit', class: 'primary-link', disabled: busy || readOnly }, busy ? 'Opening secure sign-in…' : 'Create My Account'));
       panel.append(form);
     }
-    if (busy) panel.append(h('p', { role: 'status', class: 'small-note' }, 'Please finish the sign-in prompt.'));
+    if (busy) panel.append(h('p', { role: 'status', class: 'small-note' }, emailLoginEnabled ? 'Please wait…' : 'Please finish the sign-in prompt.'));
     return panel;
+  }
+  function emailPassword(label, name = 'password', confirmation = false) {
+    const input = h('input', { name, type: 'password', required: true, autocomplete: confirmation ? 'new-password' : 'current-password', maxlength: 128 });
+    return h('div', {}, h('label', { class: 'field' }, label, input), button('Show password', e => {
+      input.type = input.type === 'password' ? 'text' : 'password';
+      e.currentTarget.textContent = input.type === 'password' ? 'Show password' : 'Hide password';
+    }, { class: 'text-button', type: 'button' }));
+  }
+  function emailForm(kind) {
+    const signup = kind === 'register', reset = kind === 'reset' || kind === 'recover', linkEmail = kind === 'link';
+    const form = h('form', { class: 'contact-login password-login', onsubmit: e => {
+      e.preventDefault(); const values = Object.fromEntries(new FormData(e.currentTarget));
+      void action(async () => {
+        const r = await api('/api/roost/email/' + kind, { ...values, ...(emailToken ? { token: emailToken } : {}) });
+        if (kind === 'login' || kind === 'recover') { await authenticated(r.recoveryKey); return; }
+        emailNotice = r.message || 'If registration is pending, we’ll send a verification email.';
+        if (kind === 'reset' || kind === 'verify') { emailAction = null; emailToken = null; await refresh(false, true); entryView = 'email-done'; }
+        if (linkEmail) await refresh(false, true);
+      })();
+    } },
+    signup ? h('label', { class: 'field' }, 'Full Name', h('input', { name: 'name', autocomplete: 'name', required: true, maxlength: 80 })) : null,
+    (!reset || kind === 'recover') && kind !== 'verify' ? h('label', { class: 'field' }, linkEmail ? 'New Email Address' : 'Email Address', h('input', { name: 'email', type: 'email', autocomplete: 'email', autocapitalize: 'none', required: true, maxlength: 254, value: linkEmail ? member.verifiedEmail || member.profile.email : '' })) : null,
+    ['register', 'login', 'resend', 'reset', 'recover'].includes(kind) ? emailPassword(reset ? 'New Password' : 'Password', 'password', signup || reset) : null,
+    kind === 'recover' ? h('label', { class: 'field' }, 'Saved Recovery Code', h('input', { name: 'recoveryKey', type: 'password', autocomplete: 'off', required: true, maxlength: 48 })) : null,
+    reset ? emailPassword('Confirm New Password', 'confirmPassword', true) : null,
+    linkEmail ? emailPassword(member.username ? 'Current Password' : 'Choose a Password', member.username ? 'currentPassword' : 'password', !member.username) : null,
+    signup || reset || linkEmail && !member.username ? h('p', { class: 'small-note' }, 'Use 15–128 characters. A short phrase is easy to remember.') : null,
+    h('button', { type: 'submit', class: 'primary-link', disabled: busy || readOnly }, ({ register: 'Create an Account', login: 'Sign In', forgot: 'Send Reset Link', resend: 'Resend Verification Email', reset: 'Save New Password', recover: 'Recover My Account', verify: 'Verify My Email', link: 'Send Verification Link' })[kind]));
+    return form;
+  }
+  function emailEntry() {
+    const kind = entryView === 'email-done' ? 'done' : emailAction && !emailNotice ? emailAction : entryView === 'email-recover' ? 'recover' : entryView === 'email-join' ? 'register' : entryView === 'email-forgot' ? 'forgot' : entryView === 'email-resend' ? 'resend' : 'login';
+    return h('main', { class: 'section-inner roost-page roost-entry roost-password-entry' },
+      h('div', { class: 'page-intro' }, h('h1', {}, kind === 'register' ? 'Join The Roost' : kind === 'forgot' || kind === 'reset' ? 'Reset Your Password' : 'Welcome to The Roost')),
+      error ? h('p', { role: 'alert', class: 'form-error' }, error) : null,
+      emailNotice ? h('p', { role: 'status' }, emailNotice) : null,
+      kind !== 'done' ? emailForm(kind) : null,
+      kind !== 'login' ? button('Sign In', () => { emailNotice = ''; showEntry('email-done' === entryView ? 'email-signin' : 'welcome'); }, { class: 'text-button', disabled: busy }) : null,
+      kind !== 'register' ? button('Create an Account', () => { emailNotice = ''; showEntry('email-join'); }, { class: 'text-button', disabled: busy }) : null,
+      button('Forgot Password?', () => { emailNotice = ''; showEntry('email-forgot'); }, { class: 'text-button', disabled: busy }),
+      button('Resend Verification Email', () => { emailNotice = ''; showEntry('email-resend'); }, { class: 'text-button', disabled: busy }),
+      h('details', {}, h('summary', {}, 'Existing member sign-in'), button('Use email and saved recovery code', () => showEntry('email-recover'), { class: 'text-button', disabled: busy }), h('p', {}, 'Already joined with a username or another sign-in method? Use it once more, then verify an email in Account Settings. Your orders and favorites stay with you.'), button('Use existing sign-in', () => showEntry('legacy'), { class: 'text-button', disabled: busy })),
+      link('/shop', 'Continue as a Guest', 'entry-guest'));
+  }
+  function emailSettings() {
+    return h('section', {}, h('h3', {}, member.verifiedEmail ? 'Your verified email' : 'Verify your sign-in email'),
+      h('p', {}, member.verifiedEmail || 'Keep your existing account. Verify an email here to use email and password next time.'),
+      h('details', {}, h('summary', {}, member.verifiedEmail ? 'Change email address' : 'Verify email address'), emailForm('link')),
+      member.username ? h('details', {}, h('summary', {}, 'Change password'), passwordForm('change')) : null,
+      !member.verifiedEmail ? passwordSettings() : null,
+      emailNotice ? h('p', { role: 'status' }, emailNotice) : null);
   }
   function passwordFields(kind) {
     const signup = kind === 'register', setup = kind === 'setup', change = kind === 'change', recover = kind === 'recover';
@@ -232,7 +297,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
   function passwordEntry() {
     const signup = entryView === 'password-join', recover = entryView === 'password-recover';
     return h('main', { class: 'section-inner roost-page roost-entry roost-password-entry', 'data-roost-view': signup ? 'password-join' : recover ? 'password-recover' : 'password-signin' },
-      signup || recover ? button('Back to Sign In', () => showEntry('welcome'), { class: 'text-button', disabled: busy }) : null,
+      signup || recover ? button('Back to Sign In', () => showEntry(emailLoginEnabled ? 'legacy' : 'welcome'), { class: 'text-button', disabled: busy }) : null,
       h('div', { class: 'page-intro' }, h('h1', {}, recover ? 'Reset Your Password' : 'Welcome to The Roost!'), h('p', {}, signup ? 'Join our little community.' : recover ? 'Use your username and saved recovery code.' : 'Sign in and make yourself at home.')),
       error ? h('p', { role: 'alert', class: 'form-error' }, error) : null,
       passwordForm(signup ? 'register' : recover ? 'recover' : 'login'),

@@ -3,7 +3,7 @@ import { dollarsToCents, centsToDollars } from './credit-money.mjs';
 import { POLICY_VERSION, POLICY_TITLE, POLICY, providers } from './commerce.mjs';
 import { h, button, notify, request, guard } from "./dom.mjs";
 import { money, localInstant, pickupLabel, orderByLabel } from "./model.mjs";
-import { createCustomerExperience } from "./customer.mjs?v=c0a93f87eaf5";
+import { createCustomerExperience } from "./customer.mjs?v=d4ca7d983d57";
 import { pickupLocation } from "./pickup-location.mjs";
 import { sellingMethod } from './selling.mjs';
 
