@@ -8,7 +8,7 @@ import { createHelpGuide } from './help.mjs';
 import { sellingMethod, inventoryMode } from './selling.mjs';
 
 const primary = ['Home', 'Orders', 'Products', 'Calendar', 'More'];
-const secondary = ['The Roost', 'Website Content', 'Customer Comments', 'Sales Reports', 'Settings'];
+const secondary = ['Marketing', 'The Roost', 'Website Content', 'Customer Comments', 'Sales Reports', 'Settings'];
 const id = () => crypto.randomUUID();
 const navigationIcon = kind => {
   const namespace = 'http://www.w3.org/2000/svg';
@@ -35,7 +35,7 @@ export async function start(root, initial, newAccessKey) {
   document.head.append(h('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' }), h('meta', { name: 'apple-mobile-web-app-title', content: 'Website Studio' }), h('link', { rel: 'apple-touch-icon', href: '/assets/logo.webp' }));
   document.title = 'Rise & Roost Website Studio';
   let data = initial, view = 'Home', selection = '', filter = 'all', search = '', period = 'today', from = '', through = '';
-  let emailDraft = null;
+  let emailDraft = null, marketingDraft = null;
   let editing = null, busy = false, pending = null, error = '', connected = navigator.onLine, checking = false, disposed = false, reauth = false;
   const bindings = new WeakMap();
   const workspace = initial.id, storageKey = 'rr-studio-draft:' + workspace;
@@ -285,6 +285,7 @@ export async function start(root, initial, newAccessKey) {
       panel('Customer messages & pickup arrangements',
         o.contact?.unresolved ? h('p', {}, 'Customer Contacted — awaiting owner review. A request does not approve an extension.') : null,
         (o.messages || []).map(m => h('article', { class: 'ms-audit' }, h('strong', {}, m.sender === 'owner' ? 'Danielle' : o.customer?.name || 'Customer'), h('p', {}, m.body), h('small', {}, stamp(m.at)), (m.requestedDate || m.requestedTime) ? h('p', {}, 'Requested: ' + requestedPickupLabel(m)) : m.topic === 'pickup' ? h('p', {}, 'Pickup delay or more time requested; alternative date/time not specified.') : null)),
+        (o.messages || []).filter(m=>m.pickupRequestStatus).map(m=>h('article',{class:'ms-audit'},h('h3',{},'Pickup change request · '+m.pickupRequestStatus), h('p',{},'Original: '+pickupLabel(m.originalPickup)), h('p',{},'Requested: '+requestedPickupLabel(m)), h('p',{},m.body), m.pickupRequestStatus==='pending' ? h('div',{},button('Approve',()=>{if(confirm('Approve this requested pickup schedule?')) send('approve-extension',{id:o.id,orderVersion:o.version,date:m.requestedDate,time:m.requestedTime,requestId:m.id,confirmed:true});},{class:'ms-primary'}),button('Decline',()=>{if(confirm('Decline this request and preserve the original pickup?')) send('decline-pickup-request',{id:o.id,orderVersion:o.version,requestId:m.id,confirmed:true});},{class:'ms-secondary'})) : null)),
         button('Reply to customer', () => edit('reply', { orderId: o.id, orderVersion: o.version, body: '' }), { class: 'ms-secondary' }),
         !['canceled','picked-up'].includes(o.status) && !o.resolution ? button('Approve New Pickup Time', () => edit('extension', { orderId: o.id, orderVersion: o.version, date: o.pickup.date, time: o.pickup.start, confirmed: false }), { class: 'ms-primary' }) : null,
         o.contact?.unresolved ? button('Resolve conversation', () => edit('contact-resolution', { orderId: o.id, orderVersion: o.version, reason: '', confirmed: false }), { class: 'ms-secondary' }) : null),
@@ -649,10 +650,27 @@ export async function start(root, initial, newAccessKey) {
       h('input', { value: workspace, readonly: true, 'aria-label': 'Workspace ID' }), h('input', { type: 'password', value: newAccessKey, readonly: true, 'aria-label': 'Private access key', autocomplete: 'off' }),
       button('I saved these details', () => { newAccessKey = ''; render(); }, { class: 'ms-primary' }));
   }
+  function marketing() {
+    const m=data.management.marketing || {contacts:[],campaigns:[],templates:{}};
+    const d=marketingDraft;
+    return h('div',{},h('h1',{},'Marketing'),h('p',{},'Fresh from the Roost'),
+      panel('Subscribers',h('p',{},m.contacts.filter(c=>c.status==='confirmed').length+' confirmed · '+m.contacts.filter(c=>c.status==='pending').length+' awaiting confirmation · '+m.contacts.filter(c=>c.status==='unsubscribed').length+' unsubscribed'),
+        h('p',{},'Customers join voluntarily through a separate email signup. No customer addresses are imported.'),
+        m.contacts.map(c=>h('article',{class:'ms-audit'},h('strong',{},c.email),h('p',{},c.status),c.status!=='unsubscribed'?button('Unsubscribe',()=>{if(confirm('Suppress this subscriber immediately?'))send('marketing-suppress',{ledgerVersion:data.ledgerVersion,contactId:c.id});},{class:'ms-secondary'}):null))),
+      panel('Campaigns',h('p',{},'Marketing delivery is disabled. Drafts and previews are available. Live sending requires a verified Marketing connection, an accurate mailing address and Danielle’s separate approval.'),
+        button('Create campaign',()=>{marketingDraft={template:'products',subject:'New Products',message:'',photo:''};render();},{class:'ms-primary'}),
+        d?h('form',{onsubmit:async e=>{e.preventDefault();const saved=await send('marketing-draft',{ledgerVersion:data.ledgerVersion,...d});if(saved){marketingDraft=null;render();}}},
+          f('Template',d,'template',{choices:Object.entries(m.templates).map(([value,label])=>({value,label}))}),f('Subject',d,'subject',{required:true,maxlength:150}),f('Message',d,'message',{type:'textarea',required:true,maxlength:12000}),
+          f('Product photograph',d,'photo',{choices:[{value:'',label:'No photograph'},...(data.published.products || []).filter(p=>!p.placeholder).flatMap(p=>(p.images||[]).filter(i=>!i.src.endsWith('.svg')).map(i=>({value:i.src,label:p.name})))]}),
+          h('button',{type:'submit',class:'ms-primary',disabled:busy},'Save draft'),button('Cancel',()=>{marketingDraft=null;render();},{class:'ms-secondary'})):null,
+        m.campaigns.map(c=>h('article',{class:'ms-audit'},h('h3',{},c.subject),h('p',{},c.status+' · '+stamp(c.updatedAt)),button('Edit draft',()=>{marketingDraft={campaignId:c.id,template:c.template,subject:c.subject,message:c.message,photo:c.photo};render();},{class:'ms-secondary'}),
+          h('details',{},h('summary',{},'Preview email'),h('iframe',{title:'Email preview: '+c.subject,sandbox:'',srcdoc:c.preview.html,style:{width:'100%',height:'620px',border:'1px solid #d8dfd2'}})),h('p',{},'Delivery results: no sending attempted.')))),
+      panel('Sender details',h('form',{onsubmit:e=>{e.preventDefault();send('marketing-settings',{ledgerVersion:data.ledgerVersion,address:e.currentTarget.elements.address.value});}},h('label',{class:'field'},'Physical mailing address',h('textarea',{name:'address',maxlength:500},m.address || '')),h('button',{type:'submit',class:'ms-primary',disabled:busy},'Save address')),h('p',{},'Use the accurate physical mailing address required in every marketing email.')));
+  }
   function render() {
     if (reauth) { root.replaceChildren(h('main', { class: 'ms-loading' }, h('h1', {}, initial.previewPinAccess ? 'Studio is locked' : initial.previewDirectAccess ? 'Testing access needs verification' : 'Sign-in required'), h('p', {}, initial.previewPinAccess ? 'Enter your owner PIN in another tab, then check the connection here. Your unsaved form is kept here.' : initial.previewDirectAccess ? 'Reopen Studio in another tab to verify your Cloudflare Access session. Your unsaved form is kept here.' : 'Your unsaved form is kept in this tab. Sign in to this exact website in a new tab, then check the connection.'), h('a', { href: initial.studioPath, target: '_blank', rel: 'noopener' }, initial.previewPinAccess ? 'Unlock Studio' : initial.previewDirectAccess ? 'Reopen Website Studio' : 'Sign in to this website'), button('Check connection', () => refresh()))); return; }
     if (!data.management) { root.replaceChildren(h('main', { class: 'ms-loading' }, 'Opening Rise & Roost Website Studio…')); return; }
-    const page = editing ? editForm() : view === 'Home' ? home() : view === 'Orders' ? orders() : view === 'Products' ? products() : view === 'Calendar/Weeks' ? pickupWeeks() : view === 'Calendar/Changes' ? scheduleChanges() : view === 'Calendar' ? calendar() : view === 'The Roost/Return Credits' ? returnCredits() : view === 'The Roost' ? members() : view === 'Website Content' ? content() : view === 'Customer Comments' ? comments() : view === 'Sales Reports' ? reports() : view === 'Settings/Email' ? emailSettings() : view === 'Settings/Help' ? helpGuide() : view === 'Settings/Payments' ? payments() : view === 'Settings' ? settings() : h('div', {}, h('h1', {}, 'More'), secondary.map(label => menu(label, label)));
+    const page = editing ? editForm() : view === 'Marketing' ? marketing() : view === 'Home' ? home() : view === 'Orders' ? orders() : view === 'Products' ? products() : view === 'Calendar/Weeks' ? pickupWeeks() : view === 'Calendar/Changes' ? scheduleChanges() : view === 'Calendar' ? calendar() : view === 'The Roost/Return Credits' ? returnCredits() : view === 'The Roost' ? members() : view === 'Website Content' ? content() : view === 'Customer Comments' ? comments() : view === 'Sales Reports' ? reports() : view === 'Settings/Email' ? emailSettings() : view === 'Settings/Help' ? helpGuide() : view === 'Settings/Payments' ? payments() : view === 'Settings' ? settings() : h('div', {}, h('h1', {}, 'More'), secondary.map(label => menu(label, label)));
     root.replaceChildren(h('div', { class: 'management' },
       h('aside', { class: 'ms-sidebar' }, h('a', { href: initial.studioPath, class: 'ms-brand' }, h('img', { src: '/assets/logo.webp', alt: 'Rise & Roost' }), h('span', {}, 'Rise & Roost', h('small', {}, 'Website Studio'))),
         h('nav', { 'aria-label': 'Studio navigation' }, primary.filter(v => v !== 'More').map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view.startsWith('Settings/') ? 'page' : undefined })), h('details', { open: true }, h('summary', {}, 'More'), secondary.map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view.startsWith('Settings/') ? 'page' : undefined })))), h('a', { href: initial.publishedPath, target: '_blank', rel: 'noopener', class: 'ms-secondary' }, 'View website')),

@@ -32,5 +32,5 @@ export async function fixture() {
  async function order(overrides={},client=member){const current=(await call(guest,'/api/site')).data,p=current.document.products[0];return post(client,'/api/orders',{revision:current.revision,requestId:crypto.randomUUID(),pickupId:current.document.pickups[0]?.id,checkoutMode:client===guest?'guest':'member',customerDetails:{name:'Synthetic Neighbor'},policyAccepted:true,policyVersion:POLICY_VERSION,total:p.price,lines:[{productId:p.id,variantId:p.variants[0].id,qty:1,unitPrice:p.price}],...overrides});}
  const balance=()=>creditBalance(ledger(),customer.id);
  const cancel=o=>change('fulfillment',{id:o.id,orderVersion:ledger().orders.find(v=>v.id===o.id).version,status:'canceled',confirmCancellation:true,releaseInventory:true,reason:'Synthetic cancellation'});
- return {sql,db,now,origin,owner,member,other,guest,customer,stranger,site,call,post,me,change,snapshot,enable,item,award,order,ledger,putLedger,balance,cancel};
+ return {config,sql,db,now,origin,owner,member,other,guest,customer,stranger,site,call,post,me,change,snapshot,enable,item,award,order,ledger,putLedger,balance,cancel};
 }

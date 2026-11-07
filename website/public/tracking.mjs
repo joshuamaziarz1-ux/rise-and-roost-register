@@ -1,3 +1,4 @@
+import { pickupRequest } from './pickup-request.mjs';
 import { confirmationTools } from './order-confirmation.mjs?v=0d70de759184';
 import { pickupNotice } from './pickup-notice.mjs';
 import { requestedPickupLabel, POLICY_TITLE, POLICY } from './commerce.mjs';
@@ -127,6 +128,7 @@ export async function start(root) {
         h("a", { href: shop, class: "brand" }, h("img", { src: doc.business.logo, alt: doc.business.logoAlt }), h("span", {}, doc.business.name)),
         h("a", { href: shop }, "Back to the shop")));
     const main = h("main", { id: "main-content", tabindex: "-1", class: "section-inner cart-page tracking-page" + (order?.paidReceipt ? " has-paid-receipt" : "") },
+      pickupRequest(order, payload => save('/pickup-request', payload), busy),
       pickupNotice(order || {}, payload => save('/pickup-response', payload), busy),
       h("span", { class: "eyebrow" }, "YOUR PRIVATE ORDER STATUS"),
       h("h1", { style: { fontSize: "clamp(1.25rem, 5vw, 2rem)" } }, order?.orderNumber || "Order tracking"),

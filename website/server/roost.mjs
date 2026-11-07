@@ -2,7 +2,7 @@ import { emailLogin } from './email-login.mjs';
 import { emailLoginReady, sendAuthEmail } from './auth-email.mjs';
 import { passwordLogin, passwordLoginReady } from './password-login.mjs';
 import { contactLogin, contactLoginReady } from './contact-login.mjs';
-import { acknowledgePickup } from './pickup-changes.mjs';
+import { acknowledgePickup, requestPickup } from './pickup-changes.mjs';
 import { cashEligibility } from './cash-pickup.mjs';
 import { customerCredits } from './return-credits.mjs';
 import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } from '@simplewebauthn/server';
@@ -72,13 +72,15 @@ export async function roostApi({ request, db, now, input, path, json, rateLimit,
     const devices = await list(db, "SELECT json_group_array(json_object('id',d.id,'label',d.label,'lastSeen',d.last_seen,'current',s.hash=?)) AS items FROM roost_sessions s JOIN roost_session_details d ON d.hash=s.hash WHERE s.workspace_id=? AND s.member_id=? AND s.expires>? AND d.absolute_expires>?", member.session_hash, workspaceId, member.id, now, now);
     return response({ emailLoginEnabled: emailLoginReady(contactLoginEnv), passwordLoginEnabled: passwordLoginReady(contactLoginEnv), simpleLoginEnabled: contactLoginReady(contactLoginEnv), member: { ...safeMember(member), ...(emailAccount ? { verifiedEmail: emailAccount.email } : {}), ...(passwordAccount ? { username: passwordAccount.username } : {}) }, orders, devices, cashPickup: cashEligibility(ledger, member.id), credits: customerCredits(ledger, member.id), favorites: ledger.roostFavorites?.[member.id] || [] }, [renewed.cookie]);
   }
-  if (path === '/api/roost/pickup-response' && request.method === 'POST') {
+  if (['/api/roost/pickup-response','/api/roost/pickup-request'].includes(path) && request.method === 'POST') {
     const member = await memberFor(request, db, workspaceId, now, true);
     for (let attempt = 0; attempt < 4; attempt++) {
       const row = await first(db, 'SELECT ledger_json,ledger_version FROM workspaces WHERE id=?', workspaceId), ledger = JSON.parse(row.ledger_json);
       const order = ledger.orders.find(o => o.id === input.orderId && o.customer?.memberId === member.id);
       if (!order) fail('Order not found.', 404);
-      if (!acknowledgePickup(order, input, now, { memberId: member.id })) return response(customerOrder(order, workspaceId, ledger.management?.settings, now));
+      if (path.endsWith('/pickup-request') && contactLoginEnv.PICKUP_REQUESTS_ENABLED !== 'true') fail('Pickup change requests are not available yet.',409);
+      if (attempt===0 && path.endsWith('/pickup-request')) await rateLimit('pickup-request:'+order.id,6);
+      if (!(path.endsWith('/pickup-request') ? requestPickup : acknowledgePickup)(order, input, now, { memberId: member.id })) return response(customerOrder(order, workspaceId, ledger.management?.settings, now));
       order.version = (order.version || 1) + 1;
       const saved = await run(db, 'UPDATE workspaces SET ledger_json=?,ledger_version=ledger_version+1 WHERE id=? AND ledger_version=?', JSON.stringify(ledger), workspaceId, row.ledger_version);
       if (saved.meta.changes === 1) return response(customerOrder(order, workspaceId, ledger.management?.settings, now));

@@ -3,6 +3,14 @@
 // Each topic is plain text; no accounts, customer records or remote service.
 const topic = (title, paragraphs, steps = []) => ({ title, paragraphs, steps });
 export const helpCategories = [
+  { title: 'Marketing', topics: [
+    topic('Manage subscribers', ['Open More → Marketing to see confirmed, awaiting-confirmation and unsubscribed contacts. Only people who choose to subscribe and confirm their email can receive bakery updates. Joining The Roost does not subscribe anyone. Unsubscribe immediately suppresses a contact.']),
+    topic('Create and preview campaigns', ['Choose Create campaign, select a template, write the subject and message, and choose an existing product photograph. Save the draft, then open Preview email. No HTML is required. Configure your accurate physical mailing address under Sender details.', 'Marketing delivery remains disabled while the Resend Marketing connection is prepared. Owner test delivery and final campaign sending will become available only after the connection is validated and Danielle separately approves activation. No campaign is sent by saving or previewing.'])
+  ]},
+  { title: 'Customer pickup change requests', topics: [
+    topic('Review a request', ['Open the customer’s order in Orders. Review the original schedule, requested schedule and message. A request leaves the original pickup time and deadline in place.']),
+    topic('Approve or decline', ['Choose Approve and confirm to update the order using the existing pickup arrangement workflow. Choose Decline and confirm to retain the original schedule. The result appears on the customer’s private tracking page. No automatic email is promised; use the existing authorized direct-contact channels when needed.'])
+  ]},
   { title: 'Customer email', topics: [
     topic('Choose customer emails', ['Open Settings → Customer Email. The connection card shows Resend configuration, Rise & Roost <orders@rise-and-roost.com>, and whether customer sending is active. Use Enable customer email notifications, choose Order Received, Payment Confirmed, Preparing, Ready for Pickup, Order Canceled or Pickup Forfeited, then Save email settings. Preparing is optional. Customers must request updates at checkout; missing email does not stop ordinary checkout.', 'The initial release keeps customer sending locked off. Danielle must approve activation; the operator releases that lock only after free-plan and owner inbox checks. After that one-time activation, manage the master switch and individual types here. This never enables checkout, resumes ordering, activates credits or changes Cash at Pickup.']),
     topic('Send an owner test', ['Choose Send test to my owner address and confirm. It uses your individually authenticated owner address; you cannot enter a customer address. Customer sending can stay off. Check your inbox and spam folder. A queued request or service acceptance does not prove delivery. One test per minute and five per hour are allowed.']),

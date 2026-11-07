@@ -1,3 +1,4 @@
+import { pickupRequest } from './pickup-request.mjs';
 import { pickupNotice } from './pickup-notice.mjs';
 import { h, button, field, notify, guard, request } from './dom.mjs';
 import { money, pickupLabel, localInstant } from './model.mjs';
@@ -145,7 +146,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
           h('div', { class: 'panel-heading' }, h('h2', {}, 'My Orders'), button('Refresh orders', action(() => refresh(false, true)), { class: 'text-button', disabled: busy })),
           orders.length ? orders.map(order => h('article', { class: 'member-order' },
             h('div', {}, h('h3', {}, order.orderNumber), h('p', {}, order.pickupChange && !order.pickupChange.replacement ? 'Awaiting makeup date' : pickupLabel(order.pickup))),
-            pickupNotice(order, payload => action(async () => { await api('/api/roost/pickup-response', { ...payload, orderId: order.id }); await refresh(false, true); })(), busy),
+            pickupRequest({...order,pickupCustomerName:member.profile.name}, async payload => { await api('/api/roost/pickup-request', {orderId:order.id,...payload}); await refresh(false,true); return true; }, busy), pickupNotice(order, payload => action(async () => { await api('/api/roost/pickup-response', { ...payload, orderId: order.id }); await refresh(false, true); })(), busy),
             h('p', {}, order.lines.map(l => `${l.qty} × ${l.name}`).join(', ')),
             order.selectedPaymentMethod === 'cash_pickup' ? h('p', {}, 'Cash at Pickup · Cash Due: ' + money(order.paymentVerifiedAt || order.status === 'canceled' || order.resolution ? 0 : order.total)) : null,
             h('p', { class: 'order-state' }, paymentLabels[order.paymentStatus || 'not_collected'], ' · ', fulfillmentLabels[order.status || 'pending']),
