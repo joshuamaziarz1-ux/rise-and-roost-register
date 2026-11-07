@@ -5,9 +5,9 @@ import { readFile } from 'node:fs/promises';
 import { resolve, extname } from 'node:path';
 import { api } from '../server/service.mjs';
 import { sqliteD1 } from '../server/sqlite-adapter.mjs';
-export async function contactFixture(){
+export async function contactFixture({ password = false } = {}){
  const sql=new DatabaseSync(':memory:');sql.exec(await readFile(new URL('../schema.sql',import.meta.url),'utf8'));const db=sqliteD1(sql),messages=[];
- const config={customerExperienceEnabled:true,contactLoginEnv:{ROOST_SIMPLE_LOGIN_ENABLED:'true',ROOST_DELIVERY_VERIFIED:'true',ROOST_CODE_PEPPER:'synthetic'.repeat(8),RESEND_API_KEY:'mock',ROOST_EMAIL_FROM:'mock@example.test',TWILIO_ACCOUNT_SID:'mock',TWILIO_AUTH_TOKEN:'mock',ROOST_SMS_FROM:'+12605551234'},contactSend:async(_,target,code)=>messages.push({...target,code})};
+ const config={customerExperienceEnabled:true,contactLoginEnv:{ROOST_PASSWORD_LOGIN_ENABLED:String(password),ROOST_PASSWORD_PEPPER:'synthetic'.repeat(8),ROOST_SIMPLE_LOGIN_ENABLED:password?'false':'true',ROOST_DELIVERY_VERIFIED:'true',ROOST_CODE_PEPPER:'synthetic'.repeat(8),RESEND_API_KEY:'mock',ROOST_EMAIL_FROM:'mock@example.test',TWILIO_ACCOUNT_SID:'mock',TWILIO_AUTH_TOKEN:'mock',ROOST_SMS_FROM:'+12605551234'},contactSend:async(_,target,code)=>messages.push({...target,code})};
  const root=resolve(new URL('../public/',import.meta.url).pathname);
  const server=createServer(async(req,res)=>{try{const chunks=[];for await(const c of req)chunks.push(c);const request=new Request(origin+req.url,{method:req.method,headers:req.headers,...(['GET','HEAD'].includes(req.method)?{}:{body:Buffer.concat(chunks)})});let response;
  if(req.url.startsWith('/api/'))response=await api(request,db,Date.now(),config);

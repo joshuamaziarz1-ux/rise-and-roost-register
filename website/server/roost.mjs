@@ -1,3 +1,4 @@
+import { passwordLogin, passwordLoginReady } from './password-login.mjs';
 import { contactLogin, contactLoginReady } from './contact-login.mjs';
 import { acknowledgePickup } from './pickup-changes.mjs';
 import { cashEligibility } from './cash-pickup.mjs';
@@ -43,17 +44,19 @@ export async function roostApi({ request, db, now, input, path, json, rateLimit,
     for (const c of cookies) result.headers.append('Set-Cookie', c);
     return result;
   };
+  if (/^\/api\/roost\/password\/(register|login|setup|change|recover)$/.test(path) && request.method === 'POST') return passwordLogin({ request, db, workspaceId, now, input, path, response, env: contactLoginEnv });
   if (/^\/api\/roost\/contact\/(start|verify|finish)$/.test(path) && request.method === 'POST') return contactLogin({ request, db, workspaceId, now, input, path, response, env: contactLoginEnv, send: contactSend });
   if (path === '/api/roost/me' && request.method === 'GET') {
     const current = await memberFor(request, db, workspaceId, now);
     const renewed = current && await renewCustomerSession(request, db, workspaceId, current, now);
-    if (!renewed) return response({ simpleLoginEnabled: contactLoginReady(contactLoginEnv), member: null }, cookieValue(request, 'rr_roost_' + workspaceId) ? [customerCookie(request, workspaceId, '', 0)] : []);
+    if (!renewed) return response({ passwordLoginEnabled: passwordLoginReady(contactLoginEnv), simpleLoginEnabled: contactLoginReady(contactLoginEnv), member: null }, cookieValue(request, 'rr_roost_' + workspaceId) ? [customerCookie(request, workspaceId, '', 0)] : []);
     const member = renewed.member;
+    const passwordAccount = passwordLoginReady(contactLoginEnv) && await first(db, 'SELECT username FROM roost_passwords WHERE workspace_id=? AND member_id=?', workspaceId, member.id);
     const row = await first(db, 'SELECT ledger_json FROM workspaces WHERE id=?', workspaceId);
     const ledger = JSON.parse(row.ledger_json);
     const orders = ledger.orders.filter(o => o.customer?.memberId === member.id).map(o => customerOrder(o, workspaceId, ledger.management?.settings, now));
     const devices = await list(db, "SELECT json_group_array(json_object('id',d.id,'label',d.label,'lastSeen',d.last_seen,'current',s.hash=?)) AS items FROM roost_sessions s JOIN roost_session_details d ON d.hash=s.hash WHERE s.workspace_id=? AND s.member_id=? AND s.expires>? AND d.absolute_expires>?", member.session_hash, workspaceId, member.id, now, now);
-    return response({ simpleLoginEnabled: contactLoginReady(contactLoginEnv), member: safeMember(member), orders, devices, cashPickup: cashEligibility(ledger, member.id), credits: customerCredits(ledger, member.id), favorites: ledger.roostFavorites?.[member.id] || [] }, [renewed.cookie]);
+    return response({ passwordLoginEnabled: passwordLoginReady(contactLoginEnv), simpleLoginEnabled: contactLoginReady(contactLoginEnv), member: { ...safeMember(member), ...(passwordAccount ? { username: passwordAccount.username } : {}) }, orders, devices, cashPickup: cashEligibility(ledger, member.id), credits: customerCredits(ledger, member.id), favorites: ledger.roostFavorites?.[member.id] || [] }, [renewed.cookie]);
   }
   if (path === '/api/roost/pickup-response' && request.method === 'POST') {
     const member = await memberFor(request, db, workspaceId, now, true);
@@ -179,10 +182,12 @@ export async function roostApi({ request, db, now, input, path, json, rateLimit,
     if (!/^[a-f0-9]{48}$/.test(input.recoveryKey || '')) fail('Enter your saved recovery key.', 401);
     const member = await first(db, 'SELECT * FROM roost_members WHERE workspace_id=? AND recovery_hash=?', workspaceId, await hash(input.recoveryKey));
     if (!member) fail('This recovery key does not match. Your membership has not changed.', 401);
+    const passwordTable = await first(db, "SELECT name FROM sqlite_master WHERE type='table' AND name='roost_passwords'");
+    if (passwordTable && await first(db, 'SELECT username FROM roost_passwords WHERE workspace_id=? AND member_id=?', workspaceId, member.id)) fail('This account has a username. Use Forgot password with that username and your saved recovery code.', 409);
     const next = token(), nextHash = await hash(next), session = token();
     const guard = 'EXISTS(SELECT 1 FROM roost_members WHERE id=? AND workspace_id=? AND recovery_hash=?)';
     const args = [member.id, workspaceId, nextHash];
-    const batch = [db.prepare('UPDATE roost_members SET recovery_hash=? WHERE id=? AND workspace_id=? AND recovery_hash=?').bind(nextHash, member.id, workspaceId, member.recovery_hash),
+    const batch = [db.prepare('UPDATE roost_members SET recovery_hash=? WHERE id=? AND workspace_id=? AND recovery_hash=?' + (passwordTable ? ' AND NOT EXISTS(SELECT 1 FROM roost_passwords WHERE workspace_id=? AND member_id=?)' : '')).bind(nextHash, member.id, workspaceId, member.recovery_hash, ...(passwordTable ? [workspaceId, member.id] : [])),
       db.prepare('UPDATE roost_sessions SET expires=0 WHERE member_id=? AND workspace_id=? AND ' + guard).bind(member.id, workspaceId, ...args),
       db.prepare('DELETE FROM roost_credentials WHERE member_id=? AND workspace_id=? AND ' + guard).bind(member.id, workspaceId, ...args),
       // Invalidate pre-recovery challenges too, so a stolen credential cannot

@@ -217,3 +217,10 @@
 
 .contact-login { display: grid; gap: 16px; }
 .contact-login .text-button, .roost-entry > .text-button { min-height: 44px; }
+
+.roost-password-entry { display: grid; gap: 12px; }
+.roost-password-entry > .text-button { justify-self: start; }
+.roost-password-entry details > summary { cursor: pointer; min-height: 44px; padding: 10px 0; list-style: none; }
+.roost-password-entry details > summary::-webkit-details-marker { display: none; }
+.roost-password-entry details > summary::before { content: '›'; display: inline-block; margin-right: .5em; }
+.roost-password-entry details[open] > summary::before { transform: rotate(90deg); }

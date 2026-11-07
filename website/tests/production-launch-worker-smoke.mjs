@@ -9,6 +9,7 @@ import { accessAuthority, TESTER_A } from './access-jwt-fixture.mjs';
 import { seed } from '../public/model.mjs';
 import { PRODUCTION_DATABASE_ID, PRODUCTION_WORKSPACE_ID } from '../server/production-preparation.mjs';
 import { softwarePasskey } from './passkey-fixture.mjs';
+const passwordMode = process.env.RR_TEST_PASSWORD_LOGIN === 'true';
 const bundle = process.env.RR_PRODUCTION_WORKER_BUNDLE;
 if (!bundle) throw Error('Provide the local production dry-run bundle.');
 const authority = await accessAuthority(), origin = 'https://rise-and-roost.com';
@@ -20,7 +21,7 @@ const mf = new Miniflare(convertV4MiniflareOptions({ modules: true, modulesRoot:
     assert.equal(request.url, authority.team + '/cdn-cgi/access/certs');
     return new Response(JSON.stringify({ keys: [authority.jwk] }), { headers: { 'Content-Type': 'application/json' } });
   },
-  bindings: { PICKUP_APPROVALS_REQUIRED: 'true', DEPLOYMENT_ENVIRONMENT: 'production', PRODUCTION_RELEASE_APPROVED: 'true', REAL_CHECKOUT_ENABLED: 'true', PRODUCTION_DATABASE_ID, PUBLIC_WORKSPACE_ID: PRODUCTION_WORKSPACE_ID,
+  bindings: { ...(passwordMode ? { ROOST_PASSWORD_LOGIN_ENABLED: 'true', ROOST_PASSWORD_PEPPER: 'synthetic'.repeat(8) } : {}), PICKUP_APPROVALS_REQUIRED: 'true', DEPLOYMENT_ENVIRONMENT: 'production', PRODUCTION_RELEASE_APPROVED: 'true', REAL_CHECKOUT_ENABLED: 'true', PRODUCTION_DATABASE_ID, PUBLIC_WORKSPACE_ID: PRODUCTION_WORKSPACE_ID,
     WEBSITE_BASE_URL: origin, REVIEW_BUILD: 'false', STUDIO_MANAGEMENT_ENABLED: 'true', COMMERCE_UPDATE_ENABLED: 'true', CUSTOMER_EXPERIENCE_ENABLED: 'true',
     PRODUCTION_ACCESS_TEAM_DOMAIN: authority.team, PRODUCTION_ACCESS_AUD: authority.aud, PRODUCTION_OWNERS: JSON.stringify([{ email: TESTER_A, name: 'Synthetic Owner', role: 'owner' }]) } }));
 try {
@@ -29,6 +30,10 @@ try {
   for (const statement of schema.split(';')) if (statement.trim()) await db.prepare(statement).run();
   const migration = (await readFile(new URL('../migrations/0003_customer_remembered_sessions.sql', import.meta.url), 'utf8')).split('\n').filter(line => !line.trim().startsWith('--')).join('\n');
   for (const statement of migration.split(';')) if (statement.trim()) await db.prepare(statement).run();
+  if (passwordMode) {
+    const passwordSchema = (await readFile(new URL('../migrations/0011-roost-password-login.sql', import.meta.url), 'utf8')).split('\n').filter(line => !line.trim().startsWith('--')).join('\n');
+    for (const statement of passwordSchema.split(';')) if (statement.trim()) await db.prepare(statement).run();
+  }
   const doc = seed(Date.now() + 7 * 86400000); doc.business.pickupAddress = { name: 'Synthetic farm', street: 'Synthetic street', city: 'Synthetic Indiana city' }; doc.products[0].stock = 1; doc.products[0].inventoryMode = 'physical';
   doc.pickups = []; doc.pickupSchedule = { start: '15:00', end: '18:00', capacity: 1 };
   const serialized = JSON.stringify(doc);
@@ -166,5 +171,19 @@ try {
   await db.prepare('UPDATE workspaces SET ledger_json=? WHERE id=?').bind(JSON.stringify(withoutBooking),PRODUCTION_WORKSPACE_ID).run();
   assert.equal((await call('/api/site')).status,503,'Production cannot silently fall back to legacy availability');
   await db.prepare('UPDATE workspaces SET ledger_json=? WHERE id=?').bind(stored.ledger_json,PRODUCTION_WORKSPACE_ID).run();
+  if (passwordMode) {
+    const before = await customer('me');
+    await customer('password/setup', { username: 'existing-neighbor', password: 'a friendly garden phrase' });
+    assert.equal((await customer('me')).member.id, before.member.id);
+    assert.deepEqual((await customer('me')).orders, before.orders);
+    await customer('logout', {});
+    await customer('password/login', { username: 'existing-neighbor', password: 'a friendly garden phrase' });
+    assert.equal((await customer('me')).member.id, before.member.id);
+    await customer('logout', {});
+    const created = await customer('password/register', { username: 'new-neighbor', password: 'a friendly garden phrase', name: 'New Neighbor' });
+    const createdId = (await customer('me')).member.id;
+    await customer('password/recover', { username: 'new-neighbor', password: 'another friendly garden phrase', recoveryKey: created.recoveryKey });
+    assert.equal((await customer('me')).member.id, createdId);
+  }
   console.log(JSON.stringify({ actualProductionWorkerdD1: true, pickupApprovalsReschedulingAcknowledgements: true, cashPickupAtomicMemberEligibilityReceiptAndCreditLifecycle: true, returnCreditsFavoritesReservationFinalizationCancellationAndZeroDue: true, customerPasskeysSessionsRecoveryAndRevocation: true, individualSignedOwnerIdentity: true, privateApiAuthorization: true, manualPaymentVerification: true, duplicateVerificationPrevented: true, atomicInventoryRace: true, trackingAndFulfillment: true, automaticCalendar: true, calendarExceptionPreservesOrder: true, remoteRequests: 0, remoteWrites: 0 }));
 } finally { await mf.dispose(); }

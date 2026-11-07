@@ -32,9 +32,12 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
   const joinProfile = { name: '', preferredName: '', email: '', phone: '' };
   let profileDraft;
   let entryView = 'welcome', helpOpen = false;
+  let passwordLoginEnabled = false;
+  const passwordDraft = { username: '', password: '', name: '', currentPassword: '', recoveryKey: '' };
   let simpleLoginEnabled = false, contactDraft = '', codeDraft = '', preferredDraft = '', contactStep = 'contact', linkContact = false, resendAt = 0;
   function showEntry(view) {
     if (busy) return;
+    passwordDraft.password = ''; passwordDraft.currentPassword = ''; passwordDraft.recoveryKey = '';
     entryView = view; helpOpen = false; error = ''; render();
     document.querySelector('.roost-entry h1')?.focus();
   }
@@ -49,6 +52,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
   };
   function clearPrivate() {
     entryView = 'welcome'; helpOpen = false; contactDraft = ''; codeDraft = ''; preferredDraft = ''; contactStep = 'contact'; linkContact = false;
+    Object.keys(passwordDraft).forEach(key => passwordDraft[key] = '');
     generation++; cashPickup = {}; member = null; orders = []; devices = []; favorites = []; credits = { available: 0, reserved: 0, enabled: false, items: [], transactions: [] }; recoveryKey = ''; profileDraft = undefined;
     Object.assign(joinProfile, { name: '', preferredName: '', email: '', phone: '' });
     Object.assign(commentDraft, { name: '', body: '', consent: false }); onMember(null);
@@ -65,6 +69,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
       try {
         const result = await api('/api/roost/me');
         if (started !== generation) return false;
+        passwordLoginEnabled = result.passwordLoginEnabled === true;
         simpleLoginEnabled = result.simpleLoginEnabled === true;
         const changed = member?.id !== result.member?.id;
         if (!result.member && member) { clearPrivate(); }
@@ -102,8 +107,9 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
   function recoveryCard() {
     if (!recoveryKey) return null;
     return h('section', { class: 'recovery-card', 'aria-label': 'Save your recovery key' },
-      h('h2', {}, 'Keep a way back in'),
-      h('p', {}, 'Save this recovery key in your password manager. Use it if you lose access to your passkeys. It is shown only now.'),
+      h('h2', {}, passwordLoginEnabled ? 'Save your recovery code' : 'Keep a way back in'),
+      passwordLoginEnabled && member?.username ? h('p', {}, 'Username: ' + member.username) : null,
+      h('p', {}, passwordLoginEnabled ? 'Save this recovery code in a safe place or your password manager. You will need it if you forget your password. It is shown only now; we cannot send an email or text to reset your password.' : 'Save this recovery key in your password manager. Use it if you lose access to your passkeys. It is shown only now.'),
       h('input', { value: recoveryKey, readonly: true, 'aria-label': 'Roost recovery key', autocomplete: 'off' }),
       button('Copy recovery key', guard(async () => { await navigator.clipboard.writeText(recoveryKey); notify('Recovery key copied. Save it in your password manager.'); }), { class: 'secondary-button' }),
       button('I saved my recovery key', () => { recoveryKey = ''; render(); }, { class: 'primary-link' }));
@@ -139,9 +145,9 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
               h('button', { type: 'submit', class: 'secondary-button', disabled: busy }, 'Add my order')))),
         h('aside', {}, form, h('section', { class: 'account-controls' },
           h('h2', {}, 'Account Settings'), h('p', {}, 'Welcome back to The Roost! This personal device stays signed in for about 30 days after your last visit, for at most 90 days. Log out on shared computers.'),
-          simpleLoginEnabled ? contactSettings() : null,
+          passwordLoginEnabled ? passwordSettings() : simpleLoginEnabled ? contactSettings() : null,
           button('Sign out of all devices', action(async () => { await api('/api/roost/logout-all', {}); clearPrivate(); channel?.postMessage('changed'); }), { class: 'text-button', disabled: busy }),
-          h('p', { class: 'small-note' }, 'Your passkey verifies your Roost membership. Contact details are for pickup, never proof of account ownership.'),
+          h('p', { class: 'small-note' }, passwordLoginEnabled ? 'Your username and password keep your account secure. Your pickup contact details do not grant account access.' : 'Your passkey verifies your Roost membership. Contact details are for pickup, never proof of account ownership.'),
           button('Add a passkey on this device', action(() => authenticate('add')), { class: 'secondary-button', disabled: busy }),
           h('details', { class: 'remembered-devices' }, h('summary', {}, 'Remembered devices'),
             devices.map(device => h('div', { class: 'remembered-device' }, h('p', {}, device.label, device.current ? ' · This device' : ''),
@@ -155,6 +161,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     return result;
   }
   function entry() {
+    if (passwordLoginEnabled && entryView !== 'signin') return passwordEntry();
     if (simpleLoginEnabled && entryView !== 'signin') return simpleEntry();
     const title = entryView === 'signin' ? 'Welcome Back!' : entryView === 'join' ? 'Join The Roost' : 'Welcome to The Roost';
     const intro = entryView === 'signin' ? 'Sign in securely to your Roost account.' : entryView === 'join' ? 'Create your account to keep your orders, favorites, and pickup details together.' : 'Your little corner of Rise & Roost.';
@@ -171,7 +178,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
           link('/shop', 'Continue as a Guest', 'entry-guest'))));
     } else if (entryView === 'signin') {
       panel.append(h('section', { class: 'roost-signin' },
-        !simpleLoginEnabled ? h('p', {}, 'Email and phone sign-in are not available yet. Use a passkey, your saved recovery key, or continue as a guest.') : null,
+        !simpleLoginEnabled && !passwordLoginEnabled ? h('p', {}, 'Email and phone sign-in are not available yet. Use a passkey, your saved recovery key, or continue as a guest.') : null,
         button('Sign in with a Passkey', action(() => authenticate('login')), { class: 'primary-link', disabled: busy || readOnly }),
         h('details', { open: helpOpen, ontoggle: e => { helpOpen = e.currentTarget.open; } },
           h('summary', {}, 'Need help signing in?'),
@@ -194,6 +201,51 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     }
     if (busy) panel.append(h('p', { role: 'status', class: 'small-note' }, 'Please finish the sign-in prompt.'));
     return panel;
+  }
+  function passwordFields(kind) {
+    const signup = kind === 'register', setup = kind === 'setup', change = kind === 'change', recover = kind === 'recover';
+    return [
+      signup ? field('Preferred name', passwordDraft.name, v => passwordDraft.name = v, { name: 'name', autocomplete: 'given-name', required: true, maxlength: 40 }) : null,
+      !change ? field('Username', passwordDraft.username, v => passwordDraft.username = v, { name: 'username', autocomplete: 'username', autocapitalize: 'none', spellcheck: false, required: true, minlength: 3, maxlength: 30 }) : null,
+      recover ? field('Recovery code', passwordDraft.recoveryKey, v => passwordDraft.recoveryKey = v, { name: 'recoveryKey', type: 'password', autocomplete: 'off', required: true, maxlength: 48 }) : null,
+      change ? field('Current password', passwordDraft.currentPassword, v => passwordDraft.currentPassword = v, { name: 'currentPassword', type: 'password', autocomplete: 'current-password', required: true, maxlength: 128 }) : null,
+      field(signup || setup || change || recover ? 'New password' : 'Password', passwordDraft.password, v => passwordDraft.password = v, { name: 'password', type: 'password', autocomplete: signup || setup || change || recover ? 'new-password' : 'current-password', required: true, minlength: signup || setup || change || recover ? 15 : 1, maxlength: 128 }),
+      signup || setup || change || recover ? h('p', { class: 'small-note' }, 'Use at least 15 characters. A short phrase is easy to remember. Your browser can save it for you.') : null
+    ];
+  }
+  function passwordForm(kind) {
+    return h('form', { class: 'contact-login password-login', onsubmit: e => {
+      e.preventDefault();
+      // Read the native fields so password-manager autofill is respected.
+      const values = Object.fromEntries(new FormData(e.currentTarget));
+      passwordDraft.username = values.username || passwordDraft.username;
+      passwordDraft.name = values.name || passwordDraft.name;
+      void action(async () => {
+        passwordDraft.password = ''; passwordDraft.currentPassword = ''; passwordDraft.recoveryKey = '';
+        const result = await api('/api/roost/password/' + kind, values);
+        await authenticated(result.recoveryKey || '');
+        if (kind === 'setup') notify('Your username and password are ready. This is the same Roost account.');
+        if (kind === 'change' || kind === 'recover') notify('Your password is saved. Other devices are signed out.');
+      })();
+    } }, passwordFields(kind), h('button', { type: 'submit', class: 'primary-link', disabled: busy || readOnly }, kind === 'register' ? 'Create My Account' : kind === 'setup' ? 'Save username and password' : kind === 'change' || kind === 'recover' ? 'Save new password' : 'Sign In'));
+  }
+  function passwordEntry() {
+    const signup = entryView === 'password-join', recover = entryView === 'password-recover';
+    return h('main', { class: 'section-inner roost-page roost-entry roost-password-entry', 'data-roost-view': signup ? 'password-join' : recover ? 'password-recover' : 'password-signin' },
+      signup || recover ? button('Back to Sign In', () => showEntry('welcome'), { class: 'text-button', disabled: busy }) : null,
+      h('div', { class: 'page-intro' }, h('h1', {}, recover ? 'Reset Your Password' : 'Welcome to The Roost!'), h('p', {}, signup ? 'Join our little community.' : recover ? 'Use your username and saved recovery code.' : 'Sign in and make yourself at home.')),
+      error ? h('p', { role: 'alert', class: 'form-error' }, error) : null,
+      passwordForm(signup ? 'register' : recover ? 'recover' : 'login'),
+      signup ? h('p', { class: 'small-note' }, 'Already a member? Sign in with your existing passkey or recovery key first, then add a username in Account Settings. Your orders and favorites stay together.') : null,
+      !signup && !recover ? [button('Join The Roost', () => showEntry('password-join'), { class: 'secondary-button', disabled: busy }), button('Forgot password?', () => showEntry('password-recover'), { class: 'text-button', disabled: busy })] : null,
+      h('details', {}, h('summary', {}, 'Other sign-in options'), button('Sign in with a Passkey', () => showEntry('signin'), { class: 'text-button', disabled: busy }), h('p', { class: 'small-note' }, 'Existing passkey members can also use their saved recovery key from this option.')),
+      link('/shop', 'Continue as a Guest', 'entry-guest'));
+  }
+  function passwordSettings() {
+    return h('section', {}, h('h3', {}, member.username ? 'Your sign-in' : 'Add a username and password'),
+      member.username ? h('p', {}, 'Username: ' + member.username) : h('p', {}, 'Add a username to this existing account. Your orders, favorites and passkeys stay with you. Sign in again first if asked.'),
+      h('details', {}, h('summary', {}, member.username ? 'Change password' : 'Set up username sign-in'), passwordForm(member.username ? 'change' : 'setup')),
+      !member.username ? button('Verify with your existing passkey', action(() => authenticate('login')), { class: 'text-button', disabled: busy }) : null);
   }
   async function startContact() {
     await api('/api/roost/contact/start', { contact: contactDraft, link: linkContact });
