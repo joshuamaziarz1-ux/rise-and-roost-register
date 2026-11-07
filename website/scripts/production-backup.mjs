@@ -24,7 +24,10 @@ export async function loadProductionExport({ accountId, databaseId, token, fetch
   const request = async body => {
     const response = await fetcher(url, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(30000), headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     requireValue(response.ok, 'The D1 export request was not confirmed.');
-    const data = await response.json(); requireValue(data.success && data.result, 'The D1 export did not return confirmed metadata.'); return data.result;
+    const data = await response.json(); requireValue(data.success && data.result && data.result.success !== false && !data.result.error, 'The D1 export did not return confirmed metadata.');
+    // Completed Cloudflare exports place the download inside result.result.
+    // Retain top-level support for older responses, without logging either URL.
+    return { ...data.result, signed_url: data.result.signed_url || data.result.result?.signed_url };
   };
   let result = await request({ output_format: 'polling' });
   requireValue(result.at_bookmark || result.signed_url, 'The D1 export bookmark is missing.');

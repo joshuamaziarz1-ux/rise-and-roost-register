@@ -3,6 +3,8 @@ import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import assert from "node:assert/strict";
+import { seed } from '../public/model.mjs';
+import { PRODUCTION_DATABASE_ID, PRODUCTION_WORKSPACE_ID } from '../server/production-preparation.mjs';
 const bundle = process.env.RR_PRODUCTION_WORKER_BUNDLE;
 if (!bundle) throw Error("Provide a dry-run bundle.");
 const messages = [];
@@ -18,7 +20,18 @@ const mf = new Miniflare(
     serviceBindings: { ASSETS: () => new Response("synthetic") },
     bindings: {
       CUSTOMER_EXPERIENCE_ENABLED: "true",
-      REVIEW_BUILD: "true",
+      REVIEW_BUILD: "false",
+      DEPLOYMENT_ENVIRONMENT: "production",
+      PRODUCTION_RELEASE_APPROVED: "true",
+      PRODUCTION_DATABASE_ID,
+      PUBLIC_WORKSPACE_ID: PRODUCTION_WORKSPACE_ID,
+      STUDIO_MANAGEMENT_ENABLED: "true",
+      COMMERCE_UPDATE_ENABLED: "true",
+      REAL_CHECKOUT_ENABLED: "false",
+      ORDER_EMAIL_ENABLED: "false",
+      PRODUCTION_ACCESS_TEAM_DOMAIN: "https://synthetic.cloudflareaccess.com",
+      PRODUCTION_ACCESS_AUD: "a".repeat(64),
+      PRODUCTION_OWNERS: JSON.stringify([{email:'owner@example.test',name:'Synthetic Owner',role:'owner'}]),
       ROOST_EMAIL_LOGIN_ENABLED: "true",
       ROOST_PASSWORD_LOGIN_ENABLED: "true",
       ROOST_PASSWORD_PEPPER: "synthetic".repeat(8),
@@ -26,7 +39,7 @@ const mf = new Miniflare(
       ROOST_AUTH_EMAIL_ENABLED: "true",
       ROOST_AUTH_DELIVERY_VERIFIED: "true",
       ROOST_AUTH_FREE_PLAN_CONFIRMED: "true",
-      WEBSITE_BASE_URL: "https://edge.test",
+      WEBSITE_BASE_URL: "https://rise-and-roost.com",
     },
     outboundService: async (req) => {
       assert.equal(req.url, "https://api.resend.com/emails");
@@ -45,7 +58,12 @@ try {
     .join("\n");
   for (const sql of schema.split(";"))
     if (sql.trim()) await db.prepare(sql).run();
-  const origin = "https://edge.test",
+  const identitySchema=await readFile(new URL('../production-identity.sql',import.meta.url),'utf8');
+  await db.prepare(identitySchema).run();
+  await db.prepare("INSERT INTO deployment_identity VALUES('main','production',?,?)").bind(PRODUCTION_DATABASE_ID,PRODUCTION_WORKSPACE_ID).run();
+  const document=JSON.stringify(seed());
+  await db.prepare('INSERT INTO workspaces(id,owner_hash,draft_json,published_json,versions_json,created_at) VALUES(?,?,?,?,?,?)').bind(PRODUCTION_WORKSPACE_ID,'disabled-legacy-owner',document,document,'[]',new Date().toISOString()).run();
+  const origin = "https://rise-and-roost.com",
     cookies = new Map(),
     password = "a friendly garden phrase",
     email = "neighbor@example.test";
@@ -66,8 +84,7 @@ try {
     }
     return { status: r.status, data: await r.json() };
   }
-  const site = await call("/api/workspaces", {});
-  const workspaceId = site.data.id;
+  const workspaceId = PRODUCTION_WORKSPACE_ID;
   const post = (p, b = {}) => call("/api/roost/" + p, { workspaceId, ...b });
   const me = () => call("/api/roost/me?workspace=" + workspaceId);
   assert.equal(
@@ -111,9 +128,17 @@ try {
   );
   assert.equal((await me()).data.member.id, id);
   assert.equal(messages.at(-1).subject, "Password Changed · Rise & Roost");
+  assert.equal((await call('/studio/api/manage/snapshot')).status,401);
+  assert.equal((await call('/api/manage/snapshot')).status,404);
+  const closedCheckout=await call('/api/orders',{});
+  assert.equal(closedCheckout.status,409);
+  assert.match(closedCheckout.data.error,/Ordering is not open yet/);
   console.log(
     JSON.stringify({
       actualWorkerdD1: true,
+      productionWrapper: true,
+      studioProtected: true,
+      checkoutDisabled: true,
       pendingRegistration: true,
       singleUseVerification: true,
       emailLogin: true,

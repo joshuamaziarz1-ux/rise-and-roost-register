@@ -1,0 +1,36 @@
+{
+  "migration": "0012-roost-email-login.sql",
+  "sha256": "8cd6dba36060dcaca307091e9e623ef53f2576fd0f316e792f71c38de5da3cac",
+  "appliedAt": "2026-11-07T18:38:33.970825+00:00",
+  "newTables": {
+    "roost_email_identities": [
+      "workspace_id",
+      "email",
+      "member_id",
+      "verified_at"
+    ],
+    "roost_email_tokens": [
+      "hash",
+      "workspace_id",
+      "email",
+      "purpose",
+      "member_id",
+      "session_hash",
+      "payload_json",
+      "expires",
+      "claimed_by"
+    ],
+    "roost_auth_events": [
+      "id",
+      "workspace_id",
+      "member_id",
+      "event",
+      "occurred_at"
+    ]
+  },
+  "oldTableSchemasAndCountsUnchanged": true,
+  "memberCount": 0,
+  "databaseId": "889a4b96-cabd-43d1-ad45-79f65b0052b0",
+  "tableCountBefore": 15,
+  "tableCountAfter": 18
+}

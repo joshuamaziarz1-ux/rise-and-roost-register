@@ -1,0 +1,54 @@
+{
+  "testMemberDeleted": true,
+  "memberFingerprint": "3196d780f96a",
+  "ownershipBasis": [
+    "explicit owner attestation identifying the sole existing member",
+    "sole member count rechecked against verified backup",
+    "exact email match to one configured production owner"
+  ],
+  "deletedRows": {
+    "roost_session_details": 2,
+    "roost_sessions": 2,
+    "roost_credentials": 1,
+    "roost_challenges": 1,
+    "roost_passwords": 0,
+    "roost_members": 1
+  },
+  "remainingMembers": 0,
+  "associatedOrders": 0,
+  "associatedPayments": 0,
+  "associatedBenefits": 0,
+  "protectedBusinessTablesUnchanged": {
+    "workspaces": {
+      "count": 1,
+      "sha256": "71c22ffd1d2a515ce0db155a959f22e2d24a3aa64921e3229141d9d7dbf11e9b"
+    },
+    "assets": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "sessions": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "device_links": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "previews": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "customer_comments": {
+      "count": 1,
+      "sha256": "96ec743be1e241c4d141a644dc6429b25742497321a329921d9aea6c524940de"
+    },
+    "deployment_identity": {
+      "count": 1,
+      "sha256": "333447b5e4fc61a0f0ca6214a52edc1cc49348c4207fd73205dd3c268a2a9df3"
+    }
+  },
+  "backupSha256": "ce9c24534ba16edf2fc7a0d59f7ff6330b4ad7c1ea6e979751529f54af0c48ba",
+  "deletedAt": "2026-11-07T18:37:47.727731+00:00",
+  "studioIdentitiesChanged": false
+}

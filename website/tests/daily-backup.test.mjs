@@ -120,7 +120,7 @@ test('scheduled runner restores an actual SQL export before encrypted backup and
     const fetcher = async (url, options) => {
       calls++;
       if (calls === 1) { assert.match(url, /api.cloudflare.com/); assert.equal(options.headers.Authorization, 'Bearer fixture-export-credential'); return Response.json({ success: true, result: { at_bookmark: 'fixture-bookmark', status: 'active' } }); }
-      if (calls === 2) { assert.equal(JSON.parse(options.body).current_bookmark, 'fixture-bookmark'); return Response.json({ success: true, result: { signed_url: 'https://signed-export.example.test/fixture.sql' } }); }
+      if (calls === 2) { assert.equal(JSON.parse(options.body).current_bookmark, 'fixture-bookmark'); return Response.json({ success: true, result: { success: true, status: 'complete', result: { filename: 'fixture.sql', signed_url: 'https://signed-export.example.test/fixture.sql' } } }); }
       assert.equal(url, 'https://signed-export.example.test/fixture.sql'); assert.equal(options.headers, undefined); return new Response(dump.join('\n'));
     };
     source = await loadProductionExport({ accountId: 'f'.repeat(32), databaseId, token: 'fixture-export-credential', fetcher, sleep: async () => {} });

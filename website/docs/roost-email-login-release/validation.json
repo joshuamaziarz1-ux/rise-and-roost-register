@@ -1,0 +1,20 @@
+{
+  "unitTestsPassed": 344,
+  "broadBrowserPassed": 280,
+  "chromiumPassed": 168,
+  "webkitPassed": 112,
+  "initialWebkitRunnerConfigurationFailureCorrected": true,
+  "commercePassed": 8,
+  "productionIsolationPassed": 10,
+  "nativeProductionEmailSmokePassed": true,
+  "nativePasswordSmokePassed": true,
+  "testAccountDeleted": true,
+  "remainingMembersAtVerification": 0,
+  "migrationApplied": true,
+  "verifiedEncryptedBackups": 2,
+  "workerDeployed": false,
+  "newLoginActivated": false,
+  "liveAuthEmailsSent": 0,
+  "conditionalDeploymentAuthorizationReceived": true,
+  "remainingBlocker": "Authenticated Resend account access for current plan/usage/sender checks and owner-only live authentication email workflow tests"
+}

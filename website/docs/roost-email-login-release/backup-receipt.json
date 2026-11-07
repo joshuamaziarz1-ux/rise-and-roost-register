@@ -1,0 +1,13 @@
+{
+  "backupVerified": true,
+  "databaseId": "889a4b96-cabd-43d1-ad45-79f65b0052b0",
+  "capturedAt": "2026-11-07T18:35:15.424Z",
+  "archiveSha256": "ce9c24534ba16edf2fc7a0d59f7ff6330b4ad7c1ea6e979751529f54af0c48ba",
+  "archiveBytes": 275391,
+  "tableCount": 15,
+  "memberCount": 1,
+  "everyRecordMatches": true,
+  "schemaMatches": true,
+  "remoteWrites": 0,
+  "storage": "private workspace; not an offsite scheduled backup"
+}

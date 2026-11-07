@@ -1,0 +1,16 @@
+{
+  "activeWorkerVersion": "3afe2f0a-0a83-4781-92fc-2bdd4576536a",
+  "deploymentId": "2a3853c3-c3b7-4793-a9d3-0451ae075063",
+  "deploymentUnchanged": true,
+  "allBindingMetadataUnchanged": true,
+  "REAL_CHECKOUT_ENABLED": "false",
+  "ORDER_EMAIL_ENABLED": "false",
+  "authenticationFlags": {
+    "ROOST_EMAIL_LOGIN_ENABLED": "absent (disabled)",
+    "ROOST_AUTH_EMAIL_ENABLED": "absent (disabled)",
+    "ROOST_AUTH_OWNER_TEST": "absent (disabled)",
+    "ROOST_AUTH_FREE_PLAN_CONFIRMED": "absent (disabled)",
+    "ROOST_AUTH_DELIVERY_VERIFIED": "absent (disabled)"
+  },
+  "liveAuthEmailsSentByThisTask": 0
+}
