@@ -83,3 +83,13 @@ The fallback button previously said “Sign In Securely” despite offering only
 Five existing entry/cancellation/recovery/guest browser cases passed across all five profiles. Production version `d31565e8-0383-4e12-9cb3-690b790f9cf7`, deployment `3dd08743-625b-4b16-a1c6-e949762a5d5e`, serves the wording change. Candidate resources (including executable etag, all bindings, runtime and handlers) matched the preceding production version exactly. All production table/schema fingerprints, Access configuration and commerce settings remained unchanged. Read-only public desktop/mobile checks verified the explicit label, availability message, guest navigation, zero JS errors and zero write requests. Both login flags remain false; provider configuration is still outstanding.
 
 Live sign-in screenshots: [desktop](roost-simple-login/production-explicit-passkey-desktop.png), [mobile](roost-simple-login/production-explicit-passkey-mobile.png).
+
+## Follow-up: refresh versioned entry modules
+
+Both apex and www returned the corrected customer module, but the reported browser screen still showed the old text. Added content-derived version queries to the HTML application script and its customer module import, so fresh navigation requests distinct module URLs. This does not activate email/SMS verification. Runtime asset commit `930ed2e`; Worker version `067e51f1-ced0-48d6-87ab-0887df891080`; deployment `8fd467e9-4cd0-4d06-8c84-60cdbf7d0116`. The executable and every binding/runtime resource match the preceding version exactly.
+
+Five entry/browser regressions passed. Read-only live desktop Chromium, desktop WebKit and iPhone WebKit verified `/app.mjs?v=d08e8c5dbe66` and `/customer.mjs?v=e744885a4c55`, the explicit passkey label and unavailable-delivery notice, guest navigation, zero JS errors/overflow and zero write requests. No WebAuthn request occurred on opening welcome or the sign-in view. Customer/member/credential/session/workspace tables, commerce settings and Access were unchanged. One additional authentication challenge appeared during the verification window; the verification browsers blocked all write requests, and no production records were reset or used for testing.
+
+Fresh navigation: https://rise-and-roost.com/roost?release=d08e8c5dbe66
+
+Live screenshots: [desktop WebKit](roost-simple-login/versioned-signin-desktop-webkit.png), [iPhone WebKit](roost-simple-login/versioned-signin-iphone-webkit.png).
