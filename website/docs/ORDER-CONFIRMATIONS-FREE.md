@@ -21,7 +21,7 @@ Sending requires all of:
 - `ORDER_EMAIL_DELIVERY_VERIFIED=true` after authorized domain/account/sender and controlled delivery checks.
 - Secure `RESEND_API_KEY`, a verified `ORDER_EMAIL_FROM` sender and the correct public workspace.
 
-The site enforces an atomic D1 budget of 90 provider API attempts per UTC day and 2,700 attempts in any rolling 31-day window. Retries and uncertain timeouts consume budget conservatively, so the application's own usage stops below the advertised 100/day and 3,000/month free allowance. These limits do not measure unrelated applications using the same provider account; the account must remain on its provider-enforced free plan. No code upgrades the plan or authorizes billing. A quota pause makes no provider call and directs customers to save/use their order page. Old queued events expire after 23 hours rather than sending stale confirmations much later.
+The site enforces an atomic D1 budget of 90 provider API attempts per UTC day and 2,700 attempts across the most recent 31 UTC calendar dates. Retries and uncertain timeouts consume budget conservatively, so the application's own usage stops below the advertised 100/day and 3,000/month free allowance. These limits do not measure unrelated applications using the same provider account; the account must remain on its provider-enforced free plan. No code upgrades the plan or authorizes billing. A quota pause makes no provider call and directs customers to save/use their order page. Old queued events expire after 23 hours rather than sending stale confirmations much later.
 
 Outbox leases and ledger compare-and-swap prevent concurrent submissions. A complete payload is frozen before first provider submission so payment/pickup edits cannot change an idempotent retry's body. Accepted/permanently failed/expired payload snapshots are removed to limit storage. Existing Resend idempotency keys remain stable. Provider errors are not printed to customer pages or logs; private emails and capabilities are not logged by this change.
 
@@ -52,3 +52,41 @@ If the owner already has Workers Paid, inspect its Email Sending eligibility, in
 Dedicated branch: `feature/order-confirmations-free`, based on the approved active username/password release. Original settings, secret bindings, runtime/asset behavior and Studio Access must be retained. `ORDER_EMAIL_ENABLED` remains false; this candidate adds explicit false free-plan/delivery flags. No database migration or production data update is required. The existing `limits` table is used only when the mail sender is enabled. Checkout, Cash at Pickup, credits and pickup/payment policies remain unchanged.
 
 Tests cover confirmation content/private links, atomic daily/rolling limits, opt-in/readiness, provider errors, unchanged retry payloads, printable payment distinctions, reopening guest tracking, actual downloads, print/PDF layout dispatch, production routing/background drain and existing customer/checkout flows. Physical printers and real inbox delivery are not claimed tested. Candidate screenshots use isolated synthetic local orders, not production customer records.
+
+## Verified production release — November 7, 2026
+
+| Item | Value |
+| --- | --- |
+| Branch | `feature/order-confirmations-free` |
+| Runtime commit | `68ba6687bb3f375c63f568ac3e9d8fdecfe85787` |
+| Worker | `rise-roost-website-production` |
+| Active version, 100% traffic | `88342f95-ac03-4923-9ae5-148b8dbb7c4e` |
+| Deployment | `30a2ee18-a815-4251-8d87-b762a9f807b1` |
+| Exact executable SHA256 | `1b6389dfd21e2284b9a5849a98e711fcab0d977fe580c59717c58715d5c6cbf6` |
+| Previous retained version | `09e9a128-77cf-4cfa-81ee-21bbb80cab8e` |
+| Save/Print controls | Deployed for order confirmations/private tracking |
+| Receipt email | **DISABLED**, free account/sender/delivery setup still required |
+| Username/password login | **ACTIVE**, unchanged |
+| Production checkout | Disabled, unchanged |
+| Database migration | None |
+| Paid service, subscription or plan upgrade | None |
+
+All original bindings, including the password pepper secret, runtime/asset behavior and handlers were compared before activation and retained. Only the two explicit false email-readiness flags were added. Production/source state was rechecked before release; newer approved features were not overwritten. The deployed executable and HTML/app/customer/tracking/confirmation assets match the tested candidate byte for byte. All fifteen pre-existing table fingerprints and schemas, Cloudflare Access applications and commerce settings remain identical after deployment. No production test orders, customers, sessions, emails or SMS messages were created/sent. Checkout, Cash at Pickup, return credits, pickup approvals, inventory, payment verification and announcements were not activated or changed.
+
+There are no production order records to use for a live receipt test, and this task deliberately did not create one. Download/print/email examples are synthetic local fixtures. Public read-only checks across desktop Chromium, desktop WebKit, iPhone WebKit, Android Chromium and tablet Chromium confirmed username/password login, Join/reset navigation, optional passkeys and guest shopping remain intact, with zero errors, overflow or write requests. Public APIs report username/password enabled, receipt notifications disabled and checkout disabled. Studio and its private APIs still return the Cloudflare Access challenge.
+
+| Final validation | Result |
+| --- | --- |
+| Full unit/service/security/database suite | 307 passed |
+| New confirmation download/print/private-link/email-opt-in browser cases, five profiles | 10 passed |
+| Existing checkout/date/payment/closed-ordering browser cases, five profiles | 20 passed |
+| Existing guest/member order journeys, five profiles | 10 passed |
+| Exact compiled production Worker with username login and mocked receipt sending in disposable D1 | Passed; 11 mock email submissions, zero real outbound requests/writes |
+| Read-only live browser checks, five profiles | Passed |
+| Exact executable/assets and data/Access/commerce preservation | Passed |
+
+Total: **347 automated cases**, one compiled edge-runtime smoke test and production verification. An initial download test found that the existing SPA router intercepted blob download links. The router now respects download attributes and non-HTTP protocols; all ten confirmation cases passed their clean final run. Print tests verify browser print dispatch and print-media layout, not physical printers. Mock provider acceptance is not represented as real inbox delivery.
+
+Examples: [desktop confirmation](order-confirmations/confirmation-desktop-chromium.png), [iPhone confirmation](order-confirmations/confirmation-iphone-webkit.png), [print layout](order-confirmations/print-desktop-chromium.png), [optional-email confirmation with mock delivery](order-confirmations/email-opt-in-desktop-chromium.png).
+
+Remaining action: confirm whether the existing Cloudflare account is Workers Free or Workers Paid, or connect the separately free transactional sender as described above. No account plan can be inferred from the website's DNS plan. Sending stays off until a no-upgrade allowance, sender/domain, secure credentials and actual controlled delivery have been verified. No new paid plan is authorized or enabled by this release.

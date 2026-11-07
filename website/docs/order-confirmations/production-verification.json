@@ -1,0 +1,17 @@
+{
+  "worker": "rise-roost-website-production",
+  "version": "88342f95-ac03-4923-9ae5-148b8dbb7c4e",
+  "deploymentId": "30a2ee18-a815-4251-8d87-b762a9f807b1",
+  "branch": "feature/order-confirmations-free",
+  "runtimeCommit": "68ba6687bb3f375c63f568ac3e9d8fdecfe85787",
+  "executableSha256": "1b6389dfd21e2284b9a5849a98e711fcab0d977fe580c59717c58715d5c6cbf6",
+  "savePrintConfirmationDeployed": true,
+  "emailSendingEnabled": false,
+  "checkoutEnabled": false,
+  "usernamePasswordLoginEnabled": true,
+  "originalDataAndSchemaUnchanged": true,
+  "accessAndCommerceUnchanged": true,
+  "paidAccountUpgrade": false,
+  "realMessagesSent": 0,
+  "productionTestOrdersCreated": 0
+}
