@@ -41,7 +41,7 @@ export default {
     const pin = await studioPinAccess(request, env);
     const access = pin.active ? pin : await previewAccess(request, env);
     let response = pin.response || (!pin.active && access.active && !access.grant ? restrictedResponse(request, access) : new URL(request.url).pathname.startsWith("/api/")
-      ? await api(request, env.DB, Date.now(), { publicWorkspaceId: env.PUBLIC_WORKSPACE_ID, emailEnabled: emailConfigured(env), customerExperienceEnabled: env.CUSTOMER_EXPERIENCE_ENABLED === "true", reviewBuild: env.REVIEW_BUILD === "true", studioManagementEnabled: env.STUDIO_MANAGEMENT_ENABLED === "true", previewGrant: access.grant, previewPinMode: pin.active, commerceEnabled: env.COMMERCE_UPDATE_ENABLED === "true" })
+      ? await api(request, env.DB, Date.now(), { contactLoginEnv: env, publicWorkspaceId: env.PUBLIC_WORKSPACE_ID, emailEnabled: emailConfigured(env), customerExperienceEnabled: env.CUSTOMER_EXPERIENCE_ENABLED === "true", reviewBuild: env.REVIEW_BUILD === "true", studioManagementEnabled: env.STUDIO_MANAGEMENT_ENABLED === "true", previewGrant: access.grant, previewPinMode: pin.active, commerceEnabled: env.COMMERCE_UPDATE_ENABLED === "true" })
       : await env.ASSETS.fetch(request));
     if (request.method === "POST" && response.ok && emailConfigured(env))
       ctx?.waitUntil(drainNotifications(env.DB, env));

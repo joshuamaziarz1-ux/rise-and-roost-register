@@ -1,3 +1,4 @@
+import { contactLogin, contactLoginReady } from './contact-login.mjs';
 import { acknowledgePickup } from './pickup-changes.mjs';
 import { cashEligibility } from './cash-pickup.mjs';
 import { customerCredits } from './return-credits.mjs';
@@ -31,7 +32,7 @@ export async function memberFor(request, db, workspaceId, now, required = false)
   return member || null;
 }
 const safeMember = m => ({ id: m.id, profile: JSON.parse(m.profile_json), sessionExpiresAt: new Date(m.expires).toISOString(), ...(m.absolute_expires ? { sessionMaximumAt: new Date(m.absolute_expires).toISOString() } : {}), ...(m.authenticated_at ? { passkeyAdditionUntil: new Date(m.authenticated_at + RECENT_AUTH).toISOString() } : {}) });
-export async function roostApi({ request, db, now, input, path, json, rateLimit }) {
+export async function roostApi({ request, db, now, input, path, json, rateLimit, contactLoginEnv = {}, contactSend }) {
   const url = new URL(request.url);
   const workspaceId = request.method === 'GET' ? url.searchParams.get('workspace') : input.workspaceId;
   if (!/^[a-f0-9]{48}$/.test(workspaceId || '') || !await first(db, 'SELECT id FROM workspaces WHERE id=?', workspaceId)) fail('Open The Roost from this website.', 404);
@@ -42,16 +43,17 @@ export async function roostApi({ request, db, now, input, path, json, rateLimit 
     for (const c of cookies) result.headers.append('Set-Cookie', c);
     return result;
   };
+  if (/^\/api\/roost\/contact\/(start|verify|finish)$/.test(path) && request.method === 'POST') return contactLogin({ request, db, workspaceId, now, input, path, response, env: contactLoginEnv, send: contactSend });
   if (path === '/api/roost/me' && request.method === 'GET') {
     const current = await memberFor(request, db, workspaceId, now);
     const renewed = current && await renewCustomerSession(request, db, workspaceId, current, now);
-    if (!renewed) return response({ member: null }, cookieValue(request, 'rr_roost_' + workspaceId) ? [customerCookie(request, workspaceId, '', 0)] : []);
+    if (!renewed) return response({ simpleLoginEnabled: contactLoginReady(contactLoginEnv), member: null }, cookieValue(request, 'rr_roost_' + workspaceId) ? [customerCookie(request, workspaceId, '', 0)] : []);
     const member = renewed.member;
     const row = await first(db, 'SELECT ledger_json FROM workspaces WHERE id=?', workspaceId);
     const ledger = JSON.parse(row.ledger_json);
     const orders = ledger.orders.filter(o => o.customer?.memberId === member.id).map(o => customerOrder(o, workspaceId, ledger.management?.settings, now));
     const devices = await list(db, "SELECT json_group_array(json_object('id',d.id,'label',d.label,'lastSeen',d.last_seen,'current',s.hash=?)) AS items FROM roost_sessions s JOIN roost_session_details d ON d.hash=s.hash WHERE s.workspace_id=? AND s.member_id=? AND s.expires>? AND d.absolute_expires>?", member.session_hash, workspaceId, member.id, now, now);
-    return response({ member: safeMember(member), orders, devices, cashPickup: cashEligibility(ledger, member.id), credits: customerCredits(ledger, member.id), favorites: ledger.roostFavorites?.[member.id] || [] }, [renewed.cookie]);
+    return response({ simpleLoginEnabled: contactLoginReady(contactLoginEnv), member: safeMember(member), orders, devices, cashPickup: cashEligibility(ledger, member.id), credits: customerCredits(ledger, member.id), favorites: ledger.roostFavorites?.[member.id] || [] }, [renewed.cookie]);
   }
   if (path === '/api/roost/pickup-response' && request.method === 'POST') {
     const member = await memberFor(request, db, workspaceId, now, true);
@@ -93,6 +95,11 @@ export async function roostApi({ request, db, now, input, path, json, rateLimit 
     const member = await memberFor(request, db, workspaceId, now, true), profile = customerProfile(input.profile);
     await run(db, 'UPDATE roost_members SET profile_json=? WHERE id=? AND workspace_id=?', JSON.stringify(profile), member.id, workspaceId);
     return response({ member: safeMember({ ...member, profile_json: JSON.stringify(profile) }) });
+  }
+  if (path === '/api/roost/logout-all' && request.method === 'POST') {
+    const member = await memberFor(request, db, workspaceId, now, true);
+    await run(db, 'UPDATE roost_sessions SET expires=0 WHERE member_id=? AND workspace_id=?', member.id, workspaceId);
+    return response({ ok: true }, [customerCookie(request, workspaceId, '', 0)]);
   }
   if (path === '/api/roost/logout' && request.method === 'POST') {
     const raw = cookieValue(request, 'rr_roost_' + workspaceId);

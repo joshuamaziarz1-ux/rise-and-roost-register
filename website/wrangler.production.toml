@@ -19,6 +19,8 @@ database_name = "rise-roost-production-db"
 database_id = "889a4b96-cabd-43d1-ad45-79f65b0052b0"
 
 [vars]
+ROOST_SIMPLE_LOGIN_ENABLED = "false"
+ROOST_DELIVERY_VERIFIED = "false"
 PICKUP_APPROVALS_REQUIRED = "true"
 DEPLOYMENT_ENVIRONMENT = "production"
 PRODUCTION_RELEASE_APPROVED = "false"

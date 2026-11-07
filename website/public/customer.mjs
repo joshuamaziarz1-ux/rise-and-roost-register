@@ -32,6 +32,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
   const joinProfile = { name: '', preferredName: '', email: '', phone: '' };
   let profileDraft;
   let entryView = 'welcome', helpOpen = false;
+  let simpleLoginEnabled = false, contactDraft = '', codeDraft = '', preferredDraft = '', contactStep = 'contact', linkContact = false, resendAt = 0;
   function showEntry(view) {
     if (busy) return;
     entryView = view; helpOpen = false; error = ''; render();
@@ -47,7 +48,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     finally { busy = false; render(); }
   };
   function clearPrivate() {
-    entryView = 'welcome'; helpOpen = false;
+    entryView = 'welcome'; helpOpen = false; contactDraft = ''; codeDraft = ''; preferredDraft = ''; contactStep = 'contact'; linkContact = false;
     generation++; cashPickup = {}; member = null; orders = []; devices = []; favorites = []; credits = { available: 0, reserved: 0, enabled: false, items: [], transactions: [] }; recoveryKey = ''; profileDraft = undefined;
     Object.assign(joinProfile, { name: '', preferredName: '', email: '', phone: '' });
     Object.assign(commentDraft, { name: '', body: '', consent: false }); onMember(null);
@@ -64,6 +65,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
       try {
         const result = await api('/api/roost/me');
         if (started !== generation) return false;
+        simpleLoginEnabled = result.simpleLoginEnabled === true;
         const changed = member?.id !== result.member?.id;
         if (!result.member && member) { clearPrivate(); }
         const viewChanged = JSON.stringify(cashPickup) !== JSON.stringify(result.cashPickup || {}) || !loaded || changed || JSON.stringify(orders) !== JSON.stringify(result.orders || []) || JSON.stringify(devices) !== JSON.stringify(result.devices || []) || JSON.stringify(credits) !== JSON.stringify(result.credits || { available: 0, reserved: 0, enabled: false, items: [], transactions: [] }) || JSON.stringify(favorites) !== JSON.stringify(result.favorites || []);
@@ -137,6 +139,8 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
               h('button', { type: 'submit', class: 'secondary-button', disabled: busy }, 'Add my order')))),
         h('aside', {}, form, h('section', { class: 'account-controls' },
           h('h2', {}, 'Account Settings'), h('p', {}, 'Welcome back to The Roost! This personal device stays signed in for about 30 days after your last visit, for at most 90 days. Log out on shared computers.'),
+          simpleLoginEnabled ? contactSettings() : null,
+          button('Sign out of all devices', action(async () => { await api('/api/roost/logout-all', {}); clearPrivate(); channel?.postMessage('changed'); }), { class: 'text-button', disabled: busy }),
           h('p', { class: 'small-note' }, 'Your passkey verifies your Roost membership. Contact details are for pickup, never proof of account ownership.'),
           button('Add a passkey on this device', action(() => authenticate('add')), { class: 'secondary-button', disabled: busy }),
           h('details', { class: 'remembered-devices' }, h('summary', {}, 'Remembered devices'),
@@ -151,6 +155,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     return result;
   }
   function entry() {
+    if (simpleLoginEnabled && entryView !== 'signin') return simpleEntry();
     const title = entryView === 'signin' ? 'Welcome Back!' : entryView === 'join' ? 'Join The Roost' : 'Welcome to The Roost';
     const intro = entryView === 'signin' ? 'Sign in securely to your Roost account.' : entryView === 'join' ? 'Create your account to keep your orders, favorites, and pickup details together.' : 'Your little corner of Rise & Roost.';
     const panel = h('main', { class: 'section-inner roost-page roost-entry', 'data-roost-view': entryView },
@@ -188,6 +193,49 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     }
     if (busy) panel.append(h('p', { role: 'status', class: 'small-note' }, 'Please finish the sign-in prompt.'));
     return panel;
+  }
+  async function startContact() {
+    await api('/api/roost/contact/start', { contact: contactDraft, link: linkContact });
+    contactStep = 'code'; codeDraft = ''; resendAt = Date.now() + 60000;
+  }
+  function contactForm() {
+    const submit = action(async () => {
+      if (contactStep === 'contact') return startContact();
+      if (contactStep === 'name') {
+        await api('/api/roost/contact/finish', { name: preferredDraft });
+        contactStep = 'contact'; await authenticated(''); return;
+      }
+      const result = await api('/api/roost/contact/verify', { code: codeDraft });
+      if (result.registrationRequired) { contactStep = 'name'; return; }
+      contactStep = 'contact'; codeDraft = ''; contactDraft = '';
+      if (linkContact) { linkContact = false; notify('Your contact is verified for sign-in.'); }
+      else await authenticated('');
+    });
+    const form = h('form', { class: 'contact-login', onsubmit: e => { e.preventDefault(); void submit(); } },
+      contactStep === 'contact' ? field('Email or phone number', contactDraft, v => contactDraft = v, { name: 'contact', placeholder: 'Enter your email or phone number', autocomplete: 'username', required: true, maxlength: 254, disabled: busy }) :
+      contactStep === 'code' ? field('Six-digit code', codeDraft, v => codeDraft = v, { name: 'code', inputmode: 'numeric', autocomplete: 'one-time-code', pattern: '[0-9]{6}', maxlength: 6, required: true, disabled: busy }) :
+      field('Preferred name', preferredDraft, v => preferredDraft = v, { name: 'preferred-name', autocomplete: 'given-name', maxlength: 40, required: true, disabled: busy }),
+      h('button', { type: 'submit', class: 'primary-link', disabled: busy }, contactStep === 'code' ? 'Verify & Continue' : 'Continue'));
+    if (contactStep === 'code') form.append(
+      button('Resend Code', action(async () => { if (Date.now() < resendAt) throw new Error('Please wait one minute before requesting another code.'); await startContact(); }), { class: 'text-button', disabled: busy }),
+      button('Change Email or Phone Number', () => { contactStep = 'contact'; codeDraft = ''; error = ''; render(); }, { class: 'text-button', disabled: busy }));
+    return form;
+  }
+  function simpleEntry() {
+    linkContact = false;
+    return h('main', { class: 'section-inner roost-page roost-entry' },
+      h('div', { class: 'page-intro' }, h('h1', {}, contactStep === 'code' ? 'Enter Your Code' : 'Welcome to The Roost!'),
+        h('p', {}, contactStep === 'code' ? 'We sent a verification code to your email or phone.' : contactStep === 'name' ? 'What should we call you?' : 'Sign in or join our little community.')),
+      error ? h('p', { role: 'alert', class: 'form-error' }, error) : null,
+      contactForm(),
+      button('Sign in with a Passkey', () => showEntry('signin'), { class: 'text-button', disabled: busy }),
+      link('/shop', 'Continue as a Guest', 'entry-guest'));
+  }
+  function contactSettings() {
+    return h('section', {}, h('h3', {}, 'Email or phone sign-in'),
+      h('p', {}, 'Verify a contact to sign in with a code. For your security, first sign in again with your passkey or an already verified contact.'),
+      button('Verify identity with a passkey', action(() => authenticate('login')), { class: 'text-button', disabled: busy }),
+      linkContact ? contactForm() : button('Add a verified email or phone', () => { linkContact = true; contactStep = 'contact'; render(); }, { class: 'secondary-button', disabled: busy }));
   }
   function greeting() {
     const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Indiana/Indianapolis', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));

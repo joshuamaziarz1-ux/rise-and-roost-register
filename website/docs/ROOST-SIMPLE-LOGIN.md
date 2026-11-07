@@ -1,0 +1,42 @@
+# Roost email-or-phone login
+
+Status: implementation behind a fail-closed gate. Real email and SMS delivery are NOT configured or verified. Existing passkey welcome/login remains the production fallback. No subscription, sender number, DNS record or provider account was purchased or activated.
+
+## Production inspection
+
+Started from `fix/roost-login-experience` at `11a4a761f3a26a8682224619bc60f897a8260666`, including deployed implementation `cc1d059`. Default main is the older register application and is not the production base. Every application source in the active Worker source map matched the branch HEAD before implementation. Active version at inspection: `6aad782d-3aa7-4f59-8016-213a2f2447c7`, deployment `4994f42b-e98e-430a-a170-edb866e18226`.
+
+Production bindings contain no Resend key, email sender, Twilio credentials or SMS sender; order email is also disabled. Existing notification code has a Resend adapter but no usable production delivery configuration. D1 has one member, one passkey, two sessions and no verified-contact identity table. The member has email and phone pickup details; both are unverified. No production customer record was used for testing or changed.
+
+## Architecture
+
+`server/contact-login.mjs` handles contact recognition, delivery adapters, send budgets and transactional authentication. One field accepts normalized lowercase email or US ten-digit phone formats and stores phone identities as +1 E.164. International numbers, extensions and malformed numbers are rejected. SMS delivery can fail for landlines or unavailable recipients; the provider must accept delivery before the code screen appears. Acceptance is not proof of arrival; actual code entry proves possession.
+
+Codes use rejection-sampled cryptographic six-digit randomness. Only challenge-specific HMAC-SHA256 verifiers are persisted, with a separately configured secret pepper. Challenges are bound to workspace, origin and a random HttpOnly cookie; expire in five minutes; permit at most five failed attempts; and are consumed atomically with session/contact/account writes. Replay or a failed transaction cannot create partial accounts. Verification for new contacts grants a short continuation in the same five-minute challenge; a preferred name completes registration. No account exists before contact verification.
+
+Resends invalidate previous codes. Atomic sliding contact cooldown: 60 seconds; sends: five per identity/hour, twenty per IP/hour and two hundred globally/hour. Verification requests: one hundred per IP/hour plus five incorrect guesses per challenge. Hour budgets use fixed windows, so adjacent windows can permit two budgets in quick succession; the sliding contact cooldown still applies. Provider failures consume send budgets, mark challenges unusable and return friendly errors. No provider payloads, codes or raw provider errors are logged. Mock delivery is dependency-injected only by test fixtures, never selected by a production flag or HTTP endpoint.
+
+Verified identities use a separate unique `(workspace_id, contact)` table; pickup fields cannot authenticate. A verified contact that matches legacy pickup details cannot create or claim an account. Its owner must use the existing passkey/recovery process and explicitly verify the contact in Account Settings. Linking requires authentication within ten minutes, the same still-valid session at challenge creation and completion, and code possession. A verified identity already owned by another member cannot be transferred or merged. Ambiguities require existing recovery or support. No passkeys, recovery credentials, sessions, orders or member IDs are migrated automatically.
+
+Sessions reuse `customer-sessions.mjs`: rolling 30-day inactivity, maximum 90 days; server verifiers and HttpOnly/SameSite=Strict cookies, Secure on HTTPS. Tokens never enter localStorage. Logout revokes the server session and clears the cookie; all-device logout revokes every session for that member. Passkeys remain an explicit secondary action. Guest shopping, original recovery and device controls are retained. Studio authentication is unchanged.
+
+## Danielle's setup before activation
+
+1. Approve delivery providers and their recurring/usage costs. Implemented adapters: Resend transactional email and Twilio Programmable SMS. Existing Resend code can be reused; it does not establish an existing paid account or sender verification.
+2. Configure an approved sender domain in Resend, publish its supplied SPF/DKIM records, verify domain status, and create a narrowly scoped sending API key. Set `ROOST_EMAIL_FROM` to the verified sender. Store `RESEND_API_KEY` with Cloudflare Worker secrets, never in git.
+3. Configure a Twilio account, an approved SMS-capable US sender and the applicable A2P 10DLC brand/campaign or toll-free verification. Approve number, registration, recurring campaign, per-segment and carrier fees. Set `ROOST_SMS_FROM`; store `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` as Worker secrets. Confirm the production account can send to real US recipients rather than only trial recipients.
+4. Store a cryptographically generated, at least 32-character `ROOST_CODE_PEPPER` as a Worker secret. Protect it separately from D1 exports. Rotation invalidates pending codes without changing remembered sessions.
+5. Back up and apply additive `migrations/0010-roost-contact-login.sql` to `rise-roost-production-db`. Do not backfill identities from pickup details. Reapplying the migration is safe. The disabled release does not need to apply it to production.
+6. Run authorized, controlled real delivery checks for both channels, inspect provider domain/account/sender readiness and accepted/delivered status, and have the intended recipients confirm arrival. Automated tests and deployment checks must continue using mocks and must never send real codes. Delivery has not been verified by this implementation task.
+7. After all checks, set BOTH `ROOST_DELIVERY_VERIFIED=true` and `ROOST_SIMPLE_LOGIN_ENABLED=true` on the exact production Worker. Missing either flag, pepper, email configuration or SMS configuration keeps the existing login active. Recheck current deployment, source and settings before release. No partial phone support is advertised.
+8. Verify returning sessions, optional passkeys, guest shopping, Studio Access and unchanged commerce settings. Turning `ROOST_SIMPLE_LOGIN_ENABLED=false` immediately restores the original entry flow without deleting identities or revoking existing sessions. Retain the prior Worker version for rollback.
+
+Production configuration should be generated from freshly inspected live settings; the checked-in `wrangler.production.toml` intentionally retains its historical launch guard and must not be blindly deployed. Preserve all live bindings, Access settings, assets configuration, schedules and disabled checkout. No production data mutations are needed for disabled deployment.
+
+## Costs
+
+No purchase was made. Resend offers a free transactional tier; public pricing currently lists 3,000 emails/month and 100/day, with entry paid service around $20/month for 50,000. Confirm the account's current quote and overage policy before approval: https://resend.com/pricing . Twilio US local numbers typically start at $1.15/month, with additional SMS segment/carrier charges, one-time registration and recurring campaign fees: https://www.twilio.com/en-us/phone-numbers and https://www.twilio.com/en-us/sms/pricing/us . These are indicative list prices, not an approved quote or a promise of availability. Danielle must approve the selected account's actual total. A2P registration and DNS verification may add lead time. Cloudflare Workers/D1 usage continues under the existing account plan.
+
+## Test evidence
+
+Synthetic contacts and mock providers only. `tests/contact-login.test.mjs` covers recognition, verification, expiry, replay, wrong guesses, budgets, delivery failure, rollback, persistent sessions, logout/all devices, isolation, legacy takeover prevention, verified linking and real signed passkey compatibility. `playwright.contact-login.config.mjs` runs the new journey in desktop Chromium, desktop WebKit, iPhone WebKit, Android Chromium and tablet Chromium. Virtual CTAP2 and a WebKit signing fixture test WebAuthn server verification; physical biometric hardware is not claimed tested. Screenshots in `roost-simple-login/` are synthetic local candidate evidence, not production activation evidence.

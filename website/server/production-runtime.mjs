@@ -43,7 +43,7 @@ export async function productionFetch(request, env, now = Date.now()) {
     if (!path.startsWith('/api/')) return await env.ASSETS.fetch(request);
     url.pathname = path;
     const rewritten = new Request(url, request);
-    return await api(rewritten, env.DB, now, { publicWorkspaceId: PRODUCTION_WORKSPACE_ID, customerExperienceEnabled: true, studioManagementEnabled: true, commerceEnabled: true,
+    return await api(rewritten, env.DB, now, { contactLoginEnv: env, publicWorkspaceId: PRODUCTION_WORKSPACE_ID, customerExperienceEnabled: true, studioManagementEnabled: true, commerceEnabled: true,
       productionContext: productionContext(owner, env.REAL_CHECKOUT_ENABLED === 'true') });
   } catch { return response('The website is temporarily unavailable. No successful save is confirmed; keep your order link and retry.', 503); }
 }
