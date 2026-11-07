@@ -1,0 +1,109 @@
+{
+  "workerVersion": "3afe2f0a-0a83-4781-92fc-2bdd4576536a",
+  "deployment": "2a3853c3-c3b7-4793-a9d3-0451ae075063",
+  "bundleSha256": "8be37ad2da38df25a28209bdf801a2362d32018209b6e036b324bf89bd9ba346",
+  "tablesPreserved": 15,
+  "schemaPreserved": true,
+  "accessPreserved": true,
+  "bindingsAndSecretNamesPreserved": true,
+  "domainsPreserved": true,
+  "assetsMatched": [
+    "index.html",
+    "app.mjs",
+    "management.mjs",
+    "help.mjs",
+    "help-content.mjs",
+    "orders.mjs",
+    "customer.mjs",
+    "order-confirmation.mjs",
+    "style.css",
+    "customer.css",
+    "management.css",
+    "assets/logo.webp"
+  ],
+  "checkoutEnabled": false,
+  "notificationsEnabled": false,
+  "privateRoutes": {
+    "/studio": 302,
+    "/studio/api/manage/snapshot": 302,
+    "/api/manage/snapshot": 404
+  },
+  "flags": {
+    "orderingPaused": false,
+    "cashPickupEnabled": false,
+    "returnCredits": {}
+  },
+  "runtimeCommit": "8de96beca69a6ea13be0434fa77f9bb154d91d6d",
+  "branch": "feature/resend-transactional-email",
+  "workerVersionNumber": 27,
+  "sender": "Rise & Roost <orders@rise-and-roost.com>",
+  "resendSecretPresent": true,
+  "realEmailSent": false,
+  "returnCreditsEnabled": false,
+  "retrySchedule": "*/5 * * * *",
+  "testCounts": {
+    "backend": 327,
+    "mainBrowserDistinct": 270,
+    "commerceBrowser": 8,
+    "productionBrowser": 10,
+    "totalDistinct": 615
+  },
+  "mainBrowserValidation": "269 passed in full run; corrected existing contact-login readiness wait then passed all five profiles; remaining suites passed separately",
+  "livePublicProfiles": [
+    {
+      "name": "desktop-chromium",
+      "paths": [
+        "/",
+        "/shop",
+        "/roost",
+        "/contact"
+      ],
+      "errors": [],
+      "blockedWrites": 0
+    },
+    {
+      "name": "desktop-webkit",
+      "paths": [
+        "/",
+        "/shop",
+        "/roost",
+        "/contact"
+      ],
+      "errors": [],
+      "blockedWrites": 0
+    },
+    {
+      "name": "iphone-webkit",
+      "paths": [
+        "/",
+        "/shop",
+        "/roost",
+        "/contact"
+      ],
+      "errors": [],
+      "blockedWrites": 0
+    },
+    {
+      "name": "android-chromium",
+      "paths": [
+        "/",
+        "/shop",
+        "/roost",
+        "/contact"
+      ],
+      "errors": [],
+      "blockedWrites": 0
+    },
+    {
+      "name": "tablet-chromium",
+      "paths": [
+        "/",
+        "/shop",
+        "/roost",
+        "/contact"
+      ],
+      "errors": [],
+      "blockedWrites": 0
+    }
+  ]
+}

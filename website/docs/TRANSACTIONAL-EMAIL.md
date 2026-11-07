@@ -79,4 +79,33 @@ Examples use synthetic local data: [desktop email](transactional-email/confirmat
 
 The full `npm run test:all` invocation exposed one pre-existing browser-test race: the second simulated phone login read the previous mock code before the new verification screen was ready. The test now waits for Enter Your Code, as its first login already did. All five profiles passed the corrected journey; the remaining commerce and production phases were then run and passed separately. Product authentication was not changed for this test repair. The initial 269/270 result is not represented as a clean single-command run.
 
-Initial deployment status: candidate ready, awaiting the final concurrent-change/preservation checks and disabled infrastructure release. All sending and checkout safety flags remain false.
+Production deployment completed and independently verified. Customer sending and checkout remain disabled; see the release receipt below.
+
+
+## Production release receipt — November 7, 2026
+
+| Item | Verified result |
+| --- | --- |
+| Feature branch | `feature/resend-transactional-email` |
+| Deployed application commit | `8de96beca69a6ea13be0434fa77f9bb154d91d6d` |
+| Production Worker | `rise-roost-website-production` |
+| Worker version | **27** · `3afe2f0a-0a83-4781-92fc-2bdd4576536a` |
+| Deployment, 100% traffic | `2a3853c3-c3b7-4793-a9d3-0451ae075063` |
+| Exact executable SHA256 | `8be37ad2da38df25a28209bdf801a2362d32018209b6e036b324bf89bd9ba346` |
+| Resend | Existing secret retained; owner reports domain verified; live provider/inbox test not performed |
+| Sender | `Rise & Roost <orders@rise-and-roost.com>`; no Reply-To |
+| Templates | Received, Payment Confirmed, Preparing, Ready for Pickup, Canceled, Forfeited; HTML and plain text; separate branded owner test |
+| Studio | Settings → Customer Email: configuration, preferences, owner-only test, recent attempts and safe retries |
+| Database | No migration; all 15 original table fingerprints and schema preserved |
+| Access and domains | Original Access configuration and both domain routes preserved; Studio/private APIs still redirect to Access; legacy unprotected manage API returns 404 |
+| Bindings/secrets/runtime | Original bindings, both secret names/types, runtime settings and handlers retained; only official sender plain-text binding added |
+| Public assets | 12 fetched assets, including all changed public modules, match source exactly; HTML checked at its canonical root URL; the unchanged Studio entry module remains protected by Access |
+| Retry trigger | Five-minute cron, `*/5 * * * *`; no prior cron removed or replaced |
+| Protected state | `REAL_CHECKOUT_ENABLED=false`, `ORDER_EMAIL_ENABLED=false`, free-plan/delivery verification flags false; cash and return credits off; saved `orderingPaused=false` unchanged |
+| Live email | None sent; no customer/owner inbox result claimed |
+
+The final remote-source/concurrent-change check matched the inspected deployed source and settings before release. The downloaded executable after activation matches the tested candidate byte for byte. All 48 recorded server/public source hashes remained unchanged through validation/deployment. Read-only post-deployment checks passed on all five browser/device profiles without JavaScript errors, overflow or write requests. No production customer, order, payment, account or credit record was inserted, altered or removed; no secret was replaced, no checkout/ordering/credit/cash feature was activated, and no paid plan or service was enabled. The release does not merge main or the other feature branches.
+
+The only remaining acceptance work is Danielle’s authorized owner inbox test, current account/free-plan checks and explicit approval for customer activation. Follow the numbered activation steps above. Email is not required for current username/password login, passkeys, private tracking or saved confirmations. No unresolved implementation defect remains from the executed checks.
+
+[Machine-readable sanitized verification receipt](transactional-email/release-verification.json). A documentation-only follow-up records this receipt; it does not change the deployed executable.
