@@ -39,3 +39,45 @@ Rollback: set `ROOST_PASSWORD_LOGIN_ENABLED=false` in a version retaining the cu
 ## Validation
 
 Tests use synthetic accounts, disposable SQLite/D1, software/virtual passkeys and blocked outbound network. New unit/service cases cover signup, policy, verifiers, generic invalid credentials, CSRF, uniqueness, rate budgets, cross-account recovery, existing-member setup, password changes, session expiry/revocation, single-use recovery, concurrency, rollback and additive/idempotent migration. Five browser profiles exercise signup, reopening remembered sessions, a fresh device, password login/reset, existing-account setup, optional passkeys, account history/favorites/pickup panels and guest shopping. Physical biometric hardware is not claimed tested; native Chromium virtual authenticators and WebKit signing fixtures exercise server verification.
+
+## Verified ACTIVE production release — November 7, 2026
+
+| Item | Value |
+| --- | --- |
+| Branch | `feature/roost-simple-login` |
+| Runtime implementation commit | `8a3d8edc08dd3c57c7183184b342738b1aafa03f` |
+| Worker | `rise-roost-website-production` |
+| Active version, 100% traffic | `09e9a128-77cf-4cfa-81ee-21bbb80cab8e` |
+| Deployment ID | `c5ca248d-3754-4f3c-831e-fc08287c585b` |
+| Executable SHA256 | `62972402fa307ff13da038acf965429a5fd851cbf9de831e2a03ec3106382646` |
+| Previous retained version | `067e51f1-ced0-48d6-87ab-0887df891080` |
+| Username/password login | **ACTIVE** |
+| Email and SMS login | **DISABLED**, no providers configured or needed |
+| Paid service or hosting-plan upgrade | None |
+| Applied migration | Additive `0011-roost-password-login.sql` only |
+
+The active release and remote heads were checked before implementation and again before upload. No newer approved production/source changes were overwritten. The inactive candidate's original bindings, runtime and asset behavior, handlers and Studio Access configuration matched the live version; only the username flag and password secret were added. Cloudflare's settings endpoint reports latest-upload metadata/bindings even before traffic activation; the deployment/version API separately confirmed the old version remained active until the explicit activation.
+
+The two new production authentication tables were empty after migration, and every original table fingerprint and schema remained identical before activation. Postdeployment, all customer/member records, recovery hashes, passkeys, sessions/session details, workspaces, orders, comments and original schemas remain unchanged. No account identity was reset, copied or merged. The new tables remain empty because no production test customers were enrolled. The only test-created production rows were three abuse-rate counters from one intentional failed login using a random unused synthetic username. That response was the expected generic HTTP 401 in approximately 0.56 seconds, confirming the actual edge password-verifier path runs without CPU/runtime errors. It created no member, password identity, grant or session and sent no message.
+
+The active executable matches the tested build byte for byte. HTML (following its canonical `/index.html` → `/` redirect), app/customer modules and customer CSS match the checked-in candidate byte for byte. Fresh live desktop Chromium, desktop WebKit, iPhone WebKit, Android Chromium and tablet Chromium checks verified the username/password screen, Join fields without email/phone, password-manager autocomplete attributes, reset navigation, optional passkey view and guest shopping. All browser write requests were blocked; zero JavaScript errors, overflow or automatic WebAuthn requests occurred. No existing production session cookie was read or used for testing; returning-member behavior was tested with synthetic persistent contexts and disposable workerd/D1.
+
+Studio and its private APIs retain the Cloudflare Access challenge. Access application fingerprints and every commerce setting remain identical. Public `/api/site` reports checkout disabled. Cash at Pickup remains OFF, and return credits were not activated. Pickup approvals/rescheduling, order tracking, products/inventory, payment/manual-verification logic, announcements, favorites and guest/member order behavior passed isolated regression checks. No real emails or SMS messages were sent, and no provider credentials/account/DNS configuration is required for this design.
+
+| Final validation | Result |
+| --- | --- |
+| Full unit/service/security/database suite | 296 passed, 0 failed |
+| Additional production-route/CSRF/Studio/all-device-logout regression | 1 passed |
+| New username/password journeys across five profiles | 15 passed |
+| Existing customer/passkey/recovery/guest/credits/cash/pickup browser regressions across five profiles | 65 passed |
+| Exact compiled Worker in disposable workerd/D1, new password flow | Passed |
+| Exact compiled Worker with password mode enabled through production routing, existing features and identity-preserving username setup | Passed |
+| Read-only actual production browser journeys, five profiles | Passed |
+| Actual edge verifier using one intentional failed synthetic login | Expected 401; no test account/session created |
+| Exact deployed executable/assets, original customer data/schema and Access/commerce preservation | Passed |
+
+Total: **377 automated cases**, two compiled edge-runtime smoke tests and production verification. The production smoke test initially found the new endpoints missing from the explicit public route allowlist; the required five password actions and authenticated all-device logout were added, then native production routing and a dedicated security regression passed. A cross-account recovery case also verifies recovery affects the code owner's account even when another account is signed in. No unresolved test failures remain. Physical biometric prompts remain outside automation and are never required for normal username/password signup or sign-in.
+
+Actual live screenshots: [desktop sign-in](roost-password-login/live-signin-desktop-chromium.png), [desktop WebKit](roost-password-login/live-signin-desktop-webkit.png), [iPhone sign-in](roost-password-login/live-signin-iphone-webkit.png), [iPhone registration](roost-password-login/live-join-iphone-webkit.png). Synthetic candidate evidence: [dashboard](roost-password-login/dashboard-desktop-chromium.png), [reset](roost-password-login/reset-iphone-webkit.png).
+
+Danielle has no provider, subscription or DNS setup remaining. New members select Join The Roost, choose a preferred name/username/password phrase, and save the recovery code. Existing members use Other sign-in options once, then add a username/password in their current Account Settings instead of creating another account. The 15-character password minimum permits simple memorable phrases; browsers can save and autofill them. Existing hosting and D1 quotas remain unchanged.

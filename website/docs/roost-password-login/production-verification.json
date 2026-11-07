@@ -1,0 +1,21 @@
+{
+  "active": true,
+  "worker": "rise-roost-website-production",
+  "version": "09e9a128-77cf-4cfa-81ee-21bbb80cab8e",
+  "deploymentId": "c5ca248d-3754-4f3c-831e-fc08287c585b",
+  "runtimeCommit": "8a3d8edc08dd3c57c7183184b342738b1aafa03f",
+  "executableSha256": "62972402fa307ff13da038acf965429a5fd851cbf9de831e2a03ec3106382646",
+  "originalCustomerAndBusinessRecordsUnchanged": true,
+  "originalSchemasUnchanged": true,
+  "onlyAdditiveTables": [
+    "roost_passwords",
+    "roost_password_grants"
+  ],
+  "studioAccessProtectedAndUnchanged": true,
+  "commerceSettingsUnchanged": true,
+  "checkoutEnabled": false,
+  "emailSmsLoginEnabled": false,
+  "paidProviderAdded": false,
+  "productionTestCustomersCreated": 0,
+  "rateCountersAddedForOneIntentionalFailedSyntheticLogin": 3
+}
