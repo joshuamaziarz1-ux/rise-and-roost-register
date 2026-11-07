@@ -39,7 +39,7 @@ async function fixture({ email = false } = {}) {
   const ledger = () => JSON.parse(sql.prepare('SELECT ledger_json FROM workspaces WHERE id=?').get(workspace.id).ledger_json);
   const mutate = (fn) => { const l = ledger(); fn(l); sql.prepare('UPDATE workspaces SET ledger_json=?,ledger_version=ledger_version+1 WHERE id=?').run(JSON.stringify(l), workspace.id); };
   const verify = (o, extra = {}) => call('/api/order-payment', { id: o.id, version: o.version, independentlyVerified: true, method: 'bank_record', evidence: 'TEST-ONLY independent reference 001', ...extra });
-  const env = { PUBLIC_WORKSPACE_ID: workspace.id, ORDER_EMAIL_ENABLED: 'true', ORDER_EMAIL_FROM: 'beta@example.test', RESEND_API_KEY: 'test-only-not-a-real-key' };
+  const env = { PUBLIC_WORKSPACE_ID: workspace.id, ORDER_EMAIL_ENABLED: 'true', ORDER_EMAIL_FREE_PLAN_CONFIRMED: 'true', ORDER_EMAIL_DELIVERY_VERIFIED: 'true', ORDER_EMAIL_FROM: 'beta@example.test', RESEND_API_KEY: 'test-only-not-a-real-key' };
   return { call, db, site, workspace, order, track, ledger, mutate, verify, env, input };
 }
 
@@ -160,7 +160,7 @@ test('email is optional, explicitly consented, validated, and only enabled on th
 });
 
 test('email cannot be enabled without a valid sender, sending key, explicit flag and primary workspace', () => {
-  const env = { PUBLIC_WORKSPACE_ID: 'a'.repeat(48), ORDER_EMAIL_ENABLED: 'true', ORDER_EMAIL_FROM: 'beta@example.test', RESEND_API_KEY: 'mock' };
+  const env = { PUBLIC_WORKSPACE_ID: 'a'.repeat(48), ORDER_EMAIL_ENABLED: 'true', ORDER_EMAIL_FREE_PLAN_CONFIRMED: 'true', ORDER_EMAIL_DELIVERY_VERIFIED: 'true', ORDER_EMAIL_FROM: 'beta@example.test', RESEND_API_KEY: 'mock' };
   assert.equal(emailConfigured(env), true);
   for (const k of Object.keys(env)) assert.equal(emailConfigured({ ...env, [k]: '' }), false);
   assert.equal(emailConfigured({ ...env, ORDER_EMAIL_FROM: 'a@test.test\r\nBcc:x@x.test' }), false);
@@ -218,4 +218,20 @@ test('uncertain email retries reuse the identical provider idempotency key and p
   h.mutate(l => { l.orders[0].notifications[0].status = 'sending'; l.orders[0].notifications[0].leaseUntil = now; });
   await drainNotifications(h.db, h.env, { now: now + 24 * 3600000, fetcher: async () => { assert.fail('must not resubmit outside provider idempotency window'); } });
   assert.equal(h.ledger().orders[0].notifications[0].status, 'expired');
+});
+
+test('free mail quota pauses without calling provider or claiming an email was sent', async () => {
+ const h=await fixture({email:true}),o=await h.order({emailOptIn:true,email:'qa@example.test'});
+ const key='rr-order-email:'+h.workspace.id+':'+new Date(now).toISOString().slice(0,10);
+ await h.db.prepare('INSERT INTO limits(key,count,expires) VALUES(?,?,?)').bind(key,90,now+35*86400000).run();
+ await drainNotifications(h.db,h.env,{now,fetcher:()=>assert.fail('must not call provider beyond allowance')});
+ const n=h.ledger().orders[0].notifications[0];assert.equal(n.status,'quota_paused');assert.equal(n.attempts,0);assert.equal(n.firstAttemptAt,undefined);assert.equal(n.acceptedAt,undefined);assert.equal(n.deliveryPayload,undefined);
+ assert.equal((await h.track(o)).data.notifications[0].status,'quota_paused');
+});
+test('uncertain retries freeze their body even when payment and pickup details change',async()=>{
+ const h=await fixture({email:true});await h.order({emailOptIn:true,email:'qa@example.test'});const submissions=[];
+ await drainNotifications(h.db,h.env,{now,fetcher:async(_,options)=>{submissions.push(options);throw Error('uncertain');}});
+ h.mutate(l=>{l.orders[0].paymentStatus='verified';l.orders[0].pickup.date='2026-11-30';});
+ await drainNotifications(h.db,h.env,{now:now+300000,fetcher:async(_,options)=>{submissions.push(options);return Response.json({id:'accepted'});}});
+ assert.equal(submissions[0].body,submissions[1].body);assert.equal(h.ledger().orders[0].notifications[0].deliveryPayload,undefined);
 });

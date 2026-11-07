@@ -10,6 +10,8 @@ import { seed } from '../public/model.mjs';
 import { PRODUCTION_DATABASE_ID, PRODUCTION_WORKSPACE_ID } from '../server/production-preparation.mjs';
 import { softwarePasskey } from './passkey-fixture.mjs';
 const passwordMode = process.env.RR_TEST_PASSWORD_LOGIN === 'true';
+const emailMode = process.env.RR_TEST_ORDER_EMAIL === 'true';
+const emailSubmissions = [];
 const bundle = process.env.RR_PRODUCTION_WORKER_BUNDLE;
 if (!bundle) throw Error('Provide the local production dry-run bundle.');
 const authority = await accessAuthority(), origin = 'https://rise-and-roost.com';
@@ -17,11 +19,12 @@ const issuedAt = Math.floor(Date.now() / 1000);
 const token = await authority.mint({ issuedAt, notBefore: issuedAt, expiresAt: issuedAt + 730 * 3600 });
 const mf = new Miniflare(convertV4MiniflareOptions({ modules: true, modulesRoot: dirname(bundle), rootPath: dirname(bundle), scriptPath: bundle, compatibilityDate: '2025-10-01', cf: false, d1Databases: ['DB'],
   serviceBindings: { ASSETS: () => new Response('Synthetic production assets') },
-  outboundService: request => {
+  outboundService: async request => {
+    if (emailMode && request.url === 'https://api.resend.com/emails') { emailSubmissions.push(await request.json()); return Response.json({ id: 'mock-email-' + emailSubmissions.length }); }
     assert.equal(request.url, authority.team + '/cdn-cgi/access/certs');
     return new Response(JSON.stringify({ keys: [authority.jwk] }), { headers: { 'Content-Type': 'application/json' } });
   },
-  bindings: { ...(passwordMode ? { ROOST_PASSWORD_LOGIN_ENABLED: 'true', ROOST_PASSWORD_PEPPER: 'synthetic'.repeat(8) } : {}), PICKUP_APPROVALS_REQUIRED: 'true', DEPLOYMENT_ENVIRONMENT: 'production', PRODUCTION_RELEASE_APPROVED: 'true', REAL_CHECKOUT_ENABLED: 'true', PRODUCTION_DATABASE_ID, PUBLIC_WORKSPACE_ID: PRODUCTION_WORKSPACE_ID,
+  bindings: { ...(emailMode ? { ORDER_EMAIL_ENABLED: 'true', ORDER_EMAIL_FREE_PLAN_CONFIRMED: 'true', ORDER_EMAIL_DELIVERY_VERIFIED: 'true', ORDER_EMAIL_FROM: 'orders@example.test', RESEND_API_KEY: 'mock-only' } : {}), ...(passwordMode ? { ROOST_PASSWORD_LOGIN_ENABLED: 'true', ROOST_PASSWORD_PEPPER: 'synthetic'.repeat(8) } : {}), PICKUP_APPROVALS_REQUIRED: 'true', DEPLOYMENT_ENVIRONMENT: 'production', PRODUCTION_RELEASE_APPROVED: 'true', REAL_CHECKOUT_ENABLED: 'true', PRODUCTION_DATABASE_ID, PUBLIC_WORKSPACE_ID: PRODUCTION_WORKSPACE_ID,
     WEBSITE_BASE_URL: origin, REVIEW_BUILD: 'false', STUDIO_MANAGEMENT_ENABLED: 'true', COMMERCE_UPDATE_ENABLED: 'true', CUSTOMER_EXPERIENCE_ENABLED: 'true',
     PRODUCTION_ACCESS_TEAM_DOMAIN: authority.team, PRODUCTION_ACCESS_AUD: authority.aud, PRODUCTION_OWNERS: JSON.stringify([{ email: TESTER_A, name: 'Synthetic Owner', role: 'owner' }]) } }));
 try {
@@ -82,7 +85,7 @@ try {
   await mutation('payment-test-confirm', { provider: 'paypal', testId: test.result.testId, confirmed: true });
   const site = await (await call('/api/site')).json();
   assert.ok(site.document.pickups.length >= 24); assert.ok(site.document.pickups[0].id.startsWith('recurring-'));
-  const p = doc.products[0], input = { workspaceId: PRODUCTION_WORKSPACE_ID, storefront: 'main', revision: 1, pickupId: site.document.pickups[0].id, checkoutMode: 'guest', customerDetails: { name: 'Synthetic Workerd Guest' }, policyAccepted: true, policyVersion: '2026-11-01', total: p.price, lines: [{ productId: p.id, variantId: p.variants[0].id, qty: 1, unitPrice: p.price }] };
+  const p = doc.products[0], input = { ...(emailMode ? { emailOptIn: true, email: 'synthetic-receipt@example.test' } : {}), workspaceId: PRODUCTION_WORKSPACE_ID, storefront: 'main', revision: 1, pickupId: site.document.pickups[0].id, checkoutMode: 'guest', customerDetails: { name: 'Synthetic Workerd Guest' }, policyAccepted: true, policyVersion: '2026-11-01', total: p.price, lines: [{ productId: p.id, variantId: p.variants[0].id, qty: 1, unitPrice: p.price }] };
   const responses = await Promise.all([call('/api/orders', { ...input, requestId: crypto.randomUUID() }), call('/api/orders', { ...input, requestId: crypto.randomUUID() })]);
   assert.deepEqual(responses.map(r => r.status).sort(), [201, 409]);
   const order = await responses.find(r => r.status === 201).json(); assert.equal(order.simulated, false);
@@ -185,5 +188,9 @@ try {
     await customer('password/recover', { username: 'new-neighbor', password: 'another friendly garden phrase', recoveryKey: created.recoveryKey });
     assert.equal((await customer('me')).member.id, createdId);
   }
-  console.log(JSON.stringify({ actualProductionWorkerdD1: true, pickupApprovalsReschedulingAcknowledgements: true, cashPickupAtomicMemberEligibilityReceiptAndCreditLifecycle: true, returnCreditsFavoritesReservationFinalizationCancellationAndZeroDue: true, customerPasskeysSessionsRecoveryAndRevocation: true, individualSignedOwnerIdentity: true, privateApiAuthorization: true, manualPaymentVerification: true, duplicateVerificationPrevented: true, atomicInventoryRace: true, trackingAndFulfillment: true, automaticCalendar: true, calendarExceptionPreservesOrder: true, remoteRequests: 0, remoteWrites: 0 }));
+  if (emailMode) {
+    assert.ok(emailSubmissions.length > 0);
+    for (const mail of emailSubmissions) { assert.deepEqual(mail.to, ['synthetic-receipt@example.test']); assert.ok(mail.text.includes('/orders/')); assert.equal(/BETA ORDER|isolated website/i.test(mail.text), false); }
+  }
+  console.log(JSON.stringify({ orderEmailMockSubmissions: emailSubmissions.length, actualProductionWorkerdD1: true, pickupApprovalsReschedulingAcknowledgements: true, cashPickupAtomicMemberEligibilityReceiptAndCreditLifecycle: true, returnCreditsFavoritesReservationFinalizationCancellationAndZeroDue: true, customerPasskeysSessionsRecoveryAndRevocation: true, individualSignedOwnerIdentity: true, privateApiAuthorization: true, manualPaymentVerification: true, duplicateVerificationPrevented: true, atomicInventoryRace: true, trackingAndFulfillment: true, automaticCalendar: true, calendarExceptionPreservesOrder: true, remoteRequests: 0, remoteWrites: 0 }));
 } finally { await mf.dispose(); }

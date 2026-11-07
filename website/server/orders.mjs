@@ -5,7 +5,7 @@ export const BETA_ORIGIN = "https://rise-roost-beta.joshua-maziarz1.workers.dev"
 export const emailAddress = (value) => typeof value === "string" &&
   value.length <= 254 && /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,}$/.test(value);
 export function emailConfigured(env) {
-  return env.ORDER_EMAIL_ENABLED === "true" && !!env.RESEND_API_KEY &&
+  return env.ORDER_EMAIL_ENABLED === "true" && env.ORDER_EMAIL_FREE_PLAN_CONFIRMED === "true" && env.ORDER_EMAIL_DELIVERY_VERIFIED === "true" && !!env.RESEND_API_KEY &&
     emailAddress(env.ORDER_EMAIL_FROM) && /^[a-f0-9]{48}$/.test(env.PUBLIC_WORKSPACE_ID || "");
 }
 export function enqueue(order, event, at, makeToken) {

@@ -16,6 +16,7 @@ export const fulfillmentLabels = {
   canceled: "Canceled",
 };
 export const notificationLabels = {
+  quota_paused: "Email is temporarily paused; save your confirmation and use this order page",
   queued: "Email queued",
   sending: "Email submission pending",
   retry: "Email submission will retry",

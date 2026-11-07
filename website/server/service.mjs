@@ -910,7 +910,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         if (checkoutMember) customer.memberId = checkoutMember.id;
         if (input.emailOptIn === true) {
           if (!emailEnabled || row.id !== publicWorkspaceId)
-            fail("Email updates are not configured for this beta site. Leave email updates off and use your private status page.", 409);
+            fail("Email confirmations are temporarily unavailable. Leave email updates off and save your private order link.", 409);
           const email = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
           if (!emailAddress(email)) fail("Enter a valid email address for order updates.");
           customer.email = email;

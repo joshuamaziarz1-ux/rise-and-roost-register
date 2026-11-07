@@ -1,3 +1,4 @@
+import { confirmationTools } from './order-confirmation.mjs?v=0d70de759184';
 import { pickupNotice } from './pickup-notice.mjs';
 import { requestedPickupLabel, POLICY_TITLE, POLICY } from './commerce.mjs';
 import { h, button, guard, field } from "./dom.mjs";
@@ -134,6 +135,7 @@ export async function start(root) {
     const appendMain = (...nodes) => main.append(...nodes.filter(node => node !== null && node !== undefined && node !== false));
     if (!order) appendMain(button("Retry loading order", () => refresh(), { class: "secondary-button" }));
     else {
+      appendMain(confirmationTools(order));
       appendMain(h("div", { class: "order-summary", "aria-live": "polite", "aria-label": "Current order status" },
         h("h2", {}, (order.status === "picked-up" ? "Historical order" : fulfillmentLabels[order.status]) || "Order Received"),
         h("p", {}, paymentLabels[order.paymentStatus] || "Awaiting Payment Verification"),

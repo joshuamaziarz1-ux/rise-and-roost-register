@@ -1,3 +1,4 @@
+import { confirmationTools } from './order-confirmation.mjs?v=0d70de759184';
 import { dollarsToCents, centsToDollars } from './credit-money.mjs';
 import { POLICY_VERSION, POLICY_TITLE, POLICY, providers } from './commerce.mjs';
 import { h, button, notify, request, guard } from "./dom.mjs";
@@ -15,7 +16,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     .then((m) => m.start(root))
     .catch((e) => notify(e.message, true));
 } else if (location.pathname.startsWith("/orders/")) {
-  import("./tracking.mjs").then((m) => m.start(root)).catch((e) => notify(e.message, true));
+  import("./tracking.mjs?v=69e463010b0b").then((m) => m.start(root)).catch((e) => notify(e.message, true));
 } else {
   let doc,
     revision = 1,
@@ -89,6 +90,8 @@ if (!location.pathname.startsWith('/studio/preview/') && (
       !a ||
       a.getAttribute("href")?.startsWith("#") ||
       a.target ||
+      a.hasAttribute("download") ||
+      !["http:", "https:"].includes(new URL(a.href).protocol) ||
       e.ctrlKey ||
       e.metaKey ||
       e.shiftKey ||
@@ -473,7 +476,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
         { class: "section-inner empty-state receipt" },
         !experience ? h("span", { class: "eyebrow" }, "DEMO · NO PAYMENT") : null,
         h("h1", {}, experience ? "Thank you. Your preorder is in." : doc.ui.simulated),
-        h("p", {}, "Order number: " + (receipt.orderNumber || receipt.id.slice(0, 10))),
+        h("p", { class: "confirmation-number" }, "Order number: " + (receipt.orderNumber || receipt.id.slice(0, 10))),
         h("p", {}, pickupLabel(receipt.pickup)),
         experience ? pickupLocation({ pickupAddress: receipt.pickupAddress }) : null,
         !experience ? h(
@@ -491,8 +494,10 @@ if (!location.pathname.startsWith('/studio/preview/') && (
           {},
           experience ? "Follow your payment and pickup status using your private order link. Payment is confirmed only after independent verification." : "Your beta request was received. Open Track your order for its current payment, preparation, and pickup status. This website has not processed a payment.",
         ),
+        receipt.emailOptIn ? h("p", {}, "Your email confirmation is queued. Keep this page until it arrives; your private link always shows the current status.") : h("p", {}, "No email confirmation was requested. Save your confirmation below."),
+        receipt.trackingPath ? confirmationTools(receipt) : null,
         receipt.trackingPath ? h("p", {}, h("a", { href: receipt.trackingPath, class: "primary-link" }, commerceEnabled ? "Pay & track your order" : "Track your order")) : null,
-        h("p", { class: "small-note" }, experience ? "Save your private tracking link. This test preorder does not process a payment." : "Save your private tracking link to view this order on another device. Email is optional and is sent only when configured and requested."),
+        h("p", { class: "small-note" }, experience ? "Your confirmation is available without email. Signed-in orders are also saved in My Orders in The Roost." : "Save your private tracking link to view this order on another device. Email is optional and is sent only when configured and requested."),
         experience ? link("/roost", customer?.member ? "View my Roost orders" : "Explore The Roost", "secondary-button") : null,
         link("/shop", doc.ui.continue, "secondary-button"),
       );
@@ -554,17 +559,19 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     const emailConsent = h("input", {
       type: "checkbox", checked: emailOptIn, disabled: !notificationsEnabled,
       "aria-label": "Email me order updates",
-      onchange: (e) => { emailOptIn = e.target.checked; emailInput.required = emailOptIn; updateActionValidity(); },
+      onchange: (e) => { emailOptIn = e.target.checked; receiptEmailInput.required = emailOptIn; updateActionValidity(); },
     });
     emailInput.required = emailOptIn;
     const customerFields = experience ? h("div", { class: "checkout-details" },
       h("h2", {}, "Contact information"),
       h("p", { class: "small-note" }, "We’ll know who your order is for."),
       ...[["Name", "name", "text", "name"], ["Email (optional)", "email", "email", "email"], ["Phone (optional)", "phone", "tel", "tel"]].map(([label, key, type, autocomplete]) => h("label", { class: "field" }, label,
-        h("input", { name: "checkout-" + key, type, autocomplete, required: key === "name", maxlength: key === "name" ? 80 : key === "phone" ? 32 : 254, value: checkoutProfile[key], oninput: e => { checkoutProfile[key] = e.target.value; updateActionValidity(); } })))) : null;
+        h("input", { name: "checkout-" + key, type, autocomplete, required: key === "name", maxlength: key === "name" ? 80 : key === "phone" ? 32 : 254, value: checkoutProfile[key], oninput: e => { checkoutProfile[key] = e.target.value; if (key === "email") checkoutEmail = e.target.value; updateActionValidity(); } })))) : null;
+    const receiptEmailInput = experience ? customerFields.querySelector('[name="checkout-email"]') : emailInput;
+    receiptEmailInput.required = emailOptIn;
     const checkoutInvalid = () => orderSubmitting || !checkoutEnabled || doc.orderingPaused || !chosen || pickupClosed(chosen) || invalidBasket || !lines.length || isPreview || editing ||
       commerceEnabled && (!policyAccepted || remainingDue > 0 && !checkoutPayments[checkoutPaymentMethod]) ||
-      emailOptIn && !emailInput.checkValidity() ||
+      emailOptIn && !receiptEmailInput.checkValidity() ||
       experience && (!checkoutProfile.name.trim() || [...customerFields.querySelectorAll('input')].some(input => !input.checkValidity()));
     const updateActionValidity = () => {
       action.disabled = checkoutInvalid();
@@ -579,7 +586,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
         if (!checkoutEnabled || doc.orderingPaused || !chosen || pickupClosed(chosen)) throw new Error('Ordering is unavailable for this pickup. Please choose another available date.');
         if (commerceEnabled && remainingDue > 0 && !checkoutPayments[checkoutPaymentMethod]) throw new Error('Ordering is paused while payment options are being set up.');
         if (commerceEnabled && !policyAccepted) throw new Error("Please read and acknowledge the pickup policy.");
-        if (emailOptIn && !emailInput.reportValidity()) return;
+        if (emailOptIn && !receiptEmailInput.reportValidity()) return;
         if (experience) {
           const fields = [...customerFields.querySelectorAll("input")];
           if (fields.some(input => !input.reportValidity())) return;
@@ -604,7 +611,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
             requestId: cart.requestId,
             pickupId: cart.pickupId,
             emailOptIn: notificationsEnabled && emailOptIn,
-            email: checkoutEmail,
+            email: experience ? checkoutProfile.email : checkoutEmail,
             total,
             ...(commerceEnabled ? { policyAccepted, policyVersion: POLICY_VERSION, paymentMethod: checkoutPaymentMethod || undefined } : {}),
             ...(experience ? { checkoutMode, customerDetails: checkoutProfile, creditCents: appliedCredit } : {}),
@@ -765,11 +772,11 @@ if (!location.pathname.startsWith('/studio/preview/') && (
                 appliedCredit > 0 ? h('label', { class: 'field' }, 'Credit amount ($)', h('input', { type: 'text', inputmode: 'decimal', value: centsToDollars(appliedCredit), onchange: e => { try { const next = dollarsToCents(e.target.value); if (next > Math.min(total, customer.credits.available)) throw new Error('Credit cannot exceed your available balance or order subtotal.'); creditChoice = next; render(); } catch (problem) { e.target.value = centsToDollars(appliedCredit); notify(problem.message, true); } } })) : null,
                 h('p', {}, 'Credit applied: −' + money(appliedCredit)), h('strong', {}, 'Remaining amount due: ' + money(remainingDue)),
                 h('p', { class: 'small-note' }, remainingDue === 0 ? 'Fully covered by return credit. No external payment is needed.' : 'Credit is reserved when your order is saved and used after Danielle verifies the remaining payment. Canceled reservations are released.')) : null,
-              !experience || notificationsEnabled ? h("label", { class: "field" }, h("span", {}, "Email for order updates (optional)"), emailInput) : null,
-              !experience || notificationsEnabled ? h("label", { class: "field" }, h("span", {}, "Email me order receipt, verified payment, preparation, and pickup readiness"), emailConsent) : null,
+              !experience ? h("label", { class: "field" }, h("span", {}, "Email for order updates (optional)"), emailInput) : null,
+              !experience || notificationsEnabled ? h("label", { class: "field" }, h("span", {}, "Email me my confirmation and order updates (optional)"), emailConsent) : null,
               h("p", { class: "small-note" }, notificationsEnabled
-                ? "Transactional updates only. Provider acceptance is shown on your private tracking page; inbox delivery is not guaranteed."
-                : experience ? "Your confirmation includes a private order tracking link." : "Email is not connected for this beta site. You will receive a private order tracking link instead."),
+                ? "Use the optional email above for your confirmation and order updates. No marketing messages. You can always save or print your confirmation."
+                : experience ? "Email confirmations are not available yet. Your order number and private tracking link will appear on your confirmation. Save or print it for your records." : "Email is not connected for this beta site. You will receive a private order tracking link instead."),
               commerceEnabled && remainingDue > 0 ? h('section', { 'aria-label': 'Checkout payment options' }, h('h2', {}, 'Payment options'),
                 h('div', { class: 'checkout-payments', role: 'group', 'aria-label': 'Choose payment method' },
                   Object.entries({ ...providers, ...(cash.eligible ? { cash_pickup: 'Cash at Pickup' } : {}) }).filter(([method]) => checkoutPayments[method]).map(([method, label]) => button(
@@ -954,7 +961,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     if (experience && workspace && customerWorkspace !== workspace) {
       customerWorkspace = workspace;
       customer = createCustomerExperience({ workspaceId: workspace, link, navigate, render, getDocument: () => doc, productCard: card, readOnly: isPreview || editing,
-        onMember: member => { creditChoice = 0; checkoutMode = member ? "member" : "guest"; checkoutProfile = member ? { ...member.profile } : { name: "", email: "", phone: "" }; } });
+        onMember: member => { emailOptIn = false; checkoutEmail = member?.profile?.email || ""; creditChoice = 0; checkoutMode = member ? "member" : "guest"; checkoutProfile = member ? { ...member.profile } : { name: "", email: "", phone: "" }; } });
       void customer.refresh();
     }
   }
