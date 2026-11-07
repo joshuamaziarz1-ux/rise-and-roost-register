@@ -9,6 +9,8 @@ export const emailLoginReady = (env) =>
   env.ROOST_PASSWORD_LOGIN_ENABLED === "true" &&
   typeof env.ROOST_PASSWORD_PEPPER === "string" &&
   env.ROOST_PASSWORD_PEPPER.length >= 32;
+export const emailOwnerTestReady = env => env.ROOST_AUTH_OWNER_TEST === 'true' &&
+  env.ROOST_PASSWORD_LOGIN_ENABLED === 'true' && typeof env.ROOST_PASSWORD_PEPPER === 'string' && env.ROOST_PASSWORD_PEPPER.length >= 32;
 export function normalizeEmail(value) {
   const email = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (!emailAddress(email))

@@ -14,9 +14,11 @@ import {
 } from "./customer-sessions.mjs";
 import {
   emailLoginReady,
+  emailOwnerTestReady,
   normalizeEmail,
   sendAuthEmail,
 } from "./auth-email.mjs";
+import { authorizedTestRecipient } from './email-policy.mjs';
 const fail = (message, status = 400) => {
   throw Object.assign(new Error(message), { status });
 };
@@ -60,13 +62,16 @@ export async function emailLogin({
   env,
   send = sendAuthEmail,
 }) {
-  if (!emailLoginReady(env))
+  if (!emailLoginReady(env) && !emailOwnerTestReady(env))
     fail(
       "Email sign-in is being prepared. Please use Existing member sign-in for now.",
       503,
     );
   const a = path.split("/").at(-1),
     ip = request.headers.get("CF-Connecting-IP") || "local";
+  const ownerOnly = env.ROOST_AUTH_OWNER_TEST === 'true';
+  if (ownerOnly && !['verify','reset'].includes(a) && !authorizedTestRecipient(env, input.email))
+    fail('Email sign-in is available only for the authorized owner test.', 503);
   await limit(db, "ip:" + ip, 50, now);
   await limit(db, "global", 1000, now);
   const member = await customerSession(request, db, w, now);
@@ -370,6 +375,7 @@ export async function emailLogin({
       "This link has expired or was already used. Please request a new one.",
       401,
     );
+  if (ownerOnly && !authorizedTestRecipient(env, row.email)) fail('This email test is restricted to an owner.', 503);
   if (row.purpose === "register") {
     const browser = (request.headers.get("Cookie") || "")
       .split(";")

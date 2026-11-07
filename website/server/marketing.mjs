@@ -1,11 +1,20 @@
 import { reserveEmailBudget } from './notifications.mjs';
-import { emailAddress, SENDER } from './email-policy.mjs';
+import { emailAddress, SENDER, authorizedTestRecipient } from './email-policy.mjs';
 const bad=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
 export const marketingTemplates={products:'New Products',preorders:'Preorders Now Open',seasonal:'Seasonal Favorites',updates:'Store Updates'};
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function marketingState(ledger) { return ledger.marketing ||= {contacts:[],campaigns:[],address:'',history:[]}; }
 export function marketingSnapshot(ledger,env) {
- const m=marketingState(ledger); return {...m,campaigns:m.campaigns.map(c=>({...c,preview:campaignPreview(c,m.address)})),contacts:m.contacts.map(({tokenHash,unsubscribeHash,...c})=>c),sendingEnabled:false,signupEnabled:env.MARKETING_SIGNUP_ENABLED==='true',providerVerified:env.MARKETING_PROVIDER_VERIFIED==='true',templates:marketingTemplates};
+ const m=marketingState(ledger);
+ const connectionReady=!!env.RESEND_MARKETING_API_KEY&&env.MARKETING_PROVIDER_VERIFIED==='true'&&env.MARKETING_FREE_PLAN_CONFIRMED==='true';
+ return {...m,
+  campaigns:m.campaigns.map(c=>({...c,preview:campaignPreview(c,m.address)})),
+  contacts:m.contacts.map(({tokenHash,unsubscribeHash,...c})=>({...c,status:c.status==='pending'&&c.expires<=Date.now()?'expired':c.status})),
+  connectionReady,
+  sendingEnabled:connectionReady&&env.MARKETING_CAMPAIGNS_ENABLED==='true'&&env.MARKETING_DELIVERY_VERIFIED==='true'&&env.MARKETING_DANIELLE_APPROVED==='true',
+  ownerTestEnabled:connectionReady&&env.MARKETING_OWNER_TEST_ENABLED==='true',
+  signupEnabled:env.MARKETING_SIGNUP_ENABLED==='true',
+  providerVerified:env.MARKETING_PROVIDER_VERIFIED==='true',templates:marketingTemplates};
 }
 export function campaignPreview(c,address,unsubscribe='https://rise-and-roost.com/subscribe#unsubscribe=PREVIEW') {
  const origin='https://rise-and-roost.com';
@@ -30,17 +39,16 @@ export function manageMarketing({ledger,input,path,published,now,actor,id}) {
  }
  if(path==='/api/manage/marketing-suppress') {
   const c=m.contacts.find(c=>c.id===input.contactId);if(!c)bad('Subscriber not found.',404);
-  c.status='unsubscribed';c.unsubscribedAt=at;delete c.tokenHash;
+  c.status='unsubscribed';c.unsubscribedAt=at;delete c.tokenHash;delete c.syncedAt;m.syncRequested=true;
   return {description:'Subscriber suppressed immediately',result:{contactId:c.id}};
  }
- // Delivery is deliberately blocked until the supported Resend Marketing adapter
- // has been validated with appropriately scoped credentials. A transactional key
- // must never be used to fan out promotional email.
+ // Delivery actions must go through the durable review/confirmation manager.
+ // Direct calls to the draft editor can never perform a provider side effect.
  if(['/api/manage/marketing-send','/api/manage/marketing-test'].includes(path)) bad('Marketing delivery is not activated. Save and preview your draft; the operator must validate the Resend Marketing connection before owner tests or sends.',409);
  bad('Marketing action not found.',404);
 }
 export async function marketingPublic({db,env,input,path,workspace,now,hash,token,rateLimit,json,fetcher=fetch}) {
- if(path.endsWith('/signup') && env.MARKETING_SIGNUP_ENABLED!=='true') bad('Email signup is not available yet. Please check back soon.',409);
+ if(path.endsWith('/signup') && env.MARKETING_SIGNUP_ENABLED!=='true' && !(env.MARKETING_SIGNUP_OWNER_TEST==='true'&&authorizedTestRecipient(env,input.email))) bad('Email signup is not available yet. Please check back soon.',409);
  const email=typeof input.email==='string'?input.email.trim().toLowerCase():'';
  if(path.endsWith('/signup')&&(!emailAddress(email)||input.consent!==true||input.website))bad('Enter your email and choose to receive bakery updates.');
  await rateLimit('marketing',12);
@@ -48,37 +56,53 @@ export async function marketingPublic({db,env,input,path,workspace,now,hash,toke
  if(!path.endsWith('/signup') && !/^[a-f0-9]{48}$/.test(input.token || ''))bad('Use the complete private email link.');
  for(let attempt=0;attempt<4;attempt++){
   const row=await db.prepare('SELECT ledger_json,ledger_version FROM workspaces WHERE id=?').bind(workspace).first();if(!row)bad('Website unavailable.',503);
-  const ledger=JSON.parse(row.ledger_json),m=marketingState(ledger),at=new Date(now).toISOString();
+  const ledger=JSON.parse(row.ledger_json),m=marketingState(ledger),at=new Date(now).toISOString(); let changedId;
   if(path.endsWith('/signup')) {
    if(env.MARKETING_CONFIRMATION_EMAIL_ENABLED!=='true'||env.ROOST_AUTH_FREE_PLAN_CONFIRMED!=='true'||!env.RESEND_API_KEY) bad('Email signup is awaiting secure confirmation delivery. Please check back soon.',409);
    const existing=m.contacts.find(c=>c.email===email);
    if(existing?.status==='confirmed' || existing?.status==='unsubscribed' || existing?.requestedAt && now-Date.parse(existing.requestedAt)<3600000) return json({message:'If eligible, a confirmation email will arrive shortly.'});
    if(!existing && m.contacts.length>=1000)bad('Email signup is temporarily full.',409);
    const c=existing || {id:token(),email,status:'pending'};
-   Object.assign(c,{tokenHash:secretHash,unsubscribeHash:await hash(c.id),expires:now+86400000,consentAt:at,source:'Fresh from the Roost website form',consentText:'I agree to receive bakery updates from Rise & Roost.',requestedAt:at});
+   Object.assign(c,{tokenHash:secretHash,unsubscribeHash:await hash(c.id),expires:now+86400000,consentAt:at,source:'Fresh from the Roost website form',consentText:'I agree to receive bakery updates from Rise & Roost.',requestedAt:at,confirmationStatus:'pending'});changedId=c.id;
    if(!existing)m.contacts.push(c);
   } else if(path.endsWith('/confirm')) {
    const c=m.contacts.find(c=>c.tokenHash===proof&&c.status==='pending'&&c.expires>now);if(!c)bad('This confirmation link has expired or was already used.',409);
-   c.status='confirmed';c.confirmedAt=at;delete c.tokenHash;
+   c.status='confirmed';c.confirmedAt=at;delete c.tokenHash;m.syncRequested=true;changedId=c.id;
   } else if(path.endsWith('/unsubscribe')) {
    const c=m.contacts.find(c=>c.unsubscribeHash===proof);if(!c)bad('This unsubscribe link is invalid.',404);
-   c.status='unsubscribed';c.unsubscribedAt=at;delete c.tokenHash;
+   c.status='unsubscribed';c.unsubscribedAt=at;delete c.tokenHash;delete c.syncedAt;m.syncRequested=true;changedId=c.id;
   } else bad('Action not found.',404);
   const saved=await db.prepare('UPDATE workspaces SET ledger_json=?,ledger_version=ledger_version+1 WHERE id=? AND ledger_version=?').bind(JSON.stringify(ledger),workspace,row.ledger_version).run();
   if(saved.meta.changes===1) {
    if(path.endsWith('/signup')) {
+    let confirmationStatus='quota_paused',providerId;
     // Separate confirmation cap preserves most transactional capacity for accounts.
     const key='marketing-confirmation:'+workspace+':'+new Date(now).toISOString().slice(0,10);
     await db.prepare('INSERT INTO limits(key,count,expires) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1').bind(key,now+172800000).run();
     const cap=await db.prepare('SELECT count FROM limits WHERE key=?').bind(key).first();
     if(cap.count<=10 && await reserveEmailBudget(db,workspace,now)) {
      const url='https://rise-and-roost.com/subscribe#confirm='+secret;
-     try { await fetcher('https://api.resend.com/emails',{method:'POST',redirect:'manual',signal:AbortSignal.timeout(15000),headers:{Authorization:'Bearer '+env.RESEND_API_KEY,'Content-Type':'application/json','Idempotency-Key':'marketing-opt-in-'+secretHash},body:JSON.stringify({from:SENDER,to:[email],subject:'Confirm your Rise & Roost subscription',text:'Confirm that you asked for bakery updates: '+url+'\nThis link expires in 24 hours. If you did not request this, ignore it.',html:`<html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="background:#faf6ed;color:#293d2c;font:17px/1.6 Georgia,serif"><main style="max-width:560px;margin:auto;padding:28px"><img src="https://rise-and-roost.com/assets/logo.webp" width="140" alt="Rise &amp; Roost"><h1>Confirm your subscription</h1><p>You asked to receive bakery updates from Rise &amp; Roost.</p><p><a href="${url}">Confirm My Subscription</a></p><p>This link expires in 24 hours. If you did not request this, ignore this email.</p></main></body></html>`})}); } catch { /* Neutral response; never assert inbox delivery. */ }
+     try { const r=await fetcher('https://api.resend.com/emails',{method:'POST',redirect:'manual',signal:AbortSignal.timeout(15000),headers:{Authorization:'Bearer '+env.RESEND_API_KEY,'Content-Type':'application/json','Idempotency-Key':'marketing-opt-in-'+secretHash},body:JSON.stringify({from:SENDER,to:[email],subject:'Confirm your Rise & Roost subscription',text:'Confirm that you asked for bakery updates: '+url+'\nThis link expires in 24 hours. If you did not request this, ignore it.',html:`<html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="background:#faf6ed;color:#293d2c;font:17px/1.6 Georgia,serif"><main style="max-width:560px;margin:auto;padding:28px"><img src="https://rise-and-roost.com/assets/logo.webp" width="140" alt="Rise &amp; Roost"><h1>Confirm your subscription</h1><p>You asked to receive bakery updates from Rise &amp; Roost.</p><p><a href="${url}">Confirm My Subscription</a></p><p>This link expires in 24 hours. If you did not request this, ignore this email.</p></main></body></html>`})}); const result=r.ok?await r.json():null; providerId=result?.id;confirmationStatus=r.ok&&providerId?'accepted':'failed'; } catch { confirmationStatus='failed'; }
     }
+    await recordConfirmation(db,workspace,changedId,confirmationStatus,providerId);
     return json({message:'If eligible, a confirmation email will arrive shortly.'});
    }
+   const {syncOneMarketingContact}=await import('./marketing-delivery.mjs');
+   await syncOneMarketingContact(db,{...env,PUBLIC_WORKSPACE_ID:workspace},changedId,now,fetcher);
    return json({message:path.endsWith('/unsubscribe')?'You have been unsubscribed.':'Your subscription is confirmed.'});
   }
  }
  bad('Another update arrived. Retry your request.',409);
+}
+
+async function recordConfirmation(db,workspace,id,status,providerId) {
+ for(let attempt=0;attempt<4;attempt++) {
+  const row=await db.prepare('SELECT ledger_json,ledger_version FROM workspaces WHERE id=?').bind(workspace).first();
+  if(!row)return;
+  const ledger=JSON.parse(row.ledger_json),c=marketingState(ledger).contacts.find(c=>c.id===id);
+  if(!c)return;
+  c.confirmationStatus=status;if(providerId)c.confirmationProviderId=providerId;
+  const r=await db.prepare('UPDATE workspaces SET ledger_json=?,ledger_version=ledger_version+1 WHERE id=? AND ledger_version=?').bind(JSON.stringify(ledger),workspace,row.ledger_version).run();
+  if(r.meta.changes===1)return;
+ }
 }

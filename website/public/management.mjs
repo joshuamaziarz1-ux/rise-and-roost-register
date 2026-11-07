@@ -35,7 +35,7 @@ export async function start(root, initial, newAccessKey) {
   document.head.append(h('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' }), h('meta', { name: 'apple-mobile-web-app-title', content: 'Website Studio' }), h('link', { rel: 'apple-touch-icon', href: '/assets/logo.webp' }));
   document.title = 'Rise & Roost Website Studio';
   let data = initial, view = 'Home', selection = '', filter = 'all', search = '', period = 'today', from = '', through = '';
-  let emailDraft = null, marketingDraft = null;
+  let emailDraft = null, marketingDraft = null, marketingProcessing = false;
   let editing = null, busy = false, pending = null, error = '', connected = navigator.onLine, checking = false, disposed = false, reauth = false;
   const bindings = new WeakMap();
   const workspace = initial.id, storageKey = 'rr-studio-draft:' + workspace;
@@ -650,6 +650,19 @@ export async function start(root, initial, newAccessKey) {
       h('input', { value: workspace, readonly: true, 'aria-label': 'Workspace ID' }), h('input', { type: 'password', value: newAccessKey, readonly: true, 'aria-label': 'Private access key', autocomplete: 'off' }),
       button('I saved these details', () => { newAccessKey = ''; render(); }, { class: 'ms-primary' }));
   }
+  async function processMarketing() {
+    if(marketingProcessing)return;
+    marketingProcessing=true;
+    try {
+      for(let step=0;step<1200;step++) {
+        const before=data.ledgerVersion;
+        if(!await send('marketing-process',{ledgerVersion:data.ledgerVersion}))break;
+        if(before===data.ledgerVersion)break;
+        const m=data.management.marketing;
+        if(m.syncError || !(m.syncRequested || (m.deliveries||[]).some(v=>['queued-review','assembling','queued-send'].includes(v.status)||v.resultsRequested)))break;
+      }
+    } finally {marketingProcessing=false;render();}
+  }
   function marketing() {
     const m=data.management.marketing || {contacts:[],campaigns:[],templates:{}};
     const d=marketingDraft;
@@ -657,14 +670,28 @@ export async function start(root, initial, newAccessKey) {
       panel('Subscribers',h('p',{},m.contacts.filter(c=>c.status==='confirmed').length+' confirmed · '+m.contacts.filter(c=>c.status==='pending').length+' awaiting confirmation · '+m.contacts.filter(c=>c.status==='unsubscribed').length+' unsubscribed'),
         h('p',{},'Customers join voluntarily through a separate email signup. No customer addresses are imported.'),
         m.contacts.map(c=>h('article',{class:'ms-audit'},h('strong',{},c.email),h('p',{},c.status),c.status!=='unsubscribed'?button('Unsubscribe',()=>{if(confirm('Suppress this subscriber immediately?'))send('marketing-suppress',{ledgerVersion:data.ledgerVersion,contactId:c.id});},{class:'ms-secondary'}):null))),
-      panel('Campaigns',h('p',{},'Marketing delivery is disabled. Drafts and previews are available. Live sending requires a verified Marketing connection, an accurate mailing address and Danielle’s separate approval.'),
+      panel('Campaigns',h('p',{},m.sendingEnabled?'Campaign sending is enabled after final audience review and explicit confirmation.':'Marketing delivery is disabled. Drafts and previews are available. Live sending requires a verified Marketing connection, an accurate mailing address and Danielle’s separate approval.'),
         button('Create campaign',()=>{marketingDraft={template:'products',subject:'New Products',message:'',photo:''};render();},{class:'ms-primary'}),
         d?h('form',{onsubmit:async e=>{e.preventDefault();const saved=await send('marketing-draft',{ledgerVersion:data.ledgerVersion,...d});if(saved){marketingDraft=null;render();}}},
           f('Template',d,'template',{choices:Object.entries(m.templates).map(([value,label])=>({value,label}))}),f('Subject',d,'subject',{required:true,maxlength:150}),f('Message',d,'message',{type:'textarea',required:true,maxlength:12000}),
           f('Product photograph',d,'photo',{choices:[{value:'',label:'No photograph'},...(data.published.products || []).filter(p=>!p.placeholder).flatMap(p=>(p.images||[]).filter(i=>!i.src.endsWith('.svg')).map(i=>({value:i.src,label:p.name})))]}),
           h('button',{type:'submit',class:'ms-primary',disabled:busy},'Save draft'),button('Cancel',()=>{marketingDraft=null;render();},{class:'ms-secondary'})):null,
         m.campaigns.map(c=>h('article',{class:'ms-audit'},h('h3',{},c.subject),h('p',{},c.status+' · '+stamp(c.updatedAt)),button('Edit draft',()=>{marketingDraft={campaignId:c.id,template:c.template,subject:c.subject,message:c.message,photo:c.photo};render();},{class:'ms-secondary'}),
-          h('details',{},h('summary',{},'Preview email'),h('iframe',{title:'Email preview: '+c.subject,sandbox:'',srcdoc:c.preview.html,style:{width:'100%',height:'620px',border:'1px solid #d8dfd2'}})),h('p',{},'Delivery results: no sending attempted.')))),
+          h('details',{},h('summary',{},'Preview email'),h('iframe',{title:'Email preview: '+c.subject,sandbox:'',srcdoc:c.preview.html,style:{width:'100%',height:'620px',border:'1px solid #d8dfd2'}})),h('p',{},'Delivery results: '+((m.deliveries||[]).filter(v=>v.campaignId===c.id).map(v=>v.status).join(', ')||'no sending attempted.')),
+          c.status==='draft'&&m.ownerTestEnabled?button('Review owner test',()=>{const recipient=prompt('Confirmed, opted-in owner email address',data.actor?.email||'');if(recipient)send('marketing-review',{ledgerVersion:data.ledgerVersion,campaignId:c.id,kind:'test',recipient});},{class:'ms-secondary'}):null,
+          c.status==='draft'&&m.sendingEnabled?button('Review campaign audience',()=>send('marketing-review',{ledgerVersion:data.ledgerVersion,campaignId:c.id,kind:'campaign'}),{class:'ms-secondary'}):null))),
+      panel('Delivery history and audience review',
+        h('p',{},m.syncError?'Synchronization needs attention: '+m.syncError:'Subscriber sync: '+(m.syncedAt?stamp(m.syncedAt):'awaiting provider setup')),
+        m.connectionReady?button('Synchronize and process pending work',()=>processMarketing(),{class:'ms-secondary',disabled:busy||marketingProcessing}):null,
+        (m.deliveries||[]).map(v=>h('article',{class:'ms-audit'},h('h3',{},v.campaign.subject+' · '+(v.kind==='test'?'Owner test':'Campaign')),
+          h('p',{},v.status+(v.providerStatus?' · Provider: '+v.providerStatus:'')+(v.error?' · '+v.error:'')+(v.resultsError?' · Results: '+v.resultsError:'')),
+          h('p',{},'Sender: orders@rise-and-roost.com'),h('p',{},'Final audience ('+v.recipients.length+'): '+v.recipients.join(', ')),
+          h('p',{},'Mailing address: '+v.address),
+          v.broadcastId?h('p',{},'Provider broadcast: '+v.broadcastId):null,
+          ['sending','unknown','checking','preparing'].includes(v.status)?h('p',{},'Processing or interrupted. Check provider results; a send is never retried automatically.'):null,
+          v.status==='reviewed'&&(v.kind==='test'?m.ownerTestEnabled:m.sendingEnabled)?button(v.kind==='test'?'Confirm owner test':'Confirm campaign send',()=>{if(confirm('Send “'+v.campaign.subject+'” to exactly '+v.recipients.length+' reviewed recipient(s)?'))send(v.kind==='test'?'marketing-test':'marketing-send',{ledgerVersion:data.ledgerVersion,deliveryId:v.id,reviewToken:v.reviewToken,confirmed:true});},{class:'ms-primary',disabled:busy}):null,
+          v.broadcastId?button('Refresh provider results',async()=>{if(await send('marketing-results',{ledgerVersion:data.ledgerVersion,deliveryId:v.id}))await processMarketing();},{class:'ms-secondary',disabled:busy||marketingProcessing}):null,
+          v.providerResults?h('p',{},Object.entries(v.providerResults).map(([kind,recipients])=>kind+': '+recipients.length).join(' · ')):null))),
       panel('Sender details',h('form',{onsubmit:e=>{e.preventDefault();send('marketing-settings',{ledgerVersion:data.ledgerVersion,address:e.currentTarget.elements.address.value});}},h('label',{class:'field'},'Physical mailing address',h('textarea',{name:'address',maxlength:500},m.address || '')),h('button',{type:'submit',class:'ms-primary',disabled:busy},'Save address')),h('p',{},'Use the accurate physical mailing address required in every marketing email.')));
   }
   function render() {

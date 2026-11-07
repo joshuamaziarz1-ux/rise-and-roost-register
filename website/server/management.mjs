@@ -1,4 +1,5 @@
 import { marketingSnapshot, manageMarketing } from './marketing.mjs';
+import { queueMarketing, drainMarketing, syncOneMarketingContact } from './marketing-delivery.mjs';
 import { emailSnapshot, manageEmail } from './email-management.mjs';
 import { bookingSummary } from './pickup-booking.mjs';
 import { managePickup, changePreview, decidePickupRequest } from './pickup-changes.mjs';
@@ -170,6 +171,11 @@ export async function managementApi({ request, db, now, row, actor, input, path,
   }
   if (m.operations.length >= 2000) bad('This preview has reached its audit-operation limit. Export a backup and ask for a storage expansion; saved data has not been removed.', 409);
   let changedDocument = false, result = {}, description = '', commentChange;
+  if (path === '/api/manage/marketing-process') {
+    if (actor.role !== 'owner') bad('Only an owner can synchronize Marketing.', 403);
+    await drainMarketing(db, emailEnv, now);
+    return json({ ...await snapshot(await current()), result: { processed: true } });
+  }
   const expectedDocument = () => { if (input.revision !== row.revision) bad('The website changed on another device. Your edits are unsaved; reload the current fields before saving.', 409); };
   const order = () => {
     const o = ledger.orders.find(o => o.id === input.id);
@@ -558,7 +564,9 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     if (!input.preferences || keys.some(k => typeof input.preferences[k] !== 'boolean')) bad('Check notification preferences.');
     m.notificationPreferences = Object.fromEntries(keys.map(k => [k, input.preferences[k]])); description = 'Studio notification preferences saved';
   } else if (path.startsWith('/api/manage/marketing-')) {
-    ({description,result}=manageMarketing({ledger,input,path,published,now,actor,id:opaque}));
+    if (input.ledgerVersion !== row.ledger_version) bad('Marketing changed. Refresh and review before saving.', 409);
+    const args = {ledger,input,path,published,now,actor,id:opaque,env:emailEnv};
+    ({description,result} = ['/api/manage/marketing-sync','/api/manage/marketing-review','/api/manage/marketing-send','/api/manage/marketing-test','/api/manage/marketing-results'].includes(path) ? queueMarketing(args) : manageMarketing(args));
   } else if (path === '/api/manage/benefit') {
     if (ledger.returnCredits) bad('Use The Roost → Return Credits for monetary transactions. Legacy records are retained.', 409);
     if (!await first('SELECT id FROM roost_members WHERE id=? AND workspace_id=?', input.memberId, row.id)) bad('Choose a member of this workspace.');
@@ -589,5 +597,6 @@ export async function managementApi({ request, db, now, row, actor, input, path,
       .bind(commentChange.status, at, commentChange.id, row.id, commentChange.version, row.id, commentChange.claim),
   ]))[0] : await statement.run();
   if (written.meta.changes !== 1) bad('Another device or order saved first. Your fields are unsaved; review the current data and retry.', 409);
+  if (path === '/api/manage/marketing-suppress') await syncOneMarketingContact(db, { ...emailEnv, PUBLIC_WORKSPACE_ID: row.id }, input.contactId, now);
   return json({ ...await snapshot(await current()), result });
 }
