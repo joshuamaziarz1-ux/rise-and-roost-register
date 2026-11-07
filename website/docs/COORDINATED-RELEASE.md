@@ -1,5 +1,7 @@
 # Coordinated Roost release — 2026-11-07
 
+**Latest continuation:** the separately gated email/Marketing implementation continues in [EMAIL-FEATURES-ACTIVATION.md](EMAIL-FEATURES-ACTIVATION.md) and [EMAIL-FEATURES-RECEIPT.json](EMAIL-FEATURES-RECEIPT.json). The original version-28 receipt and its validation below are historical evidence, preserved unchanged. Public authentication/signup and campaigns still require the documented live checks; the new Marketing adapter is implemented and mock-tested rather than claimed live-verified.
+
 Integration branch: `feature/roost-coordinated-release`, based on reviewed `feature/roost-simple-email-login` at `4d6a38d`. That branch already contains the deployed transactional Resend work. Main was not used. All remote branches and open PRs were inspected. No other local editing process or worktree was present before this worktree was created.
 
 ## Independent gates

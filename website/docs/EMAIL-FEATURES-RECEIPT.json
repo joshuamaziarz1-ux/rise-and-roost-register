@@ -1,0 +1,97 @@
+{
+  "status": "guarded_release_live_activation_blocked",
+  "applicationCommit": "1de0ac10723a39e43609b90ed267d015936ab5e1",
+  "branch": "feature/roost-coordinated-release",
+  "pullRequest": 22,
+  "workerVersion": 29,
+  "workerVersionId": "1fe1b834-660d-4372-b49a-ca3bee8b5fa3",
+  "deploymentId": "49699086-f49b-4229-a9b8-4ac5da1fd80c",
+  "workerSha256": "46fe328d55dfd52894ed608e4ce3b057b92d9cabb3118e1884e8dc1877d5871c",
+  "emailRegistrationActivated": false,
+  "verificationEmailReceived": false,
+  "passwordResetEmailReceived": false,
+  "liveAuthenticationEmailsSent": 0,
+  "promotionalCampaignsSent": 0,
+  "marketingAdapterImplemented": true,
+  "marketingLiveValidated": false,
+  "ownerMarketingTestsEnabled": false,
+  "physicalMailingAddressConfigured": false,
+  "resendAuthenticatedAccountAccessAvailable": false,
+  "resendMarketingSecretConfigured": false,
+  "mailboxEvidence": "Connected Gmail identity differs from configured production owner addresses. No new flow email was sent or claimed as received.",
+  "disabled": [
+    "public_email_login",
+    "general_auth_email",
+    "owner_auth_test",
+    "public_marketing_signup",
+    "marketing_confirmation_email",
+    "owner_marketing_test",
+    "marketing_campaigns",
+    "real_checkout",
+    "order_email",
+    "cash_at_pickup",
+    "return_credits"
+  ],
+  "enabled": [
+    "pickup_requests",
+    "protected_studio",
+    "marketing_drafts_templates_photos_previews"
+  ],
+  "tests": {
+    "backendPassed": 366,
+    "broadBrowserDistinctCases": 295,
+    "broadBrowserFirstRunPassed": 262,
+    "broadBrowserStartupFailures": 33,
+    "broadBrowserStartupFailureCauses": [
+      "32 missing matching WebKit executable",
+      "1 incomplete WebKit library installation"
+    ],
+    "broadBrowserRerunPassed": 33,
+    "additionalOwnerMarketingBrowserPassed": 5,
+    "commerceBrowserPassed": 8,
+    "productionIsolationBrowserPassed": 10,
+    "schemaGuardsPassed": 7,
+    "nativeWorkerdD1SmokesPassed": 2,
+    "preDeployReadOnlyProductionPagesPassed": 20,
+    "postDeployReadOnlyProductionPagesPassed": 20,
+    "physicalIPhoneSafariTested": false,
+    "providerMessagesMocked": true
+  },
+  "backup": {
+    "encryptedArchiveSha256": "6aadfc6bf491e4adfebf8bf0344180dd2988c892562b87b91cd83126574f48c5",
+    "restoredAllRecordsAndSchema": true,
+    "tableCount": 18,
+    "memberCount": 0
+  },
+  "safety": {
+    "migration0012Reapplied": false,
+    "accountsDeleted": 0,
+    "productionTestOrdersCreated": 0,
+    "productionPaymentsCreated": 0,
+    "existingTransactionalSecretReadOrChanged": false,
+    "newOwnerIdentityAdded": false,
+    "resendPlanUpgraded": false
+  },
+  "runbook": "EMAIL-FEATURES-ACTIVATION.md",
+  "productionPreservation": {
+    "preservedTableCount": 18,
+    "allRecordFingerprintsMatch": true,
+    "schemaUnchanged": true,
+    "accessUnchanged": true,
+    "originalBindingsPreserved": true,
+    "encryptedSecretsPreservedByNameAndType": true,
+    "pickupRequestsEnabled": true,
+    "allActivationGatesOff": true,
+    "deployedExecutableMatchesTestedBundle": true,
+    "workerSha256": "46fe328d55dfd52894ed608e4ce3b057b92d9cabb3118e1884e8dc1877d5871c",
+    "workerVersion": 29,
+    "workerVersionId": "1fe1b834-660d-4372-b49a-ca3bee8b5fa3",
+    "deploymentId": "49699086-f49b-4229-a9b8-4ac5da1fd80c",
+    "traffic": [
+      {
+        "version_id": "1fe1b834-660d-4372-b49a-ca3bee8b5fa3",
+        "percentage": 100
+      }
+    ]
+  }
+}

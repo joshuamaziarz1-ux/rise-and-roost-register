@@ -1,6 +1,6 @@
 # Email features continuation — November 7, 2026
 
-This continues `feature/roost-coordinated-release` at `d78a362c`, whose application source is `3ab008b`. It does not use legacy main. See `EMAIL-FEATURES-RECEIPT.json` for the final deployment/test status. Authentication activation and live Marketing validation remain conditional on actual provider/mailbox evidence; mocked tests never satisfy these gates.
+This continues `feature/roost-coordinated-release` at `d78a362c`, whose prior application source is `3ab008b`. Guarded application commit `1de0ac10723a39e43609b90ed267d015936ab5e1` is deployed as Worker **29**, version `1fe1b834-660d-4372-b49a-ca3bee8b5fa3`, deployment `49699086-f49b-4229-a9b8-4ac5da1fd80c`. It does not use legacy main. See `EMAIL-FEATURES-RECEIPT.json` for the final deployment/test status. Authentication activation and live Marketing validation remain conditional on actual provider/mailbox evidence; mocked tests never satisfy these gates.
 
 ## What changed
 
@@ -17,7 +17,7 @@ The new account owner-test gate allows the existing email endpoints to be exerci
 ## Evidence needed from the owner
 
 1. Open the authenticated Resend account. Verify `rise-and-roost.com`, `orders@rise-and-roost.com`, current transactional daily/monthly remaining allowance, recipient restrictions, current Marketing plan/contact/segment allowance and existing transactional-key permissions. Retain the existing restricted transactional key. The current official Usage API requires full access; a sending-only key cannot establish account usage. Never paste a key in chat.
-2. Identify a configured owner mailbox available for the live tests: `danielle.maziarz@gmail.com` or `joshua.maziarz1@gmail.com`. The connected Gmail account during this task was `jmaziarzmnlt@gmail.com`; its identity alone does not establish control of either configured address. A targeted search found no recent messages from the bakery sender in that connected inbox. Do not add an owner identity or expand a recipient allowlist just to bypass this requirement.
+2. Identify Danielle’s or Joshua’s existing configured owner mailbox from the live Worker’s `PRODUCTION_OWNERS`. The connected Gmail identity during this task differed from those configured addresses; it does not establish mailbox access to either owner address. Keep those private mailbox addresses out of public release evidence. A targeted search found no recent messages from the bakery sender in that connected inbox. Do not add an owner identity or expand a recipient allowlist just to bypass this requirement.
 3. For Marketing, install a separate appropriately scoped key as the Cloudflare encrypted Worker secret `RESEND_MARKETING_API_KEY`, using Cloudflare's dashboard or an interactive secret command. Provide authenticated Resend access/secure environment binding and permit `api.resend.com` for operator inspection if using an external runner. Do not expose or replace `RESEND_API_KEY`.
 
 These are access/evidence requirements, not another request for generic deployment permission.
@@ -42,7 +42,7 @@ const me = async () => (await fetch('/api/roost/me?workspace=' + workspaceId)).j
 
 Use a fresh test password entered locally; do not put its value in a saved console transcript. If the configured address already has an account, use login/reset instead of trying to replace it. Preserve existing records.
 
-1. `await account('email/register', {name: 'Owner email test', email: prompt('Configured owner email'), password: prompt('Test password')})`. Confirm an unrelated non-owner request returns 503 and creates no pending registration. No order or payment is involved.
+1. `await account('email/register', {name: prompt('Your name'), email: prompt('Configured owner email'), password: prompt('Test password')})`. Confirm an unrelated non-owner request returns 503 and creates no pending registration. No order or payment is involved.
 2. Confirm actual **Verify Your Email** mailbox receipt. Open the complete private verification link in the same browser profile where registration began; the pending registration cookie is required. On that Roost page, redefine the helper above if necessary, then run `await account('email/verify', {token: location.hash.split('.').at(-1)})`. If the browser has removed the fragment, copy only the token from the received link locally into the call. Do not share it. Confirm the link cannot be used twice and `await me()` shows the signed-in owner test member.
 3. Reload and open a second tab in that same browser; confirm the same member remains signed in. Confirm the session cookie is Secure, HttpOnly and SameSite=Strict without copying its value. Call `await account('logout')`; confirm `await me()` returns `member:null` and the old session cannot authenticate.
 4. Call `await account('email/login', {email: prompt('Owner email'), password: prompt('Test password')})`; confirm success and persistence. Call `await account('email/forgot', {email: prompt('Owner email')})`. Confirm actual **Reset Your Password** mailbox receipt, open that private link in the test browser, redefine the helper, then call `await account('email/reset', {token: location.hash.split('.').at(-1), password: prompt('New test password'), confirmPassword: prompt('Repeat new test password')})`.
@@ -71,3 +71,15 @@ A fresh read-only encrypted backup was restored and verified: `/workspace/roost-
 Disable only the affected feature gates to roll back availability. Retain all additive ledger history, auth accounts and schema. Restore the prior Worker version only if it supports every account already created; never overwrite current customer data with an earlier database snapshot.
 
 Provider references reviewed: [Contacts](https://resend.com/docs/api-reference/contacts/create-contact), [Segments](https://resend.com/docs/api-reference/segments/create-segment), [Broadcast creation](https://resend.com/docs/api-reference/broadcasts/create-broadcast), [Broadcast sending](https://resend.com/docs/api-reference/broadcasts/send-broadcast), [Usage API](https://resend.com/changelog/account-usage-api), and [official OpenAPI schema](https://github.com/resend/resend-openapi/blob/main/resend.yaml). Documentation establishes supported interfaces, not this account's actual permissions or remaining allowance.
+
+## Final automated validation
+
+- 366 backend/security cases passed on the final source.
+- All 295 broad browser cases have passing results: 262 passed initially; 32 WebKit executables were missing and one WebKit library was still being installed during launch. All 33 startup failures passed after installation on an unmodified application. This is not claimed as a clean first-pass broad run.
+- Five new owner Marketing workflow cases passed across desktop Chromium/WebKit, iPhone WebKit emulation, Android and tablet using provider-shaped mocks, including review, explicit confirmation, a single test send, provider results and closed campaign gates.
+- Eight commerce and ten production-isolation browser cases passed.
+- Seven schema guards and both exact-bundle native workerd/D1 smokes passed, with synthetic records, mocked account delivery and zero remote sending.
+- The downloaded deployed executable matches the tested SHA-256 `46fe328d55dfd52894ed608e4ce3b057b92d9cabb3118e1884e8dc1877d5871c`. All 18 application-table fingerprints/schema, original binding values/types and Access application/policies match baseline.
+- Twenty pre-deployment read-only live page/profile checks passed. Post-deployment results are in the machine-readable receipt. Physical iPhone Safari and actual new-flow mailbox receipt are not claimed.
+
+No live account email, confirmation email, owner Marketing test or promotional campaign was sent. Public email login/signup, all temporary test gates, campaigns, checkout and order emails remain off. Cash at Pickup and return credits were read-only verified off. The production mailing-address field is empty. Current Resend permissions/allowances, the separate Marketing secret, owner mailbox tests and Danielle’s later campaign approval remain external blockers. No additional generic activation permission is needed once the account authentication checks pass.
