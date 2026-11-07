@@ -43,7 +43,7 @@ export async function productionOwner(request, config, now = Date.now()) {
     if (payload.type !== 'app' || !validEmail(payload.email) || !owner || typeof payload.sub !== 'string' || !payload.sub || payload.sub.length > 255 ||
         !Number.isSafeInteger(payload.exp) || !Number.isSafeInteger(payload.iat) || payload.exp * 1000 <= now || payload.iat * 1000 > now + 5000 || payload.exp <= payload.iat || payload.exp - payload.iat > accessSessionSeconds) return { status: 403 };
     const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(config.issuer + ':' + payload.sub)))].map(v => v.toString(16).padStart(2, '0')).join('');
-    return { actor: Object.freeze({ id: 'production-owner:' + digest, name: owner.name.trim(), authentication: 'cloudflare_access', role: 'owner' }), expiresAt: payload.exp * 1000 };
+    return { actor: Object.freeze({ id: 'production-owner:' + digest, name: owner.name.trim(), email: owner.email.toLowerCase(), authentication: 'cloudflare_access', role: 'owner' }), expiresAt: payload.exp * 1000 };
   } catch (e) {
     return { status: !e.code || ['ERR_JWKS_TIMEOUT', 'ERR_JWKS_INVALID', 'ERR_JOSE_GENERIC'].includes(e.code) ? 503 : 403 };
   }

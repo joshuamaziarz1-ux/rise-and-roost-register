@@ -1,3 +1,4 @@
+import { emailSnapshot, manageEmail } from './email-management.mjs';
 import { bookingSummary } from './pickup-booking.mjs';
 import { managePickup, changePreview } from './pickup-changes.mjs';
 import { CASH_METHOD, outstandingCash, requireCash } from './cash-pickup.mjs';
@@ -92,7 +93,7 @@ export function productionList(orders, date) {
   return { date, orders: selected, products: [...combined.values()].sort((a, b) => a.name.localeCompare(b.name)) };
 }
 
-export async function managementApi({ request, db, now, row, actor, input, path, json, validateDocument, ownerResult, availableDocument, checkoutEnabled = true }) {
+export async function managementApi({ request, db, now, row, actor, input, path, json, validateDocument, ownerResult, availableDocument, checkoutEnabled = true, emailEnv = {} }) {
   const first = (sql, ...params) => db.prepare(sql).bind(...params).first();
   const all = async (sql, ...params) => (await db.prepare(sql).bind(...params).all()).results;
   const url = new URL(request.url), at = new Date(now).toISOString();
@@ -116,6 +117,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
           benefits: (ledger.management?.benefits || []).filter(b => b.memberId === m.id) })), comments,
         audit: (m.audit || []).slice(0, 500), benefits: m.benefits || [],
         ownerAccounts: actor.authentication === 'cloudflare_access' && actor.role === 'owner' ? { provider: 'Cloudflare Access', configured: true } : { provider: 'Descope', configured: false, activationRequiresApproval: true },
+        email: emailSnapshot(ledger, emailEnv, actor, now),
         notifications: { externalEnabled: false, preferences: m.notificationPreferences || { orders: true, payments: true, stock: true, pickups: true, comments: true, errors: true } },
         limits: { orderCount: ledger.orders.length, orderLimit: 300, memberDirectoryLimit: 500 },
         attention: {
@@ -202,7 +204,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
       delete o.paymentCorrectedAt;
       o.verification = { method: CASH_METHOD, at, author: actor.name, actorId: actor.id };
       o.paidReceipt = { number: 'RR-PAID-' + o.id.slice(0, 16).toUpperCase() + '-' + o.verifications.length, orderNumber: o.orderNumber, issuedAt: at, paidAt: at, total: o.total, currency: 'USD', lines: clone(o.lines), verification: 'An authorized owner confirmed cash received', merchant: o.merchant, beta: o.environment !== 'production', websiteProcessedPayment: false };
-      description = 'Cash received: ' + o.total + ' cents; return credit finalized'; enqueue(o, 'verified', at, opaque);
+      description = 'Cash received: ' + o.total + ' cents; return credit finalized'; enqueue(o, 'verified', at, opaque, ledger.management?.email);
     } else {
       const reason = text(input.reason, 500, 'the unpaid-order review reason', true);
       if (reason.length < 5) bad('Record a clear reason for closing this unpaid order.');
@@ -225,6 +227,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
       if (reason.length < 5) bad('Record a clear expiry review reason.');
       cancelCredit(ledger, o, now, actor); o.status = 'canceled'; o.keepInventory = false; o.canceledAt = at; o.version = (o.version || 1) + 1;
       o.audit.push({ action: 'Expired order canceled after owner review: ' + reason, at, author: actor.name });
+      enqueue(o, 'canceled', at, opaque, ledger.management?.email);
       description = 'Expired order canceled and reserved credit released: ' + reason; result = { orderId: o.id };
     } else ({ description, result } = await manageCredits({ ledger, input, action: path.slice('/api/manage/'.length), now, actor, db, workspaceId: row.id }));
   } else if (['/api/manage/payment-destination','/api/manage/payment-test-start','/api/manage/payment-test-confirm'].includes(path)) {
@@ -310,6 +313,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     if (['canceled','picked-up'].includes(o.status) || o.resolution) bad('This order already has a final resolution.', 409);
     if (input.resolution === 'forfeited' && !orderAttention(o,now).overdue) bad('Forfeiture requires a passed pickup deadline and explicit owner review.', 409);
     o.resolution = { kind: input.resolution, reason, at, actor, deadline: o.pickupDeadline }; o.archivedAt = at;
+    if (input.resolution === 'forfeited') enqueue(o, 'forfeited', at, opaque, ledger.management?.email);
     o.version = (o.version || 1) + 1; description = 'Owner reviewed pickup: ' + input.resolution + '. No refund or collection recorded.'; o.audit.push({ action: description + ' ' + reason, at, author: actor.name }); result = { orderId: o.id };
   } else if (path === '/api/manage/abandon-operation') {
     result = { abandoned: true }; description = 'Unconfirmed operation fenced off before any retry';
@@ -465,7 +469,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
       issuedAt: at, paidAt: at, total: o.total, currency: 'USD', lines: clone(o.lines),
       verification: 'An authorized owner checked an independent payment record', merchant: o.merchant || { name: published.business.name }, beta: o.environment !== 'production', websiteProcessedPayment: false };
     o.version = (o.version || 1) + 1; description = 'Independent payment verified; receipt issued';
-    o.audit.push({ action: description, author: actor.name, at }); enqueue(o, 'verified', at, opaque); result = { orderId: o.id };
+    o.audit.push({ action: description, author: actor.name, at }); enqueue(o, 'verified', at, opaque, ledger.management?.email); result = { orderId: o.id };
   } else if (path === '/api/manage/payment-correction') {
     const o = order();
     if (!o.paymentVerifiedAt || input.independentlyChecked !== true) bad('Check independent records and confirm this mistaken-verification correction.');
@@ -531,13 +535,16 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     }
     o.version = (o.version || 1) + 1; description = 'Fulfillment ' + previous + ' → ' + target;
     o.audit.push({ action: description + (reason ? ': ' + reason : ''), author: actor.name, at, correction, previous }); result = { orderId: o.id };
-    enqueue(o, target, at, opaque);
+    enqueue(o, target, at, opaque, ledger.management?.email);
   } else if (path === '/api/manage/comment') {
     const comment = await first('SELECT * FROM customer_comments WHERE id=? AND workspace_id=?', input.id, row.id);
     if (!comment || comment.version !== input.version) bad('This comment changed. Refresh it before reviewing.', 409);
     if (!['approved', 'hidden'].includes(input.status)) bad('Approve or hide the comment. Original text is retained.');
     commentChange = { ...comment, status: input.status, claim: opaque() }; m.lastCommentClaim = commentChange.claim;
     result = { commentId: comment.id }; description = 'Customer comment ' + input.status;
+  } else if (path.startsWith('/api/manage/email-')) {
+    if (input.ledgerVersion !== row.ledger_version) bad('Email settings or deliveries changed. Refresh before saving.',409);
+    ({ description, result } = manageEmail({ path, ledger, input, env: emailEnv, actor, now, id: opaque }));
   } else if (path === '/api/manage/notifications') {
     const keys = ['orders', 'payments', 'stock', 'pickups', 'comments', 'errors'];
     if (!input.preferences || keys.some(k => typeof input.preferences[k] !== 'boolean')) bad('Check notification preferences.');

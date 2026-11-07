@@ -22,9 +22,13 @@ export const notificationLabels = {
   retry: "Email submission will retry",
   accepted: "Email service accepted the message; delivery is not confirmed",
   failed: "Email could not be submitted; check your status page",
+  suppressed: "Email update no longer applies; check your order page",
+  invalid: "Email address is missing or invalid",
   expired: "Email submission could not be confirmed; check your status page",
 };
 export const eventLabels = {
+  canceled: "Order Canceled",
+  forfeited: "Pickup Forfeited",
   received: "Order Received",
   verified: "Payment Verified",
   preparing: "Preparing Your Order",

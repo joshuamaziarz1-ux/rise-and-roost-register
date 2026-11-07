@@ -36,6 +36,9 @@ CUSTOMER_EXPERIENCE_ENABLED = "true"
 STUDIO_MANAGEMENT_ENABLED = "true"
 COMMERCE_UPDATE_ENABLED = "true"
 ORDER_EMAIL_ENABLED = "false"
+ORDER_EMAIL_FROM = "orders@rise-and-roost.com"
+ORDER_EMAIL_FREE_PLAN_CONFIRMED = "false"
+ORDER_EMAIL_DELIVERY_VERIFIED = "false"
 REVIEW_BUILD = "false"
 # The existing runtime production guard returns 503 before any storage/asset
 # access until individual owner authentication and launch review are implemented.

@@ -36,6 +36,8 @@ export async function restoreBusinessBackup({ db, row, input, fingerprint, actor
     o.notifications = []; // Never resend old notifications during restoration.
   }
   restoredLedger.management ||= {};
+  restoredLedger.management.emailTests = [];
+  restoredLedger.management.email = { enabled: false };
   // A copied backup cannot certify that its payment recipients are still suitable.
   for (const destination of Object.values(restoredLedger.management.settings?.payments || {})) {
     destination.enabled = false; delete destination.tested; delete destination.pendingTest;

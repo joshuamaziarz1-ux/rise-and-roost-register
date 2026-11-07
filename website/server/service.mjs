@@ -1,3 +1,4 @@
+import { customerEmailAllowed } from './email-policy.mjs';
 import { bookingAllowed } from './pickup-booking.mjs';
 import { acknowledgePickup } from './pickup-changes.mjs';
 import { CASH_METHOD, requireCash } from './cash-pickup.mjs';
@@ -553,7 +554,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       publishedRevision: row.published_revision,
       versions: JSON.parse(row.versions_json).map(({ document, ...v }) => v),
       orders: JSON.parse(row.ledger_json).orders.map((o) => ({ ...o, orderNumber: o.orderNumber || "RR-" + o.id.slice(0, 16).toUpperCase(), version: o.version || 1, trackingPath: trackingPath(row.id, o) })),
-      notificationsEnabled: emailEnabled && row.id === publicWorkspaceId,
+      notificationsEnabled: emailEnabled && row.id === publicWorkspaceId && customerEmailAllowed(JSON.parse(row.ledger_json).management?.email),
       owner: productionContext?.owner?.actor.name || "Danielle · Demo Owner",
       productionOwnerAccess: !!productionContext,
       checkoutEnabled: !productionContext || productionContext.checkoutEnabled,
@@ -581,7 +582,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
     if (studioManagementEnabled && path.startsWith('/api/manage/')) {
       const row = await owner();
       const actor = productionContext ? productionContext.owner.actor : previewGrant ? previewGrant.actor : { id: 'workspace-session:' + authenticated.hash.slice(0, 16), name: 'Owner · workspace access', authentication: 'workspace_access' };
-      return await managementApi({ request, db, now, row, actor, input, path, json, validateDocument, ownerResult, availableDocument, checkoutEnabled: productionContext?.checkoutEnabled ?? true });
+      return await managementApi({ request, db, now, row, actor, input, path, json, validateDocument, ownerResult, availableDocument, emailEnv: contactLoginEnv, checkoutEnabled: productionContext?.checkoutEnabled ?? true });
     }
     if (path === "/api/workspaces" && request.method === "POST") {
       await rateLimit("create", 40);
@@ -702,7 +703,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       commerceEnabled,
         paymentDestinations: commerceEnabled ? configuredPayments(JSON.parse(row.ledger_json).management?.settings) : {},
         paymentReadiness: commerceEnabled ? paymentReadiness(JSON.parse(row.ledger_json).management?.settings) : undefined,
-        notificationsEnabled: emailEnabled && id === publicWorkspaceId,
+        notificationsEnabled: emailEnabled && id === publicWorkspaceId && customerEmailAllowed(JSON.parse(row.ledger_json).management?.email),
         document: availableDocument(JSON.parse(row.published_json), JSON.parse(row.ledger_json), { managed: studioManagementEnabled, now }),
         ...(studioManagementEnabled ? { serverNow: now } : {}),
         revision: row.published_revision,
@@ -909,7 +910,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         }
         if (checkoutMember) customer.memberId = checkoutMember.id;
         if (input.emailOptIn === true) {
-          if (!emailEnabled || row.id !== publicWorkspaceId)
+          if (!emailEnabled || row.id !== publicWorkspaceId || !customerEmailAllowed(ledger.management?.email))
             fail("Email confirmations are temporarily unavailable. Leave email updates off and save your private order link.", 409);
           const email = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
           if (!emailAddress(email)) fail("Enter a valid email address for order updates.");
@@ -955,7 +956,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           order.pickupDeadline = pickupDeadline(order.pickup, order.policyAcceptance.calendar);
           order.originalPickup = copy(order.pickup);
         }
-        enqueue(order, "received", order.at, token);
+        enqueue(order, "received", order.at, token, ledger.management?.email);
         ledger.orders.unshift(order);
         if (new TextEncoder().encode(JSON.stringify(ledger)).length > 1200000) fail('The order ledger needs a storage expansion. No order or credits were changed.', 409);
         const result = await run(
@@ -1069,7 +1070,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           merchant: order.merchant || { name: "Rise & Roost" },
           beta: true, websiteProcessedPayment: false,
         };
-        enqueue(order, "verified", at, token);
+        enqueue(order, "verified", at, token, ledger.management?.email);
         action = "Payment independently verified; beta paid receipt issued";
       } else {
         const transitions = {
@@ -1085,7 +1086,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         order.status = input.status;
         const timestamp = { preparing: "preparingAt", ready: "readyAt", "picked-up": "pickedUpAt", canceled: "canceledAt" }[input.status];
         if (timestamp) order[timestamp] = at;
-        enqueue(order, input.status, at, token);
+        enqueue(order, input.status, at, token, ledger.management?.email);
         action = "Fulfillment: " + input.status;
       }
       order.version = (order.version || 1) + 1;
