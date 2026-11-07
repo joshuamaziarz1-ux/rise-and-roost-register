@@ -20,11 +20,11 @@ CSS scopes the anonymous views to a centered 560px maximum with large controls a
 
 Native virtual CTAP2 authenticators exercise Chromium WebAuthn. WebKit uses a test-only signing authenticator with real server verification. Physical biometrics and real customer credentials cannot be automated or claimed verified. All mutation tests use isolated local databases; no production synthetic accounts/orders are created.
 
-## Production gate
+## Production gate resolved
 
-Read-only checks found `REAL_CHECKOUT_ENABLED=false`, return credits paused (`returnCredits.enabled=false`), but **Cash at Pickup is ON** (`management.settings.cashPickupEnabled=true`). That current setting differs from the requested OFF prerequisite. No setting has been changed. An explicit decision is pending before activation; the completed UI change must not be described as live until the prerequisite is resolved, production concurrency is rechecked, and fresh public screenshots and asset/version checks pass.
+Initial read-only checks found checkout disabled and return credits paused, but Cash at Pickup ON. The owner explicitly authorized switching it OFF before deployment. A guarded update matched the full original ledger, workspace revision and ledger version, then changed only `management.settings.cashPickupEnabled` to false, added one clearly attributed owner-authorized deployment audit entry and incremented `ledger_version` once. Original ledger content and every other workspace field were compared and retained. No customer, credential, session, recovery, order, payment or inventory record was changed. No migration was needed.
 
-Thirteen application tables were fingerprinted, including schema and all rows. Rechecking found every table unchanged. No database migration is needed. Preserve production bindings, original executable, asset routing and Cloudflare Access; do not deploy the preparation-only checked-in production config directly. Do not purge caches or modify security settings.
+The inactive candidate was inspected before activation: its executable metadata/etag, handlers (including security headers and scheduled handler), runtime/asset behavior and every binding exactly matched the prior version. Checkout remained disabled, return credits paused, and production/source had not advanced. All application-table fingerprints other than the explicitly updated workspace matched the original baseline; every table and schema then matched the preactivation snapshot after deployment. Cloudflare Access applications remained identical. No cache purge or security configuration change occurred.
 
 ## Evidence
 
@@ -37,7 +37,7 @@ Thirteen application tables were fingerprinted, including schema and all rows. R
 - [Candidate welcome: iPhone WebKit](roost-login/welcome-mobile.png)
 - [Candidate registration: iPhone WebKit](roost-login/join-mobile.png)
 
-The candidate screenshots are isolated local fixtures, not proof of production activation. Fresh public desktop Chromium and mobile WebKit checks confirm Studio still challenges through Cloudflare Access (302), checkout remains disabled, and the old layout remains active pending resolution of the setting conflict. Both public checks issued zero write requests and recorded zero JavaScript errors or horizontal overflow.
+The candidate screenshots are isolated local fixtures, not proof of production activation. Predeployment public checks reproduced the old layout. Postdeployment public desktop Chromium and mobile WebKit checks confirm the new welcome layout, Cloudflare Access protection and disabled checkout, as detailed below. Both public checks issued zero write requests and recorded zero JavaScript errors or horizontal overflow.
 
 The retained executable and dry-run output both have SHA-256 `0183895028bb98a5ba14731499b1d3fa717612f94f953e6cba5e7e36a639c327`. Only `public/customer.mjs` and `public/customer.css` change in runtime assets. No cache purge or security configuration change was made.
 
@@ -53,6 +53,37 @@ The retained executable and dry-run output both have SHA-256 `0183895028bb98a5ba
 | **Distinct automated cases** | **360 passed** |
 | Exact deployed executable in disposable workerd/D1 | Passed; zero remote requests or writes |
 | Production packaging dry-run | Passed; executable hash identical |
-| Public desktop Chromium / mobile WebKit | Existing layout verified; Studio Access 302, checkout false, no JS errors/overflow/write requests |
+| Public desktop Chromium / mobile WebKit | New layout and anonymous navigation verified; Studio Access 302, checkout false, no JS errors/overflow/write requests |
 
 The first affected browser run completed 58 cases with two trace-artifact errors caused by overlapping runs sharing an output directory. Those two cases passed when rerun in a separate output directory. The new entry suite also passed its complete clean rerun (5/5). No behavioral test failure remains. Physical biometric prompts remain unverified as explained above.
+
+## Verified production release — November 7, 2026
+
+| Item | Value |
+| --- | --- |
+| Branch | `fix/roost-login-experience` |
+| Tested/deployed implementation commit | `cc1d0594c4bb830ef18d602999df5ea8ad8ee61c` |
+| Production Worker | `rise-roost-website-production` |
+| Active Worker version, 100% traffic | `6aad782d-3aa7-4f59-8016-213a2f2447c7` |
+| Deployment ID | `4994f42b-e98e-430a-a170-edb866e18226` |
+| Previous retained Worker version | `777bc9f9-2dd8-4a15-a067-3ae79efeeddb` |
+| Executable SHA-256, before and after | `0183895028bb98a5ba14731499b1d3fa717612f94f953e6cba5e7e36a639c327` |
+| Checkout / Cash at Pickup / return credits | Disabled / OFF / PAUSED |
+| Database migration | None |
+
+The actual public homepage was opened and its The Roost link followed in desktop Chromium and iPhone-sized WebKit. Fresh screenshots show the simple welcome screen. Both public journeys exercised Sign In, hidden recovery/reveal, Back, Join, Back and Continue as a Guest. Sign-in and registration were never present together. Assets `customer.mjs`, `customer.css`, `app.mjs` and `style.css` match the tested source byte for byte. The active Worker executable also matches the retained original byte for byte. There were no JavaScript errors, horizontal overflow or browser write requests.
+
+`/studio` and `/studio/api/manage/snapshot` return the Cloudflare Access challenge (302). The unprefixed private API correctly returns 404. An initial verification assertion used the unprefixed route and expected a challenge; the corrected verifier checks both intended responses. No application/security change was needed. Public `/api/site` confirms checkout disabled.
+
+Existing authentication, dashboard, favorites, credits, member cash eligibility, guest checkout and pickup/payment behavior passed the 360 isolated cases plus actual workerd/D1 testing. No real production member was enrolled or signed in for testing, and physical biometric prompts remain manual. All newer server functionality and settings other than the explicitly authorized cash toggle were preserved. No unresolved implementation or deployment blocker remains.
+
+Fresh **production** screenshots:
+
+- [Desktop welcome](roost-login/live-desktop.png)
+- [Mobile welcome](roost-login/live-mobile.png)
+- [Desktop sign-in](roost-login/live-signin-desktop.png)
+- [Mobile sign-in](roost-login/live-signin-mobile.png)
+- [Desktop registration](roost-login/live-join-desktop.png)
+- [Mobile registration](roost-login/live-join-mobile.png)
+
+The authenticated dashboard screenshot above uses a synthetic local member. This release record and its screenshots are documentation only; runtime assets remain those tested and deployed from `cc1d059`.
