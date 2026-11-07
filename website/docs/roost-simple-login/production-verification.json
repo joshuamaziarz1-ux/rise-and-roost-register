@@ -1,0 +1,14 @@
+{
+  "workerVersion": "99a47674-dcf3-4754-8d33-28cca7fc056c",
+  "deploymentId": "bb0d120c-16af-4520-915e-1500c15ee2f1",
+  "executableSha256": "24d90d2a82488878104b40f68f60302c96a9402c98ad801fe0d853553b640b25",
+  "allOriginalTableFingerprintsAndSchemaUnchanged": true,
+  "accessConfigurationUnchanged": true,
+  "commerceSettingsUnchanged": true,
+  "checkoutEnabled": false,
+  "newLoginActive": false,
+  "assetsMatch": true,
+  "studioAccessProtected": true,
+  "productionCustomerWrites": 0,
+  "realCodesSent": 0
+}

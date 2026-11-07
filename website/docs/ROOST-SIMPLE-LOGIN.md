@@ -40,3 +40,38 @@ No purchase was made. Resend offers a free transactional tier; public pricing cu
 ## Test evidence
 
 Synthetic contacts and mock providers only. `tests/contact-login.test.mjs` covers recognition, verification, expiry, replay, wrong guesses, budgets, delivery failure, rollback, persistent sessions, logout/all devices, isolation, legacy takeover prevention, verified linking and real signed passkey compatibility. `playwright.contact-login.config.mjs` runs the new journey in desktop Chromium, desktop WebKit, iPhone WebKit, Android Chromium and tablet Chromium. Virtual CTAP2 and a WebKit signing fixture test WebAuthn server verification; physical biometric hardware is not claimed tested. Screenshots in `roost-simple-login/` are synthetic local candidate evidence, not production activation evidence.
+
+## Verified disabled production release — November 7, 2026
+
+- Branch: `feature/roost-simple-login`.
+- Runtime implementation commit: `4a395e4999e9440b486941db3c4ded6cf901180e`.
+- Worker: `rise-roost-website-production`.
+- Active version, 100% traffic: `99a47674-dcf3-4754-8d33-28cca7fc056c`.
+- Deployment: `bb0d120c-16af-4520-915e-1500c15ee2f1`.
+- Exact deployed executable SHA-256: `24d90d2a82488878104b40f68f60302c96a9402c98ad801fe0d853553b640b25`.
+- Previous version retained: `6aad782d-3aa7-4f59-8016-213a2f2447c7`.
+- `ROOST_SIMPLE_LOGIN_ENABLED=false`, `ROOST_DELIVERY_VERIFIED=false`.
+- Email: Resend adapter implemented and mocked; credentials/sender/delivery NOT configured or verified.
+- SMS: Twilio adapter implemented and mocked; credentials/sender/delivery NOT configured or verified.
+- D1 migration deliberately NOT applied to production while disabled; no production schema or customer/business data changes.
+
+All existing bindings, asset/runtime behavior and handlers were compared before activation; only the two false flags were added. The active deployment, production settings, every table fingerprint/schema and Access application were checked again before activation. Remote heads had no concurrent changes beyond this task's new branch. Postdeployment executable and `customer.mjs`, `customer.css`, `app.mjs`, `style.css` match the tested artifacts byte for byte. All thirteen original application tables retain identical fingerprints and schema, including members, passkeys, recovery hashes, sessions, workspaces, orders and comments. Access configuration and every commerce setting remain identical. Checkout remains disabled; Cash at Pickup remains OFF; return credits were not activated.
+
+Fresh read-only public desktop and mobile Chromium checks followed Home → The Roost → Sign In → Back → Continue as a Guest. Existing welcome/passkey actions and guest shopping work; the single-field screen is deliberately absent. Zero JavaScript errors, horizontal overflow or write requests occurred. `/api/roost/me` reports `simpleLoginEnabled:false`; `/api/site` reports checkout disabled. `/studio` and `/studio/api/manage/snapshot` return the Cloudflare Access challenge. No real member was signed in for production testing; returning-member behavior is verified with isolated synthetic browser and workerd/D1 fixtures, without reading or using real session cookies.
+
+| Final validation | Result |
+| --- | --- |
+| Clean unit/service/security/database suite | 283 passed, 0 failed |
+| New single-field journey, five browser profiles | 5 passed |
+| Existing customer/passkey/recovery/guest/credits/cash/pickup regressions, five profiles | 65 passed |
+| Final compiled production Worker in actual local workerd/D1 | Passed; zero remote requests/writes |
+| Compiled enabled contact flow in local workerd/D1 with mocked outbound delivery | Passed; code/session/atomic cooldown/replay/logout checked |
+| Production executable/assets, Access and data preservation | Passed |
+
+Total: 353 automated cases plus two local edge-runtime smoke tests. Early failures were corrected: the matching WebKit executable was installed, its test authenticator was initialized before navigation, and schema/backup tests were updated to include the two additive tables. The clean final runs above have no unresolved failures. No automated or production-verification check sent real email/SMS. Physical biometrics remain outside automation.
+
+Candidate screenshots (synthetic, enabled locally): [desktop welcome](roost-simple-login/welcome-desktop-chromium.png), [iPhone welcome](roost-simple-login/welcome-iphone-webkit.png), [code entry](roost-simple-login/code-iphone-webkit.png), [synthetic dashboard](roost-simple-login/dashboard-desktop-chromium.png).
+
+Actual production after deployment (feature disabled): [desktop](roost-simple-login/production-disabled-desktop.png), [mobile](roost-simple-login/production-disabled-mobile.png).
+
+Danielle's remaining actions are the provider/cost approval, sender/domain configuration, secure credentials, additive migration and controlled real delivery checks listed above. Only after both channels are genuinely ready should both gates be enabled in a freshly reviewed production release. Existing working authentication remains available throughout.
