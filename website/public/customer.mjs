@@ -33,7 +33,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
   const joinProfile = { name: '', preferredName: '', email: '', phone: '' };
   let profileDraft;
   let entryView = 'welcome', helpOpen = false;
-  let emailLoginEnabled = false, emailNotice = '';
+  let emailLoginEnabled = false, registrationPaused = false, emailNotice = '';
   const emailLink = /^#auth=(verify|reset)\.([a-f0-9]{48})$/.exec(location.hash);
   let emailAction = emailLink?.[1], emailToken = emailLink?.[2];
   window.addEventListener('hashchange', () => {
@@ -82,6 +82,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
         const result = await api('/api/roost/me');
         if (started !== generation) return false;
         emailLoginEnabled = result.emailLoginEnabled === true;
+        registrationPaused = result.registrationPaused === true;
         passwordLoginEnabled = result.passwordLoginEnabled === true;
         simpleLoginEnabled = result.simpleLoginEnabled === true;
         const changed = member?.id !== result.member?.id;
@@ -175,6 +176,11 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     return result;
   }
   function entry() {
+    if (registrationPaused && !['legacy', 'signin', 'password-recover'].includes(entryView)) return h('main', { class: 'section-inner roost-page roost-entry' },
+      h('div', { class: 'page-intro' }, h('h1', {}, 'The Roost Membership'), h('p', {}, 'We’re putting the finishing touches on member accounts. Check back soon!')),
+      h('section', { class: 'roost-welcome' }, link('/shop', 'Continue Shopping', 'primary-link'),
+        h('details', {}, h('summary', {}, 'Existing member access'), h('p', {}, 'Already a member? Sign in or recover your existing account.'),
+          button('Existing member sign-in', () => showEntry('legacy'), { class: 'text-button' }))));
     if (emailLoginEnabled && !['legacy', 'signin', 'password-recover'].includes(entryView)) return emailEntry();
     if (passwordLoginEnabled && entryView !== 'signin') return passwordEntry();
     if (simpleLoginEnabled && entryView !== 'signin') return simpleEntry();
@@ -303,7 +309,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
       error ? h('p', { role: 'alert', class: 'form-error' }, error) : null,
       passwordForm(signup ? 'register' : recover ? 'recover' : 'login'),
       signup ? h('p', { class: 'small-note' }, 'Already a member? Sign in with your existing passkey or recovery key first, then add a username in Account Settings. Your orders and favorites stay together.') : null,
-      !signup && !recover ? [button('Join The Roost', () => showEntry('password-join'), { class: 'secondary-button', disabled: busy }), button('Forgot password?', () => showEntry('password-recover'), { class: 'text-button', disabled: busy })] : null,
+      !signup && !recover ? [!registrationPaused ? button('Join The Roost', () => showEntry('password-join'), { class: 'secondary-button', disabled: busy }) : null, button('Forgot password?', () => showEntry('password-recover'), { class: 'text-button', disabled: busy })] : null,
       h('details', {}, h('summary', {}, 'Other sign-in options'), button('Sign in with a Passkey', () => showEntry('signin'), { class: 'text-button', disabled: busy }), h('p', { class: 'small-note' }, 'Existing passkey members can also use their saved recovery key from this option.')),
       link('/shop', 'Continue as a Guest', 'entry-guest'));
   }

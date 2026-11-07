@@ -4,7 +4,7 @@ import { dollarsToCents, centsToDollars } from './credit-money.mjs';
 import { POLICY_VERSION, POLICY_TITLE, POLICY, providers } from './commerce.mjs';
 import { h, button, notify, request, guard } from "./dom.mjs";
 import { money, localInstant, pickupLabel, orderByLabel } from "./model.mjs";
-import { createCustomerExperience } from "./customer.mjs?v=coordinated-20261107";
+import { createCustomerExperience } from "./customer.mjs?v=launch-membership-20261107";
 import { pickupLocation } from "./pickup-location.mjs";
 import { sellingMethod } from './selling.mjs';
 

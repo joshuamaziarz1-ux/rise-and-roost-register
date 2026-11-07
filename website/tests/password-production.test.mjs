@@ -1,3 +1,4 @@
+import { roostApi } from '../server/roost.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -10,7 +11,9 @@ test('production explicitly allows password routes with CSRF/session guards and 
  const body={workspaceId:h.env.PUBLIC_WORKSPACE_ID,username:'production-neighbor',password:'a friendly garden phrase',name:'Neighbor'};
  assert.equal((await h.call('/api/roost/password/setup',body)).status,401);
  assert.equal((await h.call('/api/roost/password/register',body,{headers:{Origin:'https://evil.test'}})).status,403);
- const registered=await h.call('/api/roost/password/register',body);assert.equal(registered.status,200,JSON.stringify(registered.data));
+ assert.equal((await h.call('/api/roost/password/register',body)).status,409);
+ const seeded=await roostApi({request:new Request(h.env.WEBSITE_BASE_URL,{method:'POST'}),db:h.env.DB,now:Date.now(),input:body,path:'/api/roost/password/register',json:(d,s=200)=>Response.json(d,{status:s}),contactLoginEnv:{...h.env,DEPLOYMENT_ENVIRONMENT:'preview'}});
+ const registered={status:seeded.status,headers:seeded.headers,data:await seeded.json()};assert.equal(registered.status,200);
  const cookie=registered.headers.getSetCookie().map(x=>x.split(';')[0]).join('; ');
  const me=await h.call('/api/roost/me?workspace='+body.workspaceId,undefined,{headers:{Cookie:cookie}});assert.equal(me.data.passwordLoginEnabled,true);assert.equal(me.data.member.username,body.username);
  assert.equal((await h.call('/studio/api/manage/snapshot',undefined,{headers:{Cookie:cookie}})).status,401);
