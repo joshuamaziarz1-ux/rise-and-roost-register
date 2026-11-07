@@ -31,6 +31,12 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
   const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('rr-roost-' + workspaceId) : null;
   const joinProfile = { name: '', preferredName: '', email: '', phone: '' };
   let profileDraft;
+  let entryView = 'welcome', helpOpen = false;
+  function showEntry(view) {
+    if (busy) return;
+    entryView = view; helpOpen = false; error = ''; render();
+    document.querySelector('.roost-entry h1')?.focus();
+  }
   let cashPickup = {};
   const api = (path, data) => request(path + (data === undefined ? '?workspace=' + workspaceId : ''), data === undefined ? undefined : { ...data, workspaceId });
   const action = fn => async () => {
@@ -41,6 +47,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     finally { busy = false; render(); }
   };
   function clearPrivate() {
+    entryView = 'welcome'; helpOpen = false;
     generation++; cashPickup = {}; member = null; orders = []; devices = []; favorites = []; credits = { available: 0, reserved: 0, enabled: false, items: [], transactions: [] }; recoveryKey = ''; profileDraft = undefined;
     Object.assign(joinProfile, { name: '', preferredName: '', email: '', phone: '' });
     Object.assign(commentDraft, { name: '', body: '', consent: false }); onMember(null);
@@ -101,6 +108,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
   }
   function roost() {
     if (!loaded) return h('main', { class: 'section-inner roost-page' }, h('h1', {}, 'The Roost'), h('p', { role: 'status' }, 'Opening your Roost…'));
+    if (!member) return entry();
     const heading = h('div', { class: 'page-intro' }, h('h1', {}, member ? greeting() + ', ' + (member.profile.preferredName || member.profile.name.split(' ')[0]) + '.' : 'Make yourself at home.'),
       h('p', {}, member ? 'Welcome back to The Roost.' : 'The Roost keeps your pickup details and orders together. Joining is always optional.'));
     const result = h('main', { class: 'section-inner roost-page' }, heading, error ? h('p', { role: 'alert', class: 'form-error' }, error) : null, recoveryCard());
@@ -138,27 +146,48 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
             await api('/api/roost/logout', {}); clearPrivate(); channel?.postMessage('changed');
           }), { class: 'text-button', disabled: busy })))));
       result.append(creditPanel(), favoritesPanel());
+    }
+    if (busy) result.append(h('p', { role: 'status', class: 'small-note' }, 'Please finish the sign-in prompt.'));
+    return result;
+  }
+  function entry() {
+    const title = entryView === 'signin' ? 'Welcome Back!' : entryView === 'join' ? 'Join The Roost' : 'Welcome to The Roost';
+    const intro = entryView === 'signin' ? 'Sign in securely to your Roost account.' : entryView === 'join' ? 'Create your account to keep your orders, favorites, and pickup details together.' : 'Your little corner of Rise & Roost.';
+    const panel = h('main', { class: 'section-inner roost-page roost-entry', 'data-roost-view': entryView },
+      entryView !== 'welcome' ? button('Back', () => showEntry('welcome'), { class: 'text-button entry-back', disabled: busy }) : null,
+      h('div', { class: 'page-intro' }, h('h1', { tabindex: -1 }, title), h('p', {}, intro)),
+      error ? h('p', { role: 'alert', class: 'form-error' }, error) : null);
+    if (entryView === 'welcome') {
+      panel.append(h('section', { class: 'roost-welcome' },
+        h('p', {}, 'View your orders, save your favorites, and enjoy member benefits. There’s a place for you here.'),
+        h('div', { class: 'roost-entry-actions' },
+          button('Sign In', () => showEntry('signin'), { class: 'primary-link' }),
+          button('Join The Roost', () => showEntry('join'), { class: 'secondary-button' }),
+          link('/shop', 'Continue as a Guest', 'entry-guest'))));
+    } else if (entryView === 'signin') {
+      panel.append(h('section', { class: 'roost-signin' },
+        button('Sign In Securely', action(() => authenticate('login')), { class: 'primary-link', disabled: busy || readOnly }),
+        h('details', { open: helpOpen, ontoggle: e => { helpOpen = e.currentTarget.open; } },
+          h('summary', {}, 'Need help signing in?'),
+          h('p', {}, 'Use the recovery key you saved when you joined. Recovery signs out remembered devices and removes old passkeys. Save your replacement key, then add a new passkey.'),
+          h('form', { onsubmit: async e => { e.preventDefault(); const code = e.currentTarget.elements.key.value.trim(); await action(async () => { const r = await api('/api/roost/recover', { recoveryKey: code }); await authenticated(r.recoveryKey); })(); } },
+            h('label', { class: 'field' }, 'Saved recovery key', h('input', { name: 'key', type: 'password', required: true, autocomplete: 'off' })),
+            h('button', { type: 'submit', class: 'secondary-button', disabled: busy || readOnly }, 'Recover my Roost')),
+          h('p', { class: 'small-note' }, 'Without a passkey or saved recovery key, contact details alone cannot safely restore access.')),
+        link('/shop', 'Continue as a Guest', 'entry-guest')));
     } else {
       const profile = joinProfile;
       const form = h('form', { class: 'join-roost', onsubmit: async e => {
         e.preventDefault();
         profile.preferredName = form.elements['customer-preferred-name'].value; profile.name = form.elements['customer-name'].value; profile.email = form.elements['customer-email'].value; profile.phone = form.elements['customer-phone'].value;
         await action(() => authenticate('register', profile))();
-      } }, h('h2', {}, 'A little place of your own'), h('p', {}, 'Save your details, see past orders, and keep track of your next pickup.'), profileFields(profile),
-        h('button', { type: 'submit', class: 'primary-link', disabled: busy || readOnly }, busy ? 'Opening passkeys…' : 'Join with a passkey'),
-        h('p', { class: 'small-note' }, 'Use Touch ID, your device unlock, or a security key. No password to remember.'));
-      const signin = h('section', { class: 'roost-signin' }, h('h2', {}, 'Already part of The Roost?'), h('p', {}, 'Use Face ID, Touch ID, your fingerprint, Windows Hello, device PIN, or a security key. Your device handles the verification.'),
-          button('Sign in with a passkey', action(() => authenticate('login')), { class: 'primary-link', disabled: busy || readOnly }),
-          h('details', {}, h('summary', {}, 'Another way to sign in / recover my membership'), h('p', {}, 'No passkey on this device? Use the recovery key you saved when you joined. Recovery signs out all remembered devices and removes old passkeys. Save your replacement recovery key, then add a new passkey if supported.'),
-            h('form', { onsubmit: async e => { e.preventDefault(); const code = e.currentTarget.elements.key.value.trim(); await action(async () => { const r = await api('/api/roost/recover', { recoveryKey: code }); await authenticated(r.recoveryKey); })(); } },
-              h('label', { class: 'field' }, 'Saved recovery key', h('input', { name: 'key', type: 'password', required: true, autocomplete: 'off' })),
-              h('button', { type: 'submit', class: 'secondary-button', disabled: busy || readOnly }, 'Recover my Roost'))),
-          h('p', { class: 'small-note' }, 'If you already joined, sign in or recover your membership to keep your orders together. Without a passkey or saved recovery key, we cannot safely restore access using contact details alone.'),
-          h('div', { class: 'guest-reminder' }, h('p', {}, 'Just here for something delicious?'), link('/shop', 'Shop as a guest', 'secondary-button')));
-      result.append(h('div', { class: 'roost-layout' }, signin, form));
+      } }, profileFields(profile),
+        h('p', { class: 'small-note' }, 'Your device will help you create a secure sign-in.'),
+        h('button', { type: 'submit', class: 'primary-link', disabled: busy || readOnly }, busy ? 'Opening secure sign-in…' : 'Create My Account'));
+      panel.append(form);
     }
-    if (busy) result.append(h('p', { role: 'status', class: 'small-note' }, 'Please finish the sign-in prompt.'));
-    return result;
+    if (busy) panel.append(h('p', { role: 'status', class: 'small-note' }, 'Please finish the sign-in prompt.'));
+    return panel;
   }
   function greeting() {
     const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Indiana/Indianapolis', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));

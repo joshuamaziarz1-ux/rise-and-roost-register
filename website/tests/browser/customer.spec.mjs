@@ -128,7 +128,7 @@ test.describe('isolated customer experience', () => {
       await reopened.close(); await nav.bringToFront();
       const options = nav.locator('.home-choices');
       await options.getByRole('link', { name: 'The Roost', exact: true }).click();
-      await expect(nav.getByRole('heading', { name: 'Make yourself at home.' })).toBeVisible();
+      await expect(nav.getByRole('heading', { name: 'Welcome to The Roost' })).toBeVisible();
       await expect(nav.locator('nav [aria-current="page"]')).toHaveText('The Roost');
       await nav.getByRole('link', { name: 'Rise & Roost home', exact: true }).click();
       await options.getByRole('link', { name: 'Leave a Comment', exact: true }).click();
@@ -147,25 +147,26 @@ test.describe('isolated customer experience', () => {
   test('member journey: passkey enrollment, saved details, remembered session, member checkout, history and sign-in', async ({ page, browser }, info) => {
     const errors = []; page.on('pageerror', e => errors.push(e.message));
     await authenticator(page, info);
-    await page.goto(fixture.origin+'/roost');
+    await page.goto(fixture.origin+'/roost');await page.getByRole('button', { name: 'Join The Roost', exact: true }).click();
     await page.getByLabel('Name', { exact: true }).fill('Returning Neighbor');
     await page.getByLabel('Email (optional)', { exact: true }).fill('neighbor@example.test');
     await page.getByLabel('Phone (optional)', { exact: true }).fill('555-0101');
-    await page.getByRole('button', { name: 'Join with a passkey', exact: true }).click();
+    await page.getByRole('button', { name: 'Create My Account', exact: true }).click();
     await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Returning\./ })).toBeVisible();
     await expect(page.getByLabel('Roost recovery key', { exact: true })).toBeVisible();
     // Even an undismissed one-time secret and prefilled contact fields must clear.
     await page.getByRole('button', { name: 'Log Out', exact: true }).click();
     await expect(page.getByLabel('Roost recovery key', { exact: true })).toHaveCount(0);
-    await expect(page.getByLabel('Name', { exact: true })).toHaveValue('');
-    await page.getByRole('button', { name: 'Sign in with a passkey', exact: true }).click();
+    await expect(page.getByLabel('Name', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Sign In', exact: true }).click();
+      await page.getByRole('button', { name: 'Sign In Securely', exact: true }).click();
     await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Returning\./ })).toBeVisible();
     await page.getByLabel('Phone (optional)', { exact: true }).fill('555-0102');
     await page.getByRole('button', { name: 'Save my details', exact: true }).click();
     await expect(page.locator('#notice')).toHaveText('Your pickup details are saved.');
     await page.reload();
     await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Returning\./ })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Sign in with a passkey', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Sign In Securely', exact: true })).toHaveCount(0);
     await expect(page.getByLabel('Phone (optional)', { exact: true })).toHaveValue('555-0102');
     await page.goto(fixture.origin+'/shop');
     await page.getByRole('button', { name: 'Add A dozen little sunrises to basket', exact: true }).click();
@@ -191,8 +192,9 @@ test.describe('isolated customer experience', () => {
       expect((await restored.request.get(fixture.origin+'/api/studio')).status()).toBe(401);
     } finally { await restored.close(); }
     await page.getByRole('button', { name: 'Log Out', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Make yourself at home.' })).toBeVisible();
-    await page.getByRole('button', { name: 'Sign in with a passkey', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Welcome to The Roost' })).toBeVisible();
+    await page.getByRole('button', { name: 'Sign In', exact: true }).click();
+      await page.getByRole('button', { name: 'Sign In Securely', exact: true }).click();
     await expect(page.locator('.member-order')).toHaveCount(1);
     expect(errors).toEqual([]);
   });

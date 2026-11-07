@@ -192,3 +192,25 @@
 .experience .checkout-redesign .checkout-pickup h2 { font-size: 28px; letter-spacing: -.6px; }
 .checkout-redesign .checkout-policy .field { flex-direction: row; }
 .checkout-redesign .checkout-selected-pickup { color: #52604b; padding-bottom: 12px; border-bottom: 1px solid #67745326; }
+
+/* Anonymous Roost views are mutually exclusive and centered at every size. */
+.experience .roost-entry { max-width: 560px; padding-top: 36px; padding-bottom: 56px; }
+.experience .roost-entry .page-intro { padding: 16px 0 24px; text-align: center; }
+.experience .roost-entry h1 { font-size: clamp(34px, 5vw, 46px); line-height: 1.15; margin: 0 0 16px; }
+.experience .roost-entry p { font-size: 15px; line-height: 1.65; }
+.experience .roost-entry .join-roost, .experience .roost-entry .roost-signin,
+.experience .roost-welcome { padding: 28px; border: 1px solid #67745326; border-radius: var(--radius); background: var(--surface); }
+.roost-welcome > p { text-align: center; margin: 0 0 24px; }
+.roost-entry-actions { display: grid; gap: 12px; }
+.experience .roost-entry .primary-link, .experience .roost-entry .secondary-button { width: 100%; min-height: 52px; font-size: 16px; border-radius: 8px; }
+.experience .roost-entry .customer-fields { display: grid; grid-template-columns: minmax(0,1fr); gap: 14px; }
+.roost-entry .field { margin: 0; }
+.roost-entry input { width: 100%; min-height: 48px; }
+.roost-entry .small-note { font-size: 13px; }
+.entry-guest { display: block; text-align: center; padding: 14px 0; min-height: 48px; font-size: 14px; text-underline-offset: 4px; }
+.entry-back { min-height: 44px; padding: 8px 0; }
+.roost-entry :is(button,a,input,summary):focus-visible { outline: 3px solid var(--green); outline-offset: 3px; }
+@media(max-width:760px) {
+  .experience .roost-entry { padding-top: 20px; padding-bottom: 36px; }
+  .experience .roost-entry .join-roost, .experience .roost-entry .roost-signin, .experience .roost-welcome { padding: 24px 20px; }
+}

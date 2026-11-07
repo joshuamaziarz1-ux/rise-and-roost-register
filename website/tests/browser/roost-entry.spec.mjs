@@ -1,0 +1,42 @@
+import { test, expect } from '@playwright/test';
+import { primaryFixture } from '../primary-fixture.mjs';
+let f;
+test.beforeEach(async()=>{ f=await primaryFixture({experience:true,port:4329,hostname:'localhost'}); });
+test.afterEach(async()=>{await f?.close();});
+test('welcome, exclusive forms, back, recovery, cancellation and guest navigation',async({page},info)=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const exclusive=async()=>{
+  expect(await page.locator('.join-roost:visible').count()+await page.locator('.roost-signin:visible').count()).toBeLessThanOrEqual(1);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+ };
+ const shot=async(name)=>{await exclusive();await page.screenshot({path:`qa-results/roost-entry-${name}-${info.project.name}.png`,fullPage:true,scale:'css'});};
+ await page.goto(f.origin+'/roost');
+ await expect(page.getByRole('heading',{name:'Welcome to The Roost',exact:true})).toBeVisible();
+ await expect(page.locator('main form')).toHaveCount(0);
+ await expect(page.locator('main')).not.toContainText(/passkey|security key|device PIN|recovery/i);
+ await shot('welcome');
+ await page.getByRole('button',{name:'Sign In',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Welcome Back!',exact:true})).toBeVisible();
+ await expect(page.locator('.join-roost')).toHaveCount(0);
+ await expect(page.getByLabel('Saved recovery key')).toBeHidden();await shot('signin');
+ await page.getByText('Need help signing in?',{exact:true}).click();
+ await expect(page.getByLabel('Saved recovery key')).toBeVisible();
+ await page.getByRole('button',{name:'Back',exact:true}).click();
+ await page.getByRole('button',{name:'Join The Roost',exact:true}).click();
+ await expect(page.locator('.roost-signin')).toHaveCount(0);
+ await expect(page.locator('main input[required]')).toHaveCount(1);
+ await page.getByLabel('Name',{exact:true}).fill('Unsubmitted Neighbor');await shot('join');
+ await page.getByRole('button',{name:'Back',exact:true}).click();
+ await page.getByRole('button',{name:'Sign In',exact:true}).click();
+ await page.evaluate(()=>{
+  if(!window.PublicKeyCredential)window.PublicKeyCredential=class{};
+  if(!navigator.credentials)Object.defineProperty(navigator,'credentials',{value:{}});
+  Object.defineProperty(navigator.credentials,'get',{configurable:true,value:async()=>{throw new DOMException('Canceled','NotAllowedError');}});
+ });
+ await page.getByRole('button',{name:'Sign In Securely',exact:true}).click();
+ await expect(page.getByRole('alert')).toContainText('canceled');
+ await expect(page.getByRole('button',{name:'Sign In Securely',exact:true})).toBeEnabled();await exclusive();
+ await page.getByRole('button',{name:'Back',exact:true}).click();
+ await page.getByRole('link',{name:'Continue as a Guest',exact:true}).click();
+ await expect(page).toHaveURL(f.origin+'/shop');expect(errors).toEqual([]);
+});

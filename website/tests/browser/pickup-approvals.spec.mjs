@@ -251,11 +251,12 @@ test("member sees pending makeup in Roost, then requests another arrangement on 
   const { installTestPasskey } = await import("../install-test-passkey.mjs");
   await installTestPasskey(page, info, f.origin);
   await page.goto(f.origin + "/roost");
+  await page.getByRole('button', { name: 'Join The Roost', exact: true }).click();
   await page
     .getByLabel("Name", { exact: true })
     .fill("Synthetic Makeup Member");
   await page
-    .getByRole("button", { name: "Join with a passkey", exact: true })
+    .getByRole("button", { name: "Create My Account", exact: true })
     .click();
   await expect(
     page.getByRole("button", { name: "I saved my recovery key" }),

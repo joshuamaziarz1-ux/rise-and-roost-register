@@ -95,10 +95,10 @@ test('hosted HTTPS guest and member shopping, private tracking, remembered sessi
       const other = await otherContext.newPage(); await other.goto(origin+guestTracking);
       await expect(other.getByLabel('Current order status', { exact: true })).toContainText('Payment Reported');
     } finally { await otherContext.close(); }
-    await page.goto(origin+prefix+'/roost');
+    await page.goto(origin+prefix+'/roost');await page.getByRole('button', { name: 'Join The Roost', exact: true }).click();
     await page.getByLabel('Name', { exact: true }).fill('Synthetic Member Neighbor');
     await page.getByLabel('Email (optional)', { exact: true }).fill('qa@example.test');
-    await page.getByRole('button', { name: 'Join with a passkey', exact: true }).click();
+    await page.getByRole('button', { name: 'Create My Account', exact: true }).click();
     await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Synthetic\./ })).toBeVisible();
     await page.getByRole('button', { name: 'I saved my recovery key', exact: true }).click();
     await page.reload();
@@ -121,8 +121,9 @@ test('hosted HTTPS guest and member shopping, private tracking, remembered sessi
     await page.screenshot({ path: `qa-results/experience-hosted/roost-${info.project.name}.png`, fullPage: true });
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
     await page.getByRole('button', { name: 'Sign out of The Roost', exact: true }).click();
-    await expect(page.getByLabel('Name', { exact: true })).toHaveValue('');
-    await page.getByRole('button', { name: 'Sign in with a passkey', exact: true }).click();
+    await expect(page.getByLabel('Name', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Sign In', exact: true }).click();
+      await page.getByRole('button', { name: 'Sign In Securely', exact: true }).click();
     await expect(page.locator('.member-order')).toHaveCount(1);
     const orders = await (await owner.request.get(origin+'/api/studio', { headers: { 'X-RR-Workspace': site.id } })).json();
     expect(orders.orders).toHaveLength(2);
