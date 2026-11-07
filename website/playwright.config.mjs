@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { webkit } from "playwright";
 const launchOptions = existsSync("/usr/bin/chromium")
   ? { executablePath: "/usr/bin/chromium" }
-  : {};
+  : existsSync("/usr/lib/chromium/chromium") ? { executablePath: "/usr/lib/chromium/chromium" } : {};
 const baseURL = process.env.RR_BETA_BASE_URL || "http://127.0.0.1:4173";
 // The official Linux bundle wrapper replaces LD_LIBRARY_PATH. Restricted cloud
 // machines can supply verified user-space dependencies and launch its same

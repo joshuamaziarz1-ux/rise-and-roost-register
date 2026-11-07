@@ -190,7 +190,8 @@ test('D1 outbox queues only opted-in lifecycle events and records provider accep
   await h.call('/api/order-fulfillment', { id: o.id, version: prep.version, status: 'ready' });
   assert.deepEqual(h.ledger().orders[0].notifications.map(n => n.event), ['received', 'verified', 'preparing', 'ready']);
   await drainNotifications(h.db, h.env, { fetcher, now });
-  assert.equal(calls, 4);
+  assert.equal(calls, 3);
+  assert.equal(h.ledger().orders[0].notifications.find(n => n.event === 'preparing').status, 'suppressed');
 });
 
 for (const [label, response, expected] of [

@@ -1,3 +1,4 @@
+import { SENDER } from './email-policy.mjs';
 import { sessionHash as hash, sessionToken as token, customerCookie, sessionStatements, customerSession, RECENT_AUTH } from './customer-sessions.mjs';
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }); };
 const first = (db, sql, ...args) => db.prepare(sql).bind(...args).first();
@@ -32,11 +33,11 @@ export async function deliverCode(env, target, code, id, fetcher = fetch) {
   // No logging of bodies, contacts, provider errors, or codes.
   let response;
   if (target.channel === 'email') response = await fetcher('https://api.resend.com/emails', {
-    method: 'POST', signal: AbortSignal.timeout(15000), headers: { Authorization: 'Bearer ' + env.RESEND_API_KEY, 'Content-Type': 'application/json', 'Idempotency-Key': 'roost-' + id },
-    body: JSON.stringify({ from: env.ROOST_EMAIL_FROM, to: [target.contact], subject: 'Your Rise & Roost sign-in code', text: `Your verification code is ${code}. It expires in five minutes. If you did not request it, ignore this message. Never share your code.` })
+    method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(15000), headers: { Authorization: 'Bearer ' + env.RESEND_API_KEY, 'Content-Type': 'application/json', 'Idempotency-Key': 'roost-' + id },
+    body: JSON.stringify({ from: SENDER, to: [target.contact], subject: 'Your Rise & Roost sign-in code', text: `Your verification code is ${code}. It expires in five minutes. If you did not request it, ignore this message. Never share your code.` })
   });
   else response = await fetcher('https://api.twilio.com/2010-04-01/Accounts/' + encodeURIComponent(env.TWILIO_ACCOUNT_SID) + '/Messages.json', {
-    method: 'POST', signal: AbortSignal.timeout(15000), headers: { Authorization: 'Basic ' + btoa(env.TWILIO_ACCOUNT_SID + ':' + env.TWILIO_AUTH_TOKEN), 'Content-Type': 'application/x-www-form-urlencoded' },
+    method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(15000), headers: { Authorization: 'Basic ' + btoa(env.TWILIO_ACCOUNT_SID + ':' + env.TWILIO_AUTH_TOKEN), 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ From: env.ROOST_SMS_FROM, To: target.contact, Body: `Rise & Roost: ${code} is your sign-in code. Expires in 5 minutes. Never share this code.` }).toString()
   });
   const result = await response.json().catch(() => ({}));

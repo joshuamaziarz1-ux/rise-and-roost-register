@@ -1,15 +1,11 @@
+import { customerEmailAllowed } from './email-policy.mjs';
 import { configuredPayments, orderAttention } from '../public/commerce.mjs';
 import { trackingPath, eventLabels } from "../public/orders.mjs";
 
 export const BETA_ORIGIN = "https://rise-roost-beta.joshua-maziarz1.workers.dev";
-export const emailAddress = (value) => typeof value === "string" &&
-  value.length <= 254 && /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,}$/.test(value);
-export function emailConfigured(env) {
-  return env.ORDER_EMAIL_ENABLED === "true" && env.ORDER_EMAIL_FREE_PLAN_CONFIRMED === "true" && env.ORDER_EMAIL_DELIVERY_VERIFIED === "true" && !!env.RESEND_API_KEY &&
-    emailAddress(env.ORDER_EMAIL_FROM) && /^[a-f0-9]{48}$/.test(env.PUBLIC_WORKSPACE_ID || "");
-}
-export function enqueue(order, event, at, makeToken) {
-  if (!order.customer?.emailOptIn || !eventLabels[event]) return;
+export { emailAddress, emailConfigured } from './email-policy.mjs';
+export function enqueue(order, event, at, makeToken, settings) {
+  if (!order.customer?.emailOptIn || !eventLabels[event] || !customerEmailAllowed(settings,event)) return;
   order.notifications ||= [];
   if (!order.notifications.some((n) => n.event === event))
     order.notifications.push({ id: makeToken(), event, at, status: "queued", attempts: 0 });

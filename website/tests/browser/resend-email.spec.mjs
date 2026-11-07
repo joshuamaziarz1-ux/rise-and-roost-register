@@ -1,0 +1,11 @@
+import { test, expect } from '@playwright/test';
+import { productionBrowserFixture } from '../production-browser-fixture.mjs';
+test('owner manages email on phone or desktop, tests only their address, and reads actual acceptance',async({page},info)=>{
+ const f=await productionBrowserFixture({email:true});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ try{f.env.ORDER_EMAIL_ENABLED='false';await page.setExtraHTTPHeaders({'x-synthetic-owner':'a'});await page.goto(f.origin+'/studio#Settings/Email');
+ await expect(page.getByRole('heading',{name:'Customer Email',exact:true})).toBeVisible();await expect(page.getByText('Sender: Rise & Roost <orders@rise-and-roost.com>',{exact:true})).toBeVisible();await expect(page.getByText(/Initial release safety lock is on/)).toBeVisible();
+ await page.getByLabel('Enable customer email notifications',{exact:true}).uncheck();await page.getByLabel('Preparing',{exact:true}).uncheck();await page.getByRole('button',{name:'Save email settings',exact:true}).click();await expect.poll(async()=> (await f.snapshot()).management.email.enabled).toBe(false);expect((await f.call('/api/site')).data.notificationsEnabled).toBe(false);
+ page.once('dialog',d=>d.accept());await page.getByRole('button',{name:'Send test to my owner address',exact:true}).click();await expect.poll(()=>f.deliveryMessages.length).toBe(1);expect(f.deliveryMessages[0].to).toEqual([JSON.parse(f.env.PRODUCTION_OWNERS)[0].email]);expect(f.deliveryMessages[0].from).toBe('Rise & Roost <orders@rise-and-roost.com>');expect(f.deliveryMessages[0].reply_to).toBeUndefined();await page.getByRole('button',{name:'Refresh email history',exact:true}).click();await expect(page.getByText('Email service accepted the message; delivery is not confirmed',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Retry failed email',exact:true})).toHaveCount(0);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:`qa-results/email/studio-${info.project.name}.png`,fullPage:true});expect(errors).toEqual([]);
+ await page.reload();await expect(page.getByLabel('Enable customer email notifications',{exact:true})).not.toBeChecked();expect((await f.snapshot()).orders).toHaveLength(0);
+ }finally{await f.close();}
+});

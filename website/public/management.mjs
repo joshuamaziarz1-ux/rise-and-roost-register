@@ -2,7 +2,7 @@ import { dollarsToCents, centsToDollars } from './credit-money.mjs';
 import { requestedPickupLabel, providers, defaultCalendar, paymentDestination, configuredPayments } from './commerce.mjs';
 import { h, button, field, request as apiRequest, notify } from './dom.mjs';
 import { clone, money, pickupLabel, orderByLabel, customerTimestamp, customerTime, localInstant, isOrderingPickup } from './model.mjs';
-import { paymentLabels, fulfillmentLabels } from './orders.mjs';
+import { paymentLabels, fulfillmentLabels, notificationLabels } from './orders.mjs';
 import { studioHistory } from './studio-history.mjs';
 import { createHelpGuide } from './help.mjs';
 import { sellingMethod, inventoryMode } from './selling.mjs';
@@ -35,6 +35,7 @@ export async function start(root, initial, newAccessKey) {
   document.head.append(h('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' }), h('meta', { name: 'apple-mobile-web-app-title', content: 'Website Studio' }), h('link', { rel: 'apple-touch-icon', href: '/assets/logo.webp' }));
   document.title = 'Rise & Roost Website Studio';
   let data = initial, view = 'Home', selection = '', filter = 'all', search = '', period = 'today', from = '', through = '';
+  let emailDraft = null;
   let editing = null, busy = false, pending = null, error = '', connected = navigator.onLine, checking = false, disposed = false, reauth = false;
   const bindings = new WeakMap();
   const workspace = initial.id, storageKey = 'rr-studio-draft:' + workspace;
@@ -130,7 +131,7 @@ export async function start(root, initial, newAccessKey) {
           }
         }
       }
-      if (wasReauth || !root.querySelector('.management') || rerender && !editing && !root.querySelector('.ms-main input[type=search]:focus') && !(view === 'Settings/Help' && root.querySelector('.ms-help')?.contains(document.activeElement))) render(); else chrome();
+      if (wasReauth || !root.querySelector('.management') || rerender && !editing && !root.querySelector('.ms-main input[type=search]:focus') && !(view === 'Settings/Email' && root.querySelector('.ms-main input:focus')) && !(view === 'Settings/Help' && root.querySelector('.ms-help')?.contains(document.activeElement))) render(); else chrome();
     } catch (e) { connected = false; error = e.message; if (e.status === 401 || (initial.previewDirectAccess || initial.productionOwnerAccess) && [403, 503].includes(e.status)) { reauth = true; render(); } else chrome(); }
     finally { checking = false; }
   }
@@ -479,7 +480,7 @@ export async function start(root, initial, newAccessKey) {
     let code = '';
     const business = data.management.settings || { calendar: defaultCalendar(), payments: {} };
     const preferences = clone(data.management.notifications.preferences);
-    return h('div', {}, h('h1', {}, 'Settings'), menu('Payments', 'Settings/Payments'), menu('Studio Help Guide', 'Settings/Help'),
+    return h('div', {}, h('h1', {}, 'Settings'), menu('Payments', 'Settings/Payments'), menu('Studio Help Guide', 'Settings/Help'), menu('Customer Email', 'Settings/Email'),
       data.productionOwnerAccess ? panel('Owner access', h('p', {}, 'Signed in as ' + data.owner + '.'), h('p', {}, 'Use your own Cloudflare Access sign-in on each device. Contact the other owner or account administrator for account recovery.'), h('p', {}, 'Session ends ' + stamp(data.sessionExpiresAt) + '.')) : data.previewPinAccess ? panel('Studio access', h('p', {}, 'This device is remembered for up to 30 days. Use Lock Studio whenever you want the PIN required again on this device.'), h('p', {}, 'This shared testing PIN is temporary. Individual owner accounts can replace it before launch.')) : data.previewDirectAccess ? panel('Testing access', h('p', {}, 'Cloudflare Access remembers this browser. No separate Studio sign-in is needed.'), h('p', {}, 'Approved tester: ' + data.previewTesterEmail), h('p', {}, 'Testing session ends ' + stamp(data.previewAccessExpiresAt) + '. Re-verification is needed after expiry, logout, or clearing cookies.'), h('a', { href: '/cdn-cgi/access/logout', class: 'ms-secondary' }, 'Sign out of testing access')) : panel('Owner access', h('p', {}, 'Current sign-in: secure workspace access. Individual Descope owner accounts are not connected yet. The existing authentication has not been replaced.'), h('p', {}, 'Both owner accounts must be tested and approved before activation. Do not share private access keys in chat.'),
         h('a', { href: data.studioPath, class: 'ms-secondary' }, 'Studio link for this saved website'),
         field('Connection code from your other device', code, v => code = v, { maxlength: 20, autocomplete: 'off' }), button('Review device connection', async () => {
@@ -490,12 +491,31 @@ export async function start(root, initial, newAccessKey) {
       panel('Backup & data protection', h('p', {}, 'Download an owner-only business backup containing website revisions, orders, members, comments, and photos. It excludes sign-in credentials and recovery secrets. Keep downloads private.'),
         button('Download business backup', async () => { try { const backup = await request('/api/manage/export'); download('rise-roost-business-backup.json', JSON.stringify(backup)); notify('Business backup downloaded.'); } catch (e) { error = e.message; chrome(); } }, { class: 'ms-primary' }),
         h('p', { class: 'ms-note' }, 'Saved records are never removed automatically. Cloudflare D1 recovery remains available through the hosting account.')), 
-      panel('Notifications', h('p', {}, 'Choose which in-app alerts appear in Needs Your Attention. External email/push services are not enabled. Save failures always remain visible.'),
+      panel('Notifications', h('p', {}, 'Choose which in-app alerts appear in Needs Your Attention. Customer email has its own section in Settings. Save failures always remain visible.'),
         [['orders', 'New orders'], ['payments', 'Awaiting payment verification'], ['stock', 'Low stock'], ['pickups', 'Upcoming pickups'], ['comments', 'New comments'], ['errors', 'System alerts']].map(([key, label]) => check(label, preferences, key)),
         button('Save alert preferences', () => send('notifications', { preferences }), { class: 'ms-primary' })),
       panel('Install on iPhone', h('p', {}, 'In Safari, open Share → Add to Home Screen. Private business data is fetched securely while online and is not stored in an offline service-worker cache.')),
       panel('Audit history', data.management.audit.slice(0, 60).map(a => h('div', { class: 'ms-audit' }, h('strong', {}, a.action || a.kind), h('span', {}, stamp(a.at)), h('small', {}, a.actor?.name || 'Owner')))),
       data.productionOwnerAccess ? h('a', { href: '/cdn-cgi/access/logout', class: 'ms-secondary' }, 'Sign out') : !data.previewDirectAccess ? button('Sign out', async () => { if (editing && !confirm('Sign out and discard the unsaved form?')) return; try { await request('/api/logout', {}); disposed = true; sessionStorage.removeItem(storageKey); location.reload(); } catch (e) { error = e.message; chrome(); } }, { class: 'ms-secondary' }) : null);
+  }
+  function emailSettings() {
+    const ledgerVersion = data.ledgerVersion;
+    const email = data.management.email, draft = emailDraft || { values: { enabled: email.enabled }, types: clone(email.types), ledgerVersion }, { values, types } = draft;
+    const emailCheck = (label, object, key) => field(label, object[key], value => { object[key] = value; emailDraft = draft; }, { type: 'checkbox' });
+    const labels = { received:'Order Received', verified:'Payment Confirmed', preparing:'Preparing', ready:'Ready for Pickup', canceled:'Order Canceled', forfeited:'Pickup Forfeited', test:'Studio test' };
+    return h('div', {}, h('h1', {}, 'Customer Email'),
+      panel('Resend connection', h('p', {}, email.configured ? 'Resend is configured. A test can check service acceptance.' : 'Resend is not configured. Ask the website operator to check the secure connection.'), h('p', {}, 'Sender: ' + email.sender), h('p', {}, email.active ? 'Customer notifications are available to customers who request them at checkout.' : 'Customer sending is disabled. Checkout and ordering have their own separate controls.'),
+        !email.releaseEnabled ? h('p', { class:'ms-note' }, 'Initial release safety lock is on. After Danielle approves activation, the website operator must release this lock once. You can then manage notifications here.') : null,
+        !email.freePlanConfirmed || !email.deliveryVerified ? h('p', { class:'ms-note' }, 'Before customer activation, the operator must confirm the free-plan allowance and an owner’s successful inbox test.') : null,
+        h('p', {}, 'Service acceptance does not confirm inbox delivery. For questions, customers use Contact Danielle on the website; the sending address is not a monitored inbox.')),
+      panel('Customer notifications', emailCheck('Enable customer email notifications', values, 'enabled'), Object.keys(types).map(k=>emailCheck(labels[k],types,k)),
+        emailDraft && draft.ledgerVersion !== ledgerVersion ? h('p',{class:'ms-note'},'Email activity changed while you were choosing settings. Reload saved email choices and review them before saving.') : null,
+        button('Save email settings', async ()=>{ const saved = await send('email-settings',{ ledgerVersion:draft.ledgerVersion, enabled:values.enabled, types }); if (saved) { emailDraft = null; render(); } }, { class:'ms-primary' }), button('Reload saved email choices', ()=>{ emailDraft = null; render(); },{class:'ms-secondary'}), h('p', { class:'ms-note' }, 'Only customers who explicitly request email updates receive them. Turning a type off cancels its waiting messages. Turning it back on applies to future events.')),
+      panel('Send a test email', h('p', {}, email.testRecipient ? 'Tests go only to your signed-in owner address: ' + email.testRecipient : 'Sign in with your individual owner account to test.'),
+        button('Send test to my owner address', ()=>{ if(confirm('Send one Studio test email to your own authorized owner address? Customer sending stays under its separate controls.')) send('email-test',{ledgerVersion,confirmed:true},{successMessage:'Owner test queued. Refresh delivery history to see the result, then check your inbox and spam folder.'}); },{class:'ms-primary',disabled:!email.configured || !email.testRecipient}), h('p',{class:'ms-note'},'One test per minute, up to five per hour. A test does not enable customer emails.')),
+      panel('Recent email attempts', button('Refresh email history', ()=>refresh(),{class:'ms-secondary'}), email.attempts.length ? email.attempts.map(n=>h('div',{class:'ms-audit'},h('strong',{},(n.orderNumber || 'Owner test')+' · '+labels[n.event]),h('p',{},notificationLabels[n.status] || n.status),h('small',{},stamp(n.at)+' · '+n.attempts+' attempt(s)'+(n.errorCode ? ' · '+n.errorCode : '')),
+        n.retryAt && ['failed','retry','quota_paused'].includes(n.status) ? h('p',{},'Retry after '+stamp(new Date(n.retryAt).toISOString())) : null,
+        n.retryable ? button('Retry failed email',()=>{if(confirm('Retry this original notification? The same identifier and message are reused to prevent duplicates.'))send('email-retry',{ledgerVersion,notificationId:n.id,...(n.orderId?{orderId:n.orderId}:{}),confirmed:true});},{class:'ms-secondary'}) : null)) : empty('No emails have been attempted yet.'), h('p',{class:'ms-note'},'Temporary failures retry automatically while the message is safe to send. Accepted messages are never resent. Messages older than 23 hours need direct contact. Delivery is not automatically confirmed.')));
   }
   async function testPaymentLink(provider) {
     const popup = window.open('about:blank', '_blank'); if (popup) popup.opener = null;
@@ -632,7 +652,7 @@ export async function start(root, initial, newAccessKey) {
   function render() {
     if (reauth) { root.replaceChildren(h('main', { class: 'ms-loading' }, h('h1', {}, initial.previewPinAccess ? 'Studio is locked' : initial.previewDirectAccess ? 'Testing access needs verification' : 'Sign-in required'), h('p', {}, initial.previewPinAccess ? 'Enter your owner PIN in another tab, then check the connection here. Your unsaved form is kept here.' : initial.previewDirectAccess ? 'Reopen Studio in another tab to verify your Cloudflare Access session. Your unsaved form is kept here.' : 'Your unsaved form is kept in this tab. Sign in to this exact website in a new tab, then check the connection.'), h('a', { href: initial.studioPath, target: '_blank', rel: 'noopener' }, initial.previewPinAccess ? 'Unlock Studio' : initial.previewDirectAccess ? 'Reopen Website Studio' : 'Sign in to this website'), button('Check connection', () => refresh()))); return; }
     if (!data.management) { root.replaceChildren(h('main', { class: 'ms-loading' }, 'Opening Rise & Roost Website Studio…')); return; }
-    const page = editing ? editForm() : view === 'Home' ? home() : view === 'Orders' ? orders() : view === 'Products' ? products() : view === 'Calendar/Weeks' ? pickupWeeks() : view === 'Calendar/Changes' ? scheduleChanges() : view === 'Calendar' ? calendar() : view === 'The Roost/Return Credits' ? returnCredits() : view === 'The Roost' ? members() : view === 'Website Content' ? content() : view === 'Customer Comments' ? comments() : view === 'Sales Reports' ? reports() : view === 'Settings/Help' ? helpGuide() : view === 'Settings/Payments' ? payments() : view === 'Settings' ? settings() : h('div', {}, h('h1', {}, 'More'), secondary.map(label => menu(label, label)));
+    const page = editing ? editForm() : view === 'Home' ? home() : view === 'Orders' ? orders() : view === 'Products' ? products() : view === 'Calendar/Weeks' ? pickupWeeks() : view === 'Calendar/Changes' ? scheduleChanges() : view === 'Calendar' ? calendar() : view === 'The Roost/Return Credits' ? returnCredits() : view === 'The Roost' ? members() : view === 'Website Content' ? content() : view === 'Customer Comments' ? comments() : view === 'Sales Reports' ? reports() : view === 'Settings/Email' ? emailSettings() : view === 'Settings/Help' ? helpGuide() : view === 'Settings/Payments' ? payments() : view === 'Settings' ? settings() : h('div', {}, h('h1', {}, 'More'), secondary.map(label => menu(label, label)));
     root.replaceChildren(h('div', { class: 'management' },
       h('aside', { class: 'ms-sidebar' }, h('a', { href: initial.studioPath, class: 'ms-brand' }, h('img', { src: '/assets/logo.webp', alt: 'Rise & Roost' }), h('span', {}, 'Rise & Roost', h('small', {}, 'Website Studio'))),
         h('nav', { 'aria-label': 'Studio navigation' }, primary.filter(v => v !== 'More').map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view.startsWith('Settings/') ? 'page' : undefined })), h('details', { open: true }, h('summary', {}, 'More'), secondary.map(label => button(label, () => go(label), { 'aria-current': view === label || label === 'Settings' && view.startsWith('Settings/') ? 'page' : undefined })))), h('a', { href: initial.publishedPath, target: '_blank', rel: 'noopener', class: 'ms-secondary' }, 'View website')),
@@ -648,10 +668,10 @@ export async function start(root, initial, newAccessKey) {
   window.addEventListener('online', () => refresh());
   window.addEventListener('focus', () => refresh());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) void refresh(); });
-  try { const target = decodeURIComponent(location.hash.slice(1)); if ([...primary, ...secondary, 'Settings/Payments', 'Settings/Help', 'The Roost/Return Credits'].includes(target)) view = target; } catch {}
+  try { const target = decodeURIComponent(location.hash.slice(1)); if ([...primary, ...secondary, 'Settings/Payments', 'Settings/Help', 'Settings/Email', 'The Roost/Return Credits'].includes(target)) view = target; } catch {}
   try { const saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null'); if (saved?.type && ['product', 'calendar', 'content', 'payment-settings', 'fresh-announcement'].includes(saved.type)) { editing = saved; view = { product: 'Products', calendar: 'Calendar', content: 'Website Content', 'payment-settings': 'Settings/Payments', 'fresh-announcement': 'Products' }[saved.type]; } } catch {}
   try { const saved = JSON.parse(sessionStorage.getItem(pendingKey) || 'null'); if (/^[a-f0-9-]{32,48}$/.test(saved?.id || '')) pending = { id: saved.id, form: editing }; } catch {}
-  navigation = studioHistory({ workspace, path: initial.studioPath, read: route, apply: applyRoute, canLeave, home: homeRoute, views: [...primary, ...secondary, 'Settings/Payments', 'Settings/Help', 'The Roost/Return Credits'] });
+  navigation = studioHistory({ workspace, path: initial.studioPath, read: route, apply: applyRoute, canLeave, home: homeRoute, views: [...primary, ...secondary, 'Settings/Payments', 'Settings/Help', 'Settings/Email', 'The Roost/Return Credits'] });
   render(); await refresh();
   setInterval(() => { if (!document.hidden && !busy && !disposed) void refresh(); }, 5000);
 }

@@ -1,5 +1,5 @@
 import { api } from "./service.mjs";
-import { emailConfigured } from "./orders.mjs";
+import { emailConfigured, emailProviderReady } from './email-policy.mjs';
 import { drainNotifications } from "./notifications.mjs";
 import { previewAccess, restrictedResponse } from './preview-access.mjs';
 import { studioPinAccess } from './studio-pin.mjs';
@@ -30,7 +30,7 @@ export default {
     }
     if (env.DEPLOYMENT_ENVIRONMENT === 'production') {
       const result = await productionFetch(request, env);
-      if (request.method === "POST" && result.ok && emailConfigured(env)) ctx?.waitUntil?.(drainNotifications(env.DB, env));
+      if (request.method === "POST" && result.ok && emailProviderReady(env)) ctx?.waitUntil?.(drainNotifications(env.DB, env));
       const response = new Response(result.body, result);
       for (const [key, value] of Object.entries(security)) response.headers.set(key, value);
       if (/\/studio(?:\/|$)|\/orders(?:\/|$)/.test(new URL(request.url).pathname)) response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
@@ -44,7 +44,7 @@ export default {
     let response = pin.response || (!pin.active && access.active && !access.grant ? restrictedResponse(request, access) : new URL(request.url).pathname.startsWith("/api/")
       ? await api(request, env.DB, Date.now(), { contactLoginEnv: env, publicWorkspaceId: env.PUBLIC_WORKSPACE_ID, emailEnabled: emailConfigured(env), customerExperienceEnabled: env.CUSTOMER_EXPERIENCE_ENABLED === "true", reviewBuild: env.REVIEW_BUILD === "true", studioManagementEnabled: env.STUDIO_MANAGEMENT_ENABLED === "true", previewGrant: access.grant, previewPinMode: pin.active, commerceEnabled: env.COMMERCE_UPDATE_ENABLED === "true" })
       : await env.ASSETS.fetch(request));
-    if (request.method === "POST" && response.ok && emailConfigured(env))
+    if (request.method === "POST" && response.ok && emailProviderReady(env))
       ctx?.waitUntil?.(drainNotifications(env.DB, env));
     response = new Response(response.body, response);
     for (const [key, value] of Object.entries(security))
