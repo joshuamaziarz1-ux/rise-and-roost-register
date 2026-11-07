@@ -75,3 +75,11 @@ Candidate screenshots (synthetic, enabled locally): [desktop welcome](roost-simp
 Actual production after deployment (feature disabled): [desktop](roost-simple-login/production-disabled-desktop.png), [mobile](roost-simple-login/production-disabled-mobile.png).
 
 Danielle's remaining actions are the provider/cost approval, sender/domain configuration, secure credentials, additive migration and controlled real delivery checks listed above. Only after both channels are genuinely ready should both gates be enabled in a freshly reviewed production release. Existing working authentication remains available throughout.
+
+## Follow-up: explicit passkey wording
+
+The fallback button previously said “Sign In Securely” despite offering only WebAuthn. Runtime asset commit `1692214` changes it to “Sign in with a Passkey” and explicitly states email/phone sign-in is unavailable while the delivery gate is closed. The native Safari prompt is still expected when customers deliberately select passkeys. No code automatically invokes WebAuthn when opening The Roost or its sign-in view.
+
+Five existing entry/cancellation/recovery/guest browser cases passed across all five profiles. Production version `d31565e8-0383-4e12-9cb3-690b790f9cf7`, deployment `3dd08743-625b-4b16-a1c6-e949762a5d5e`, serves the wording change. Candidate resources (including executable etag, all bindings, runtime and handlers) matched the preceding production version exactly. All production table/schema fingerprints, Access configuration and commerce settings remained unchanged. Read-only public desktop/mobile checks verified the explicit label, availability message, guest navigation, zero JS errors and zero write requests. Both login flags remain false; provider configuration is still outstanding.
+
+Live sign-in screenshots: [desktop](roost-simple-login/production-explicit-passkey-desktop.png), [mobile](roost-simple-login/production-explicit-passkey-mobile.png).
