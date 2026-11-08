@@ -35,3 +35,11 @@ Private local backup includes live Worker source, settings, deployment metadata,
 Production cleanup is a separate exact-record approval: the private cleanup report proposes only three expired, unconsumed registration proof rows. Legitimate Studio audit history and unattributed passkey challenges must remain. No cleanup or production record modification has occurred.
 
 Status: code and isolated tests prepared; **not ready for public activation** until real delivery/device acceptance, production-source reconciliation and separate deployment/activation approval.
+
+## Approved deployment preparation (2026-11-08)
+
+The user approved cleanup T1–T3 and deployment, without requesting public signup activation. Cleanup completed in one guarded DELETE: exactly three rows removed, all other user tables unchanged, with a fresh restore-verified backup and private receipt.
+
+Production-only changes are now reconciled for this release. Preserve the existing deployed module delivery for customer.mjs and the password-policy module; do not replace Cloudflare static assets or deploy the older whole-source build. The deterministic `scripts/prepare-verification-production.mjs` applies the auth repair and reconciled customer source to the backed-up live bundle and leaves every other byte unchanged. It also preserves the live resend cooldown while removing the original-browser requirement. `scripts/test-verification-bundle.mjs` runs the same synthetic authentication cases against that exact resulting API implementation; 15 passed. Reconciled source auth/production-gate tests: 17 passed. Reconciled browser tests: 11 passed, with one intentional WebKit-only case skipped on Chromium.
+
+This is an update to the existing production implementation and its existing module-serving mechanism. No alternate owner-test route, auth endpoint or temporary sign-in method is introduced. Use the version upload API with inherited bindings/secrets and `keep_assets=true`, inspect the staged version, then deploy it at 100% while retaining the prior version for rollback. All signup/email activation flags remain disabled and password login remains enabled.

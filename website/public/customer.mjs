@@ -1,4 +1,4 @@
-import { customerPasswordHint } from './customer-password-policy.mjs';
+import { customerPasswordError, customerPasswordHint } from './customer-password-policy.mjs?v=password8-v1';
 import { pickupRequest } from './pickup-request.mjs';
 import { pickupNotice } from './pickup-notice.mjs';
 import { h, button, field, notify, guard, request } from './dom.mjs';
@@ -234,8 +234,13 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     if (busy) panel.append(h('p', { role: 'status', class: 'small-note' }, emailLoginEnabled ? 'Please wait…' : 'Please finish the sign-in prompt.'));
     return panel;
   }
+  function checkNewPassword(form) {
+    const input = form.elements.password;
+    input.setCustomValidity(customerPasswordError(input.value));
+    return form.reportValidity();
+  }
   function emailPassword(label, name = 'password', confirmation = false) {
-    const input = h('input', { name, type: 'password', required: true, autocomplete: confirmation ? 'new-password' : 'current-password', maxlength: 128 });
+    const input = h('input', { name, type: 'password', required: true, autocomplete: confirmation ? 'new-password' : 'current-password', ...(confirmation ? { minlength: 8, oninput: e => e.currentTarget.setCustomValidity(customerPasswordError(e.currentTarget.value)) } : {}), maxlength: 256 });
     return h('div', {}, h('label', { class: 'field' }, label, input), button('Show password', e => {
       input.type = input.type === 'password' ? 'text' : 'password';
       e.currentTarget.textContent = input.type === 'password' ? 'Show password' : 'Hide password';
@@ -244,7 +249,9 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
   function emailForm(kind) {
     const signup = kind === 'register', reset = kind === 'reset' || kind === 'recover', linkEmail = kind === 'link';
     const form = h('form', { class: 'contact-login password-login', onsubmit: e => {
-      e.preventDefault(); const values = Object.fromEntries(new FormData(e.currentTarget));
+      e.preventDefault();
+      if ((signup || reset || linkEmail && !member.username) && !checkNewPassword(e.currentTarget)) return;
+      const values = Object.fromEntries(new FormData(e.currentTarget));
       void action(async () => {
         const r = await api('/api/roost/email/' + kind, { ...values, ...(emailToken ? { token: emailToken } : {}) });
         if (kind === 'login' || kind === 'recover') { await authenticated(r.recoveryKey); return; }
@@ -292,13 +299,16 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
       !change ? field('Username', passwordDraft.username, v => passwordDraft.username = v, { name: 'username', autocomplete: 'username', autocapitalize: 'none', spellcheck: false, required: true, minlength: 3, maxlength: 30 }) : null,
       recover ? field('Recovery code', passwordDraft.recoveryKey, v => passwordDraft.recoveryKey = v, { name: 'recoveryKey', type: 'password', autocomplete: 'off', required: true, maxlength: 48 }) : null,
       change ? field('Current password', passwordDraft.currentPassword, v => passwordDraft.currentPassword = v, { name: 'currentPassword', type: 'password', autocomplete: 'current-password', required: true, maxlength: 128 }) : null,
-      field(signup || setup || change || recover ? 'New password' : 'Password', passwordDraft.password, v => passwordDraft.password = v, { name: 'password', type: 'password', autocomplete: signup || setup || change || recover ? 'new-password' : 'current-password', required: true, minlength: signup || setup || change || recover ? 8 : 1, maxlength: 128 }),
+      field(signup || setup || change || recover ? 'New password' : 'Password', passwordDraft.password, v => passwordDraft.password = v, { name: 'password', type: 'password', autocomplete: signup || setup || change || recover ? 'new-password' : 'current-password', required: true, minlength: signup || setup || change || recover ? 8 : 1, maxlength: 256 }),
       signup || setup || change || recover ? h('p', { class: 'small-note' }, customerPasswordHint) : null
     ];
   }
   function passwordForm(kind) {
-    return h('form', { class: 'contact-login password-login', onsubmit: e => {
+    return h('form', { class: 'contact-login password-login', oninput: e => {
+      if (kind !== 'login' && e.target.name === 'password') e.target.setCustomValidity(customerPasswordError(e.target.value));
+    }, onsubmit: e => {
       e.preventDefault();
+      if (kind !== 'login' && !checkNewPassword(e.currentTarget)) return;
       // Read the native fields so password-manager autofill is respected.
       const values = Object.fromEntries(new FormData(e.currentTarget));
       passwordDraft.username = values.username || passwordDraft.username;

@@ -179,8 +179,6 @@ export async function emailLogin({
         customerCookie(request, w, session, 30 * 86400),
       ]);
     }
-    await limit(db, "send-ip:" + ip, 10, now);
-    await limit(db, "send:" + w + ":" + email, 3, now);
     let purpose = a === "forgot" ? "reset" : a === "link" ? "link" : "register",
       id = null,
       payload = {},
@@ -301,6 +299,12 @@ export async function emailLogin({
             "Existing members should use Existing member sign-in, then verify their email in Account Settings. Check your email if registration is pending, or use Sign In or Forgot Password.",
         });
     }
+    const matching = purpose === "register" && await first(db,
+      "SELECT expires FROM roost_email_tokens WHERE workspace_id=? AND email=? AND purpose='register' AND claimed_by IS NULL ORDER BY expires DESC LIMIT 1", w, email);
+    if (a === "resend" && matching && matching.expires > now + 840000)
+      return response({ ok: true, pending: true, message: "A verification email was just sent. Open the latest email; check Spam before requesting another." });
+    await limit(db, "send-ip:" + ip, 10, now);
+    await limit(db, "send:" + w + ":" + email, 3, now);
     const secret = token(),
       digest = await hash(secret);
     await db.batch([
