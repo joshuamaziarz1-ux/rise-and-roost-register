@@ -1,9 +1,10 @@
+import { subscriptionForm, subscriptionAction } from './subscribe.mjs';
 import { confirmationTools } from './order-confirmation.mjs?v=0d70de759184';
 import { dollarsToCents, centsToDollars } from './credit-money.mjs';
 import { POLICY_VERSION, POLICY_TITLE, POLICY, providers } from './commerce.mjs';
 import { h, button, notify, request, guard } from "./dom.mjs";
 import { money, localInstant, pickupLabel, orderByLabel } from "./model.mjs";
-import { createCustomerExperience } from "./customer.mjs?v=d4ca7d983d57";
+import { createCustomerExperience } from "./customer.mjs?v=launch-membership-20261107";
 import { pickupLocation } from "./pickup-location.mjs";
 import { sellingMethod } from './selling.mjs';
 
@@ -12,11 +13,11 @@ if (!location.pathname.startsWith('/studio/preview/') && (
   location.pathname === "/studio" ||
   location.pathname.startsWith("/studio/")
 )) {
-  import("./studio.mjs")
+  import("./studio.mjs?v=coordinated-20261107")
     .then((m) => m.start(root))
     .catch((e) => notify(e.message, true));
 } else if (location.pathname.startsWith("/orders/")) {
-  import("./tracking.mjs?v=69e463010b0b").then((m) => m.start(root)).catch((e) => notify(e.message, true));
+  import("./tracking.mjs?v=coordinated-20261107").then((m) => m.start(root)).catch((e) => notify(e.message, true));
 } else {
   let doc,
     revision = 1,
@@ -30,6 +31,8 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     notificationsEnabled = false,
     checkoutEmail = "",
     emailOptIn = false;
+  let marketingSignupEnabled=false;
+  const subscriptionPanel=location.pathname==='/subscribe'?subscriptionAction():null;
   let commerceEnabled = false, policyAccepted = false, paymentDestinations = {}, checkoutPaymentMethod = '', productionMode = false, checkoutEnabled = true;
   let automaticCalendar = false, serverOffset = 0, calendarTimer;
   const calendarNow = () => Date.now() + serverOffset;
@@ -881,7 +884,8 @@ if (!location.pathname.startsWith('/studio/preview/') && (
         ),
       ),
     );
-    if (path === "/cart") site.append(renderCart());
+    if (path === "/subscribe") site.append(h("main", {class:"section-inner"}, subscriptionPanel || (marketingSignupEnabled ? subscriptionForm() : h("p", {}, "Bakery email signup will be available soon."))));
+    else if (path === "/cart") site.append(renderCart());
     else if (experience && path === "/roost") site.append(customer.roost());
     else if (experience && path === "/comments") site.append(customer.commentPage());
     else if (path.startsWith("/product/"))
@@ -910,6 +914,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     site.prepend(
       h("a", { href: "#main-content", class: "skip-link" }, "Skip to content"),
     );
+    if(marketingSignupEnabled && ["/", "/shop"].includes(path)) main.append(subscriptionForm());
     site.append(experience ? h("footer", { class: "site-footer" },
       h("div", { class: "section-inner customer-footer" }, h("p", {}, doc.ui.footer),
         doc.pages.filter(p => p.slug === "/terms").map(p => link(p.slug, p.title)))) :
@@ -999,7 +1004,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     commerceEnabled = !!result.commerceEnabled;
     paymentDestinations = result.paymentDestinations || {};
     if (checkoutPaymentMethod !== 'cash_pickup' && !paymentDestinations[checkoutPaymentMethod]) checkoutPaymentMethod = Object.keys(paymentDestinations)[0] || '';
-    notificationsEnabled = !!result.notificationsEnabled;
+    notificationsEnabled = !!result.notificationsEnabled; marketingSignupEnabled=result.marketingSignupEnabled===true;
     revision = result.revision || 1;
     availabilityRevision = result.availabilityRevision || 0;
     workspace = result.id || workspace;

@@ -426,16 +426,28 @@ test("email linking cannot finish after logout or password change and migration 
   assert.deepEqual(h.sql.prepare("SELECT * FROM roost_members").all(), before);
 });
 
-test("unsolicited registration cannot pre-hijack another mailbox through a cross-browser verification click", async () => {
+test("mailbox verification works in a fresh browser without signing either browser in, and replay is rejected", async () => {
   const h = await fixture();
   await enroll(h);
+  assert.equal(h.messages.length, 1);
   const t = h.messages.at(-1).secret;
-  assert.equal((await verify(h, h.stranger, t)).status, 401);
-  assert.equal(
-    h.sql.prepare("SELECT COUNT(*) n FROM roost_members").get().n,
-    0,
-  );
-  assert.equal((await verify(h, h.client, t)).status, 200);
+  const results = await Promise.all([verify(h, h.stranger, t), verify(h, new Map(), t)]);
+  assert.equal(results.filter(r => r.status === 200).length, 1);
+  assert.equal(h.sql.prepare("SELECT COUNT(*) n FROM roost_members").get().n, 1);
+  assert.equal(h.sql.prepare("SELECT COUNT(*) n FROM roost_sessions").get().n, 0);
+  assert.equal((await h.me(h.client)).data.member, null);
+  assert.equal((await h.me(h.stranger)).data.member, null);
+  assert.match((await verify(h, new Map(), t)).data.error, /already used successfully/);
+  assert.equal(h.messages.length, 1);
+  assert.equal((await signin(h, h.stranger)).status, 200);
+});
+
+test("invalid and expired links give distinct errors without email or authentication side effects", async () => {
+ const h = await fixture(); await enroll(h);
+ assert.match((await verify(h, h.stranger, '0'.repeat(48))).data.error, /invalid/);
+ assert.match((await verify(h, h.stranger, h.messages[0].secret, now + 900001)).data.error, /expired/);
+ assert.equal(h.messages.length, 1);
+ assert.equal(h.sql.prepare("SELECT COUNT(*) n FROM roost_members").get().n, 0);
 });
 
 test("migrated passkey-only member retains original recovery code through email-based legacy recovery", async () => {
@@ -472,4 +484,11 @@ test("migrated passkey-only member retains original recovery code through email-
   );
   await h.post(h.stranger, "logout");
   assert.equal((await signin(h, h.stranger, nextPassword)).status, 200);
+});
+
+test('corrected production password policy permits eight characters and rejects common passwords', () => {
+ assert.equal(validatePassword('Z7!mQ2xR'), 'Z7!mQ2xR');
+ assert.throws(() => validatePassword('password'));
+ assert.throws(() => validatePassword('12345678'));
+ assert.throws(() => validatePassword('seven77'));
 });

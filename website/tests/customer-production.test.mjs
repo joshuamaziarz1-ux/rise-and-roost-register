@@ -1,3 +1,4 @@
+import { roostApi } from '../server/roost.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { productionFixture, installProductionTestKeys } from './production-fixture.mjs';
@@ -9,15 +10,20 @@ test('production customer lifecycle leaves Access authentication, checkout gates
   const h = await productionFixture(), key = softwarePasskey(), origin = h.env.WEBSITE_BASE_URL;
   const before = h.sql.prepare('SELECT * FROM workspaces').get();
   const call = (path, data, headers = {}) => h.call(path, data === undefined ? undefined : { workspaceId, ...data }, { headers });
-  const begin = await call('/api/roost/options', { kind: 'register', profile: { name: 'Synthetic Neighbor' } });
+  assert.equal((await call('/api/roost/options', {kind:'register',profile:{name:'Synthetic Neighbor'}})).status,409);
+  const seed = async (path,input,headers={}) => {const r=await roostApi({request:new Request(origin+path,{method:'POST',headers}),db:h.env.DB,now:Date.now(),input:{workspaceId,...input},path,rateLimit:async()=>{},json:(d,s=200)=>Response.json(d,{status:s}),contactLoginEnv:{...h.env,DEPLOYMENT_ENVIRONMENT:'preview'}});return {status:r.status,headers:r.headers,data:await r.json()};};
+  const begin = await seed('/api/roost/options', { kind: 'register', profile: { name: 'Synthetic Neighbor' } });
   assert.equal(begin.status, 200);
   const challengeCookie = begin.headers.getSetCookie()[0].split(';')[0];
-  const enrolled = await call('/api/roost/verify', { response: key.register(begin.data.options, origin) }, { Cookie: challengeCookie });
+  const registrationResponse = key.register(begin.data.options, origin);
+  assert.equal((await call('/api/roost/verify', {response:registrationResponse}, {Cookie:challengeCookie})).status,409);
+  const enrolled = await seed('/api/roost/verify', { response: registrationResponse }, { Cookie: challengeCookie });
   assert.equal(enrolled.status, 200);
   const sessionCookie = enrolled.headers.getSetCookie()[0].split(';')[0];
   assert.match(enrolled.headers.getSetCookie()[0], /HttpOnly.*SameSite=Strict.*Secure/);
   const me = await call('/api/roost/me?workspace='+workspaceId, undefined, { Cookie: sessionCookie });
   assert.equal(me.data.member.id, enrolled.data.member.id);
+  assert.equal(me.data.registrationPaused,true);
   assert.match(me.headers.get('Cache-Control'), /no-store/);
   for (const path of ['/studio', '/studio/api/manage/snapshot']) assert.equal((await call(path, undefined, { Cookie: sessionCookie })).status, 401);
   for (const path of ['/api/manage/snapshot', '/api/studio']) assert.equal((await call(path, undefined, { Cookie: sessionCookie })).status, 404);

@@ -2,7 +2,7 @@ import { emailLogin } from './email-login.mjs';
 import { emailLoginReady, sendAuthEmail } from './auth-email.mjs';
 import { passwordLogin, passwordLoginReady } from './password-login.mjs';
 import { contactLogin, contactLoginReady } from './contact-login.mjs';
-import { acknowledgePickup } from './pickup-changes.mjs';
+import { acknowledgePickup, requestPickup } from './pickup-changes.mjs';
 import { cashEligibility } from './cash-pickup.mjs';
 import { customerCredits } from './return-credits.mjs';
 import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } from '@simplewebauthn/server';
@@ -47,7 +47,8 @@ export async function roostApi({ request, db, now, input, path, json, rateLimit,
     return result;
   };
   if (/^\/api\/roost\/email\/(register|login|resend|forgot|link|verify|reset|recover)$/.test(path) && request.method === 'POST') return emailLogin({ request, db, workspaceId, now, input, path, response, env: contactLoginEnv, send: authSend });
-  if (emailLoginReady(contactLoginEnv) && path === '/api/roost/password/register') fail('Create an account with your name, email and password.', 409);
+  const legacyRegistrationClosed = contactLoginEnv.DEPLOYMENT_ENVIRONMENT === 'production' || emailLoginReady(contactLoginEnv);
+  if (legacyRegistrationClosed && path === '/api/roost/password/register') fail('Create an account with your name, email and password.', 409);
   if (/^\/api\/roost\/password\/(register|login|setup|change|recover)$/.test(path) && request.method === 'POST') {
     const notifyChange = emailLoginReady(contactLoginEnv) && /\/(change|recover)$/.test(path);
     const previous = notifyChange && (path.endsWith('/change') ? await customerSession(request, db, workspaceId, now) : await first(db, 'SELECT member_id AS id FROM roost_passwords WHERE workspace_id=? AND username=?', workspaceId, typeof input.username === 'string' ? input.username.trim().toLowerCase() : ''));
@@ -62,7 +63,7 @@ export async function roostApi({ request, db, now, input, path, json, rateLimit,
   if (path === '/api/roost/me' && request.method === 'GET') {
     const current = await memberFor(request, db, workspaceId, now);
     const renewed = current && await renewCustomerSession(request, db, workspaceId, current, now);
-    if (!renewed) return response({ emailLoginEnabled: emailLoginReady(contactLoginEnv), passwordLoginEnabled: passwordLoginReady(contactLoginEnv), simpleLoginEnabled: contactLoginReady(contactLoginEnv), member: null }, cookieValue(request, 'rr_roost_' + workspaceId) ? [customerCookie(request, workspaceId, '', 0)] : []);
+    if (!renewed) return response({ registrationPaused: contactLoginEnv.DEPLOYMENT_ENVIRONMENT === 'production' && !emailLoginReady(contactLoginEnv), emailLoginEnabled: emailLoginReady(contactLoginEnv), passwordLoginEnabled: passwordLoginReady(contactLoginEnv), simpleLoginEnabled: contactLoginReady(contactLoginEnv), member: null }, cookieValue(request, 'rr_roost_' + workspaceId) ? [customerCookie(request, workspaceId, '', 0)] : []);
     const member = renewed.member;
     const passwordAccount = passwordLoginReady(contactLoginEnv) && await first(db, 'SELECT username FROM roost_passwords WHERE workspace_id=? AND member_id=?', workspaceId, member.id);
     const emailAccount = emailLoginReady(contactLoginEnv) && await first(db, 'SELECT email FROM roost_email_identities WHERE workspace_id=? AND member_id=?', workspaceId, member.id);
@@ -70,15 +71,17 @@ export async function roostApi({ request, db, now, input, path, json, rateLimit,
     const ledger = JSON.parse(row.ledger_json);
     const orders = ledger.orders.filter(o => o.customer?.memberId === member.id).map(o => customerOrder(o, workspaceId, ledger.management?.settings, now));
     const devices = await list(db, "SELECT json_group_array(json_object('id',d.id,'label',d.label,'lastSeen',d.last_seen,'current',s.hash=?)) AS items FROM roost_sessions s JOIN roost_session_details d ON d.hash=s.hash WHERE s.workspace_id=? AND s.member_id=? AND s.expires>? AND d.absolute_expires>?", member.session_hash, workspaceId, member.id, now, now);
-    return response({ emailLoginEnabled: emailLoginReady(contactLoginEnv), passwordLoginEnabled: passwordLoginReady(contactLoginEnv), simpleLoginEnabled: contactLoginReady(contactLoginEnv), member: { ...safeMember(member), ...(emailAccount ? { verifiedEmail: emailAccount.email } : {}), ...(passwordAccount ? { username: passwordAccount.username } : {}) }, orders, devices, cashPickup: cashEligibility(ledger, member.id), credits: customerCredits(ledger, member.id), favorites: ledger.roostFavorites?.[member.id] || [] }, [renewed.cookie]);
+    return response({ registrationPaused: contactLoginEnv.DEPLOYMENT_ENVIRONMENT === 'production' && !emailLoginReady(contactLoginEnv), emailLoginEnabled: emailLoginReady(contactLoginEnv), passwordLoginEnabled: passwordLoginReady(contactLoginEnv), simpleLoginEnabled: contactLoginReady(contactLoginEnv), member: { ...safeMember(member), ...(emailAccount ? { verifiedEmail: emailAccount.email } : {}), ...(passwordAccount ? { username: passwordAccount.username } : {}) }, orders, devices, cashPickup: cashEligibility(ledger, member.id), credits: customerCredits(ledger, member.id), favorites: ledger.roostFavorites?.[member.id] || [] }, [renewed.cookie]);
   }
-  if (path === '/api/roost/pickup-response' && request.method === 'POST') {
+  if (['/api/roost/pickup-response','/api/roost/pickup-request'].includes(path) && request.method === 'POST') {
     const member = await memberFor(request, db, workspaceId, now, true);
     for (let attempt = 0; attempt < 4; attempt++) {
       const row = await first(db, 'SELECT ledger_json,ledger_version FROM workspaces WHERE id=?', workspaceId), ledger = JSON.parse(row.ledger_json);
       const order = ledger.orders.find(o => o.id === input.orderId && o.customer?.memberId === member.id);
       if (!order) fail('Order not found.', 404);
-      if (!acknowledgePickup(order, input, now, { memberId: member.id })) return response(customerOrder(order, workspaceId, ledger.management?.settings, now));
+      if (path.endsWith('/pickup-request') && contactLoginEnv.PICKUP_REQUESTS_ENABLED !== 'true') fail('Pickup change requests are not available yet.',409);
+      if (attempt===0 && path.endsWith('/pickup-request')) await rateLimit('pickup-request:'+order.id,6);
+      if (!(path.endsWith('/pickup-request') ? requestPickup : acknowledgePickup)(order, input, now, { memberId: member.id })) return response(customerOrder(order, workspaceId, ledger.management?.settings, now));
       order.version = (order.version || 1) + 1;
       const saved = await run(db, 'UPDATE workspaces SET ledger_json=?,ledger_version=ledger_version+1 WHERE id=? AND ledger_version=?', JSON.stringify(ledger), workspaceId, row.ledger_version);
       if (saved.meta.changes === 1) return response(customerOrder(order, workspaceId, ledger.management?.settings, now));
@@ -125,7 +128,7 @@ export async function roostApi({ request, db, now, input, path, json, rateLimit,
   }
   if (path === '/api/roost/options' && request.method === 'POST') {
     await rateLimit('roost-options', 40);
-    if (emailLoginReady(contactLoginEnv) && input.kind === 'register') fail('Create an account with your name, email and password.', 409);
+    if (legacyRegistrationClosed && input.kind === 'register') fail('Create an account with your name, email and password.', 409);
     if (!['register', 'login', 'add'].includes(input.kind)) fail('Choose a sign-in method.');
     const member = input.kind === 'add' ? await memberFor(request, db, workspaceId, now, true) : null;
     if (member && member.authenticated_at + RECENT_AUTH <= now) fail('Please sign in again before adding a passkey.', 401);
@@ -148,7 +151,7 @@ export async function roostApi({ request, db, now, input, path, json, rateLimit,
     const raw = cookieValue(request, 'rr_roost_challenge_' + workspaceId);
     const challenge = raw && await first(db, 'SELECT * FROM roost_challenges WHERE hash=? AND workspace_id=? AND expires>? AND claimed_by IS NULL', await hash(raw), workspaceId, now);
     if (!challenge) fail('This sign-in request expired. Please try again.', 401);
-    if (emailLoginReady(contactLoginEnv) && challenge.kind === 'register') fail('Create an account with your name, email and password.', 409);
+    if (legacyRegistrationClosed && challenge.kind === 'register') fail('Create an account with your name, email and password.', 409);
     const data = JSON.parse(challenge.data_json);
     if (data.origin !== url.origin) fail('Start sign-in on this website.', 401);
     let credential, previousCredential, additionSession, memberId = data.id;

@@ -1,3 +1,4 @@
+import { customerPasswordError } from '../public/customer-password-policy.mjs';
 import { customerSession, customerCookie, customerToken, sessionStatements, sessionHash as hash, sessionToken as token, RECENT_AUTH } from './customer-sessions.mjs';
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }); };
 const first = (db, sql, ...args) => db.prepare(sql).bind(...args).first();
@@ -7,10 +8,11 @@ export function normalizeUsername(value) {
   return value.trim().toLowerCase();
 }
 export function validatePassword(value) {
-  if (typeof value !== 'string' || [...value].length < 15 || [...value].length > 128 || /[\x00-\x1f\x7f]/.test(value)) fail('Use a password or short phrase of 15–128 characters. Spaces are welcome.');
-  if (/^(.)\1+$/.test(value) || ['passwordpassword','123456789012345','qwertyuiopasdfgh','letmeinletmeinletmein','riseandroost12345'].includes(value.toLowerCase())) fail('Choose a less predictable password or short phrase.');
-  return value; // Never trim, truncate, or silently normalize a password.
+  const error = customerPasswordError(value);
+  if (error) fail(error);
+  return value;
 }
+
 const hex = bytes => Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, '0')).join('');
 const bytes = text => Uint8Array.from(text.match(/../g), b => parseInt(b, 16));
 export function constantEqual(a, b) { let diff = a.length ^ b.length; for (let i = 0; i < Math.max(a.length, b.length); i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0); return diff === 0; }

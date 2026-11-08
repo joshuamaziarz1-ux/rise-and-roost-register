@@ -14,9 +14,11 @@ import {
 } from "./customer-sessions.mjs";
 import {
   emailLoginReady,
+  emailOwnerTestReady,
   normalizeEmail,
   sendAuthEmail,
 } from "./auth-email.mjs";
+import { authorizedTestRecipient } from './email-policy.mjs';
 const fail = (message, status = 400) => {
   throw Object.assign(new Error(message), { status });
 };
@@ -60,13 +62,16 @@ export async function emailLogin({
   env,
   send = sendAuthEmail,
 }) {
-  if (!emailLoginReady(env))
+  if (!emailLoginReady(env) && !emailOwnerTestReady(env))
     fail(
       "Email sign-in is being prepared. Please use Existing member sign-in for now.",
       503,
     );
   const a = path.split("/").at(-1),
     ip = request.headers.get("CF-Connecting-IP") || "local";
+  const ownerOnly = env.ROOST_AUTH_OWNER_TEST === 'true';
+  if (ownerOnly && !['verify','reset'].includes(a) && !authorizedTestRecipient(env, input.email))
+    fail('Email sign-in is available only for the authorized owner test.', 503);
   await limit(db, "ip:" + ip, 50, now);
   await limit(db, "global", 1000, now);
   const member = await customerSession(request, db, w, now);
@@ -174,8 +179,6 @@ export async function emailLogin({
         customerCookie(request, w, session, 30 * 86400),
       ]);
     }
-    await limit(db, "send-ip:" + ip, 10, now);
-    await limit(db, "send:" + w + ":" + email, 3, now);
     let purpose = a === "forgot" ? "reset" : a === "link" ? "link" : "register",
       id = null,
       payload = {},
@@ -296,8 +299,12 @@ export async function emailLogin({
             "Existing members should use Existing member sign-in, then verify their email in Account Settings. Check your email if registration is pending, or use Sign In or Forgot Password.",
         });
     }
-    const pendingBrowser = token();
-    if (purpose === "register") sessionHash = await hash(pendingBrowser);
+    const matching = purpose === "register" && await first(db,
+      "SELECT expires FROM roost_email_tokens WHERE workspace_id=? AND email=? AND purpose='register' AND claimed_by IS NULL ORDER BY expires DESC LIMIT 1", w, email);
+    if (a === "resend" && matching && matching.expires > now + 840000)
+      return response({ ok: true, pending: true, message: "A verification email was just sent. Open the latest email; check Spam before requesting another." });
+    await limit(db, "send-ip:" + ip, 10, now);
+    await limit(db, "send:" + w + ":" + email, 3, now);
     const secret = token(),
       digest = await hash(secret);
     await db.batch([
@@ -343,11 +350,7 @@ export async function emailLogin({
               ? "Check your email for a verification link."
               : "Your email still needs verification. Email delivery is temporarily unavailable. Please try again later.",
           },
-      purpose === "register"
-        ? [
-            `rr_roost_pending_${w}=${pendingBrowser}; HttpOnly; SameSite=Strict; Path=/; Max-Age=900${new URL(request.url).protocol === "https:" ? "; Secure" : ""}`,
-          ]
-        : [],
+      [],
     );
   }
   if (
@@ -355,36 +358,29 @@ export async function emailLogin({
     !/^[a-f0-9]{48}$/.test(input.token || "")
   )
     fail(
-      "This link has expired or was already used. Please request a new one.",
+      "This verification link is invalid. Open the complete link from your email.",
       401,
     );
   const row = await first(
     db,
-    "SELECT * FROM roost_email_tokens WHERE hash=? AND workspace_id=? AND expires>? AND claimed_by IS NULL",
+    "SELECT * FROM roost_email_tokens WHERE hash=? AND workspace_id=?",
     await hash(input.token),
     w,
-    now,
   );
   if (!row || (a === "reset") !== (row.purpose === "reset"))
     fail(
-      "This link has expired or was already used. Please request a new one.",
+      "This verification link is invalid. Open the complete link from your email.",
       401,
     );
-  if (row.purpose === "register") {
-    const browser = (request.headers.get("Cookie") || "")
-      .split(";")
-      .map((v) => v.trim())
-      .find((v) => v.startsWith("rr_roost_pending_" + w + "="))
-      ?.split("=")[1];
-    if (
-      !/^[a-f0-9]{48}$/.test(browser || "") ||
-      !constantEqual(await hash(browser), row.session_hash || "")
-    )
-      fail(
-        "Open this link in the browser where you joined, or request a new verification email here with your password.",
-        401,
-      );
-  }
+  if (ownerOnly && !authorizedTestRecipient(env, row.email)) fail('This email test is restricted to an owner.', 503);
+  // The mailbox token verifies a new account across browsers; it never creates a session.
+  // Existing-account email linking still requires the recent authenticated session below.
+  if (row.claimed_by)
+    fail(a === "verify" ? "This link was already used successfully. Your email is verified. Select Sign In." : "This password reset link was already used. Request a new reset link.", 401);
+  if (row.expires <= now)
+    fail("This verification link has expired. Request a new email using your email and password.", 401);
+  if (row.purpose === "register" && await first(db, "SELECT 1 FROM roost_email_identities WHERE workspace_id=? AND email=?", w, row.email))
+    fail("Your email is already verified. Select Sign In.", 401);
   const p = JSON.parse(row.payload_json),
     claim = token(),
     id = row.member_id || token();
@@ -555,7 +551,7 @@ export async function emailLogin({
       message:
         a === "reset"
           ? "Your password is saved. Please sign in."
-          : "Your email is verified. Please sign in.",
+          : "Email Verified Successfully. Please sign in with your email and password.",
     },
     row.purpose === "link" ? [customerCookie(request, w, "", 0)] : [],
   );

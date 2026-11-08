@@ -275,3 +275,31 @@ export function acknowledgePickup(o, input, now, actor) {
   });
   return true;
 }
+
+// Customer requests use the existing per-order conversation and owner extension workflow.
+export function requestPickup(order, input, now, actor) {
+  if (order.resolution || !['pending','preparing','ready'].includes(order.status)) bad('This order is no longer eligible for a pickup change.',409);
+  if (!/^[a-f0-9-]{32,48}$/.test(input.requestId || '')) bad('Use a unique request identifier.');
+  validDay(input.date);
+  if (!/^\d{2}:\d{2}$/.test(input.time || '') || localInstant(input.date,input.time) <= now) bad('Choose a future pickup date and time.');
+  if (typeof input.message !== 'string' || input.message.length > 2000 || /[\x00-\x08]/.test(input.message)) bad('Use a message of up to 2,000 characters.');
+  const prior=(order.messages || []).find(m=>m.requestId===input.requestId);
+  if (prior) {
+    if(prior.requestedDate!==input.date || prior.requestedTime!==input.time || prior.body!==(input.message.trim() || 'Pickup change requested.')) bad('Use a new request identifier.',409);
+    return false;
+  }
+  if ((order.messages || []).some(m=>m.pickupRequestStatus==='pending')) bad('Danielle is already reviewing your pickup change request.',409);
+  if ((order.messages || []).length >= 100) bad('Please contact Danielle through your order page.',409);
+  const at=new Date(now).toISOString();
+  order.messages ||= [];
+  order.messages.push({id:input.requestId,requestId:input.requestId,sender:'customer',name:order.customer?.name || 'Guest customer',body:input.message.trim() || 'Pickup change requested.',topic:'pickup',requestedDate:input.date,requestedTime:input.time,originalPickup:clone(order.pickup),pickupRequestStatus:'pending',at});
+  order.contact={...order.contact,unresolved:true,extensionRequested:true,lastMessageAt:at,alertedAt:order.contact?.alertedAt || at};
+  order.audit ||= []; order.audit.push({action:'Customer requested pickup change; original schedule retained',at,actor});
+  return true;
+}
+export function decidePickupRequest(order, input, now, actor, status) {
+  const m=order.messages?.find(m=>m.id===input.requestId && m.pickupRequestStatus==='pending');
+  if (!m) bad('This pickup request has changed. Refresh the order.',409);
+  m.pickupRequestStatus=status; m.decidedAt=new Date(now).toISOString(); m.decidedBy=actor;
+  return m;
+}

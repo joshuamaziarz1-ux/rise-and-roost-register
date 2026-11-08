@@ -25,7 +25,7 @@ export function customerOrder(order, workspaceId, settings = {}, now = Date.now(
   result.emailOptIn = !!order.customer?.emailOptIn;
   if (order.extension) result.extension = { date: order.extension.date, time: order.extension.time, at: order.extension.at, deadline: order.extension.deadline };
   if (order.resolution) result.resolution = { kind: order.resolution.kind, at: order.resolution.at };
-  result.messages = (order.messages || []).map(({ id, sender, name, body, topic, at, requestedDate, requestedTime }) => ({ id, sender, name, body, topic, at, requestedDate, requestedTime }));
+  result.messages = (order.messages || []).map(({ id, sender, name, body, topic, at, requestedDate, requestedTime, originalPickup, pickupRequestStatus, decidedAt }) => ({ id, sender, name, body, topic, at, requestedDate, requestedTime, originalPickup, pickupRequestStatus, decidedAt }));
   if (order.pickupChange) {
     const { eventId, version, originalDate, replacement, message, at, acknowledgement } = order.pickupChange;
     result.pickupChange = { eventId, version, originalDate, replacement, message, at, acknowledgement };

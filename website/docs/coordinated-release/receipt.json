@@ -1,0 +1,130 @@
+{
+  "releaseScope": "Pickup requests and guarded Studio marketing infrastructure; email activation and live marketing remain blocked",
+  "branch": "feature/roost-coordinated-release",
+  "applicationCommit": "3ab008b676ecb8345179ee59025554cb068a54a4",
+  "worker": "rise-roost-website-production",
+  "workerVersionNumber": 28,
+  "workerVersionId": "226d4ce9-4fdf-41bc-bd34-af6b131bbbc7",
+  "deploymentId": "1c7c79c0-cc04-4d19-8982-659309e047c5",
+  "trafficPercent": 100,
+  "sourceVerification": {
+    "protectedStudioAssetStatus": 302,
+    "protectedStudioAssetBytesNotRetrieved": true,
+    "executableMatches": true,
+    "workerSha256": "ff5f9ab8f99d73ef38d4f73fd5caf481426aeeeea1fbc24638d3932154dba9b9",
+    "publicAssetsMatched": [
+      "index.html",
+      "app.mjs",
+      "customer.mjs",
+      "management.mjs",
+      "help-content.mjs",
+      "tracking.mjs",
+      "pickup-request.mjs",
+      "subscribe.mjs",
+      "assets/logo.webp"
+    ]
+  },
+  "databaseId": "889a4b96-cabd-43d1-ad45-79f65b0052b0",
+  "migrationsApplied": [],
+  "existing0012Verified": true,
+  "applicationTableCount": 18,
+  "memberCount": 0,
+  "allOriginalRecordsMatch": true,
+  "schemaMatches": true,
+  "accessMatches": true,
+  "originalBindingsPreserved": true,
+  "encryptedSecretBindingsPreserved": [
+    "RESEND_API_KEY",
+    "ROOST_PASSWORD_PEPPER"
+  ],
+  "featureFlags": {
+    "REAL_CHECKOUT_ENABLED": false,
+    "ORDER_EMAIL_ENABLED": false,
+    "MARKETING_CAMPAIGNS_ENABLED": false,
+    "MARKETING_SIGNUP_ENABLED": false,
+    "MARKETING_CONFIRMATION_EMAIL_ENABLED": false,
+    "PICKUP_REQUESTS_ENABLED": true,
+    "emailLoginActivated": false
+  },
+  "validation": {
+    "backendPassed": 351,
+    "mainBrowserFirstRun": {
+      "passed": 284,
+      "failed": 1,
+      "total": 285,
+      "failedCasePassedInIsolation": true
+    },
+    "additionalCoordinatedBrowserCasesPassed": 10,
+    "commerceBrowserPassed": 8,
+    "productionIsolationBrowserPassed": 10,
+    "distinctAutomatedCasesWithPassingResults": 664,
+    "nativeWorkerdD1SmokesPassed": 2,
+    "nativeResend": "mocked; zero remote requests",
+    "liveAccountEmailTests": "not performed",
+    "physicalIPhoneSafariTested": false,
+    "publicPostDeployment": {
+      "results": [
+        {
+          "name": "desktop-chromium",
+          "pages": 4,
+          "readOnly": true,
+          "noOverflow": true,
+          "noPageErrors": true,
+          "physicalDevice": false
+        },
+        {
+          "name": "desktop-webkit",
+          "pages": 4,
+          "readOnly": true,
+          "noOverflow": true,
+          "noPageErrors": true,
+          "physicalDevice": false
+        },
+        {
+          "name": "iphone-webkit",
+          "pages": 4,
+          "readOnly": true,
+          "noOverflow": true,
+          "noPageErrors": true,
+          "physicalDevice": false
+        },
+        {
+          "name": "android-chromium",
+          "pages": 4,
+          "readOnly": true,
+          "noOverflow": true,
+          "noPageErrors": true,
+          "physicalDevice": false
+        },
+        {
+          "name": "tablet-chromium",
+          "pages": 4,
+          "readOnly": true,
+          "noOverflow": true,
+          "noPageErrors": true,
+          "physicalDevice": false
+        }
+      ],
+      "checkoutEnabled": false,
+      "marketingSignupEnabled": false,
+      "studioStatus": 302
+    }
+  },
+  "backup": {
+    "newEncryptedBackupVerifiedByRestore": true,
+    "sha256": "2a63f725e2b486a80ac16b71e0c30f0f3c0ce7e5ef3aae2cf4700c4a71ef896b",
+    "recoveryKeyRetainedSeparately": true,
+    "previousTwoArchivesNotPresentInResumedWorkspace": true,
+    "previousBackupReferencesPreserved": true
+  },
+  "remaining": [
+    "Authenticated Resend plan/sender/usage and API-key-scope checks",
+    "Owner-only live account verification/reset/sign-in/session/sign-out tests before auth activation",
+    "Implement and validate supported Resend Marketing contacts/broadcast delivery and owner tests",
+    "Configure accurate physical mailing address",
+    "Verify live subscription confirmation before public signup activation",
+    "Danielle separate approval before any promotional campaign"
+  ],
+  "unauthorizedCustomerRecordChanges": 0,
+  "repeatedTestAccountDeletions": 0
+}

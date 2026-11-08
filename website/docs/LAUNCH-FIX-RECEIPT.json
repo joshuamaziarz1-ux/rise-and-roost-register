@@ -1,0 +1,62 @@
+{
+  "status": "temporary_membership_live_email_activation_blocked",
+  "sourceBranch": "feature/roost-coordinated-release",
+  "baseCommit": "9facc2f0fdb3c6a9208f55cb5f0e7d5d121e1d3c",
+  "worker": "rise-roost-website-production",
+  "workerNumber": 30,
+  "versionId": "5e0f6182-3cf5-4468-9790-7ef37eec2401",
+  "deploymentId": "582cd029-370f-41fa-b90c-237aa693e521",
+  "trafficPercent": 100,
+  "allBindingMetadataUnchanged": true,
+  "legacyRegistrationServerBlocked": true,
+  "oldPasskeyChallengesCannotCompleteRegistration": true,
+  "emailLoginEnabled": false,
+  "ownerTestEnabled": false,
+  "liveEmailsSent": 0,
+  "accountsDeleted": 0,
+  "migrationsApplied": 0,
+  "productionOrdersSubmitted": 0,
+  "productionCommentsSubmitted": 0,
+  "productionBusinessDataWritten": false,
+  "checkoutEnabled": false,
+  "savedOrderingPaused": false,
+  "effectiveOrderSubmission": "disabled; production POST /api/orders returned HTTP 409",
+  "orderNotificationsEnabled": false,
+  "marketingEnabled": false,
+  "checks": {
+    "desktopChromiumLive": [
+      "home",
+      "shop",
+      "product and price",
+      "local basket add",
+      "cart",
+      "comments form",
+      "membership holding message",
+      "no overflow or page errors"
+    ],
+    "mobileChromiumLive": [
+      "home",
+      "shop",
+      "product and price",
+      "local basket add",
+      "cart",
+      "comments form",
+      "membership holding message",
+      "no overflow or page errors"
+    ],
+    "localProductionBrowser": [
+      "desktop membership message without registration form",
+      "mobile membership message without registration form"
+    ],
+    "targetedNodeTestFilesPassed": 7,
+    "existingAccountRecovery": "isolated synthetic production lifecycle passed",
+    "pickupAndCommentSubmission": "isolated tests passed; no live existing order or comment modified",
+    "studio": "anonymous request redirects to existing Access authentication"
+  },
+  "externalBlockers": [
+    "authenticated Resend sender/domain, current transactional usage and recipient restriction evidence",
+    "actual configured-owner verification and reset email receipt, redemption, login, session and sign-out tests"
+  ],
+  "ownerProcedure": "LAUNCH-OWNER-AUTH-CHECK.md",
+  "fullyReady": false
+}

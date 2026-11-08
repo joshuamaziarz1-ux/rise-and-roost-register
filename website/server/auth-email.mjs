@@ -9,6 +9,8 @@ export const emailLoginReady = (env) =>
   env.ROOST_PASSWORD_LOGIN_ENABLED === "true" &&
   typeof env.ROOST_PASSWORD_PEPPER === "string" &&
   env.ROOST_PASSWORD_PEPPER.length >= 32;
+export const emailOwnerTestReady = env => env.ROOST_AUTH_OWNER_TEST === 'true' &&
+  env.ROOST_PASSWORD_LOGIN_ENABLED === 'true' && typeof env.ROOST_PASSWORD_PEPPER === 'string' && env.ROOST_PASSWORD_PEPPER.length >= 32;
 export function normalizeEmail(value) {
   const email = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (!emailAddress(email))
@@ -34,7 +36,7 @@ export function authEmail(kind, email, url) {
   const title = titles[kind];
   const message =
     kind === "verify"
-      ? "Welcome to The Roost. Confirm your email to finish joining our little community."
+      ? "Welcome to The Roost. Confirm your email to finish joining The Roost."
       : kind === "reset"
         ? "Choose a new password for your Roost account."
         : kind === "password"
@@ -49,7 +51,7 @@ export function authEmail(kind, email, url) {
     to: [email],
     subject: title + " · Rise & Roost",
     text: `${title}\n\n${message}\n\n${url ? url + "\nThis link expires in 15 minutes and works once. If you did not request it, ignore this email." : ""}\n\nRise & Roost`,
-    html: `<html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0;background:#faf6ed;color:#293d2c;font:17px/1.6 Georgia,serif"><main style="max-width:560px;margin:auto;padding:32px 20px"><p>RISE & ROOST</p><h1>${title}</h1><p>${message}</p>${action}<p>From our little store to your table.</p></main></body></html>`,
+    html: `<html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0;background:#faf6ed;color:#293d2c;font:17px/1.6 Georgia,serif"><main style="max-width:560px;margin:auto;padding:32px 20px"><img src="https://rise-and-roost.com/assets/logo.webp" width="140" alt="Rise &amp; Roost"><h1>${title}</h1><p>${message}</p>${action}</main></body></html>`,
   };
 }
 export async function sendAuthEmail(

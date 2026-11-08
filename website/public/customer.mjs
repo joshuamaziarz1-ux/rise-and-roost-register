@@ -1,3 +1,5 @@
+import { customerPasswordError, customerPasswordHint } from './customer-password-policy.mjs?v=password8-v1';
+import { pickupRequest } from './pickup-request.mjs';
 import { pickupNotice } from './pickup-notice.mjs';
 import { h, button, field, notify, guard, request } from './dom.mjs';
 import { money, pickupLabel, localInstant } from './model.mjs';
@@ -32,14 +34,14 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
   const joinProfile = { name: '', preferredName: '', email: '', phone: '' };
   let profileDraft;
   let entryView = 'welcome', helpOpen = false;
-  let emailLoginEnabled = false, emailNotice = '';
+  let emailLoginEnabled = false, registrationPaused = false, emailNotice = '';
   const emailLink = /^#auth=(verify|reset)\.([a-f0-9]{48})$/.exec(location.hash);
   let emailAction = emailLink?.[1], emailToken = emailLink?.[2];
   window.addEventListener('hashchange', () => {
     const incoming = /^#auth=(verify|reset)\.([a-f0-9]{48})$/.exec(location.hash);
     if (!incoming) return;
     emailAction = incoming[1]; emailToken = incoming[2]; emailNotice = ''; entryView = 'welcome';
-    history.replaceState(null, '', location.pathname + location.search); render();
+    history.replaceState(null, '', location.pathname + location.search); void action(completeEmailVerification)(); render();
   });
   if (emailLink) history.replaceState(null, '', location.pathname + location.search);
   let passwordLoginEnabled = false;
@@ -71,6 +73,15 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
   channel?.addEventListener('message', () => { clearPrivate(); loaded = false; render(); void refresh(); });
   window.addEventListener('pagehide', () => { clearPrivate(); loaded = false; render(); });
   window.addEventListener('pageshow', event => { if (event.persisted) { clearPrivate(); loaded = false; render(); void refresh(); } });
+  async function completeEmailVerification() {
+    if (emailAction !== 'verify' || !emailToken) return;
+    const verificationToken = emailToken;
+    emailAction = null; emailToken = null; entryView = 'email-done';
+    try {
+      const verified = await api('/api/roost/email/verify', { token: verificationToken });
+      emailNotice = verified.message;
+    } catch (e) { error = e.message; }
+  }
   async function refresh(rerender = true, duringAction = false) {
     if (readOnly) { loaded = true; return; }
     if (busy && !duringAction) return false;
@@ -81,6 +92,8 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
         const result = await api('/api/roost/me');
         if (started !== generation) return false;
         emailLoginEnabled = result.emailLoginEnabled === true;
+        await completeEmailVerification();
+        registrationPaused = result.registrationPaused === true;
         passwordLoginEnabled = result.passwordLoginEnabled === true;
         simpleLoginEnabled = result.simpleLoginEnabled === true;
         const changed = member?.id !== result.member?.id;
@@ -145,7 +158,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
           h('div', { class: 'panel-heading' }, h('h2', {}, 'My Orders'), button('Refresh orders', action(() => refresh(false, true)), { class: 'text-button', disabled: busy })),
           orders.length ? orders.map(order => h('article', { class: 'member-order' },
             h('div', {}, h('h3', {}, order.orderNumber), h('p', {}, order.pickupChange && !order.pickupChange.replacement ? 'Awaiting makeup date' : pickupLabel(order.pickup))),
-            pickupNotice(order, payload => action(async () => { await api('/api/roost/pickup-response', { ...payload, orderId: order.id }); await refresh(false, true); })(), busy),
+            pickupRequest({...order,pickupCustomerName:member.profile.name}, async payload => { await api('/api/roost/pickup-request', {orderId:order.id,...payload}); await refresh(false,true); return true; }, busy), pickupNotice(order, payload => action(async () => { await api('/api/roost/pickup-response', { ...payload, orderId: order.id }); await refresh(false, true); })(), busy),
             h('p', {}, order.lines.map(l => `${l.qty} × ${l.name}`).join(', ')),
             order.selectedPaymentMethod === 'cash_pickup' ? h('p', {}, 'Cash at Pickup · Cash Due: ' + money(order.paymentVerifiedAt || order.status === 'canceled' || order.resolution ? 0 : order.total)) : null,
             h('p', { class: 'order-state' }, paymentLabels[order.paymentStatus || 'not_collected'], ' · ', fulfillmentLabels[order.status || 'pending']),
@@ -174,6 +187,11 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     return result;
   }
   function entry() {
+    if (registrationPaused && !['legacy', 'signin', 'password-recover'].includes(entryView)) return h('main', { class: 'section-inner roost-page roost-entry' },
+      h('div', { class: 'page-intro' }, h('h1', {}, 'The Roost Membership'), h('p', {}, 'We’re putting the finishing touches on member accounts. Check back soon!')),
+      h('section', { class: 'roost-welcome' }, link('/shop', 'Continue Shopping', 'primary-link'),
+        h('details', {}, h('summary', {}, 'Existing member access'), h('p', {}, 'Already a member? Sign in or recover your existing account.'),
+          button('Existing member sign-in', () => showEntry('legacy'), { class: 'text-button' }))));
     if (emailLoginEnabled && !['legacy', 'signin', 'password-recover'].includes(entryView)) return emailEntry();
     if (passwordLoginEnabled && entryView !== 'signin') return passwordEntry();
     if (simpleLoginEnabled && entryView !== 'signin') return simpleEntry();
@@ -216,8 +234,13 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     if (busy) panel.append(h('p', { role: 'status', class: 'small-note' }, emailLoginEnabled ? 'Please wait…' : 'Please finish the sign-in prompt.'));
     return panel;
   }
+  function checkNewPassword(form) {
+    const input = form.elements.password;
+    input.setCustomValidity(customerPasswordError(input.value));
+    return form.reportValidity();
+  }
   function emailPassword(label, name = 'password', confirmation = false) {
-    const input = h('input', { name, type: 'password', required: true, autocomplete: confirmation ? 'new-password' : 'current-password', maxlength: 128 });
+    const input = h('input', { name, type: 'password', required: true, autocomplete: confirmation ? 'new-password' : 'current-password', ...(confirmation ? { minlength: 8, oninput: e => e.currentTarget.setCustomValidity(customerPasswordError(e.currentTarget.value)) } : {}), maxlength: 256 });
     return h('div', {}, h('label', { class: 'field' }, label, input), button('Show password', e => {
       input.type = input.type === 'password' ? 'text' : 'password';
       e.currentTarget.textContent = input.type === 'password' ? 'Show password' : 'Hide password';
@@ -226,7 +249,9 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
   function emailForm(kind) {
     const signup = kind === 'register', reset = kind === 'reset' || kind === 'recover', linkEmail = kind === 'link';
     const form = h('form', { class: 'contact-login password-login', onsubmit: e => {
-      e.preventDefault(); const values = Object.fromEntries(new FormData(e.currentTarget));
+      e.preventDefault();
+      if ((signup || reset || linkEmail && !member.username) && !checkNewPassword(e.currentTarget)) return;
+      const values = Object.fromEntries(new FormData(e.currentTarget));
       void action(async () => {
         const r = await api('/api/roost/email/' + kind, { ...values, ...(emailToken ? { token: emailToken } : {}) });
         if (kind === 'login' || kind === 'recover') { await authenticated(r.recoveryKey); return; }
@@ -241,21 +266,21 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     kind === 'recover' ? h('label', { class: 'field' }, 'Saved Recovery Code', h('input', { name: 'recoveryKey', type: 'password', autocomplete: 'off', required: true, maxlength: 48 })) : null,
     reset ? emailPassword('Confirm New Password', 'confirmPassword', true) : null,
     linkEmail ? emailPassword(member.username ? 'Current Password' : 'Choose a Password', member.username ? 'currentPassword' : 'password', !member.username) : null,
-    signup || reset || linkEmail && !member.username ? h('p', { class: 'small-note' }, 'Use 15–128 characters. A short phrase is easy to remember.') : null,
+    signup || reset || linkEmail && !member.username ? h('p', { class: 'small-note' }, customerPasswordHint) : null,
     h('button', { type: 'submit', class: 'primary-link', disabled: busy || readOnly }, ({ register: 'Create an Account', login: 'Sign In', forgot: 'Send Reset Link', resend: 'Resend Verification Email', reset: 'Save New Password', recover: 'Recover My Account', verify: 'Verify My Email', link: 'Send Verification Link' })[kind]));
     return form;
   }
   function emailEntry() {
     const kind = entryView === 'email-done' ? 'done' : emailAction && !emailNotice ? emailAction : entryView === 'email-recover' ? 'recover' : entryView === 'email-join' ? 'register' : entryView === 'email-forgot' ? 'forgot' : entryView === 'email-resend' ? 'resend' : 'login';
     return h('main', { class: 'section-inner roost-page roost-entry roost-password-entry' },
-      h('div', { class: 'page-intro' }, h('h1', {}, kind === 'register' ? 'Join The Roost' : kind === 'forgot' || kind === 'reset' ? 'Reset Your Password' : 'Welcome to The Roost')),
+      h('div', { class: 'page-intro' }, h('h1', {}, kind === 'done' && emailNotice?.startsWith('Email Verified Successfully') ? 'Email Verified Successfully' : kind === 'register' ? 'Join The Roost' : kind === 'forgot' || kind === 'reset' ? 'Reset Your Password' : 'Welcome to The Roost')),
       error ? h('p', { role: 'alert', class: 'form-error' }, error) : null,
       emailNotice ? h('p', { role: 'status' }, emailNotice) : null,
       kind !== 'done' ? emailForm(kind) : null,
       kind !== 'login' ? button('Sign In', () => { emailNotice = ''; showEntry('email-done' === entryView ? 'email-signin' : 'welcome'); }, { class: 'text-button', disabled: busy }) : null,
       kind !== 'register' ? button('Create an Account', () => { emailNotice = ''; showEntry('email-join'); }, { class: 'text-button', disabled: busy }) : null,
       button('Forgot Password?', () => { emailNotice = ''; showEntry('email-forgot'); }, { class: 'text-button', disabled: busy }),
-      button('Resend Verification Email', () => { emailNotice = ''; showEntry('email-resend'); }, { class: 'text-button', disabled: busy }),
+      kind !== 'done' ? button('Resend Verification Email', () => { emailNotice = ''; showEntry('email-resend'); }, { class: 'text-button', disabled: busy }) : null,
       h('details', {}, h('summary', {}, 'Existing member sign-in'), button('Use email and saved recovery code', () => showEntry('email-recover'), { class: 'text-button', disabled: busy }), h('p', {}, 'Already joined with a username or another sign-in method? Use it once more, then verify an email in Account Settings. Your orders and favorites stay with you.'), button('Use existing sign-in', () => showEntry('legacy'), { class: 'text-button', disabled: busy })),
       link('/shop', 'Continue as a Guest', 'entry-guest'));
   }
@@ -274,13 +299,16 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
       !change ? field('Username', passwordDraft.username, v => passwordDraft.username = v, { name: 'username', autocomplete: 'username', autocapitalize: 'none', spellcheck: false, required: true, minlength: 3, maxlength: 30 }) : null,
       recover ? field('Recovery code', passwordDraft.recoveryKey, v => passwordDraft.recoveryKey = v, { name: 'recoveryKey', type: 'password', autocomplete: 'off', required: true, maxlength: 48 }) : null,
       change ? field('Current password', passwordDraft.currentPassword, v => passwordDraft.currentPassword = v, { name: 'currentPassword', type: 'password', autocomplete: 'current-password', required: true, maxlength: 128 }) : null,
-      field(signup || setup || change || recover ? 'New password' : 'Password', passwordDraft.password, v => passwordDraft.password = v, { name: 'password', type: 'password', autocomplete: signup || setup || change || recover ? 'new-password' : 'current-password', required: true, minlength: signup || setup || change || recover ? 15 : 1, maxlength: 128 }),
-      signup || setup || change || recover ? h('p', { class: 'small-note' }, 'Use at least 15 characters. A short phrase is easy to remember. Your browser can save it for you.') : null
+      field(signup || setup || change || recover ? 'New password' : 'Password', passwordDraft.password, v => passwordDraft.password = v, { name: 'password', type: 'password', autocomplete: signup || setup || change || recover ? 'new-password' : 'current-password', required: true, minlength: signup || setup || change || recover ? 8 : 1, maxlength: 256 }),
+      signup || setup || change || recover ? h('p', { class: 'small-note' }, customerPasswordHint) : null
     ];
   }
   function passwordForm(kind) {
-    return h('form', { class: 'contact-login password-login', onsubmit: e => {
+    return h('form', { class: 'contact-login password-login', oninput: e => {
+      if (kind !== 'login' && e.target.name === 'password') e.target.setCustomValidity(customerPasswordError(e.target.value));
+    }, onsubmit: e => {
       e.preventDefault();
+      if (kind !== 'login' && !checkNewPassword(e.currentTarget)) return;
       // Read the native fields so password-manager autofill is respected.
       const values = Object.fromEntries(new FormData(e.currentTarget));
       passwordDraft.username = values.username || passwordDraft.username;
@@ -302,7 +330,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
       error ? h('p', { role: 'alert', class: 'form-error' }, error) : null,
       passwordForm(signup ? 'register' : recover ? 'recover' : 'login'),
       signup ? h('p', { class: 'small-note' }, 'Already a member? Sign in with your existing passkey or recovery key first, then add a username in Account Settings. Your orders and favorites stay together.') : null,
-      !signup && !recover ? [button('Join The Roost', () => showEntry('password-join'), { class: 'secondary-button', disabled: busy }), button('Forgot password?', () => showEntry('password-recover'), { class: 'text-button', disabled: busy })] : null,
+      !signup && !recover ? [!registrationPaused ? button('Join The Roost', () => showEntry('password-join'), { class: 'secondary-button', disabled: busy }) : null, button('Forgot password?', () => showEntry('password-recover'), { class: 'text-button', disabled: busy })] : null,
       h('details', {}, h('summary', {}, 'Other sign-in options'), button('Sign in with a Passkey', () => showEntry('signin'), { class: 'text-button', disabled: busy }), h('p', { class: 'small-note' }, 'Existing passkey members can also use their saved recovery key from this option.')),
       link('/shop', 'Continue as a Guest', 'entry-guest'));
   }

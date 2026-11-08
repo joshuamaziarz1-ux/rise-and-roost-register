@@ -1,6 +1,8 @@
+import { marketingSnapshot, manageMarketing } from './marketing.mjs';
+import { queueMarketing, drainMarketing, syncOneMarketingContact } from './marketing-delivery.mjs';
 import { emailSnapshot, manageEmail } from './email-management.mjs';
 import { bookingSummary } from './pickup-booking.mjs';
-import { managePickup, changePreview } from './pickup-changes.mjs';
+import { managePickup, changePreview, decidePickupRequest } from './pickup-changes.mjs';
 import { CASH_METHOD, outstandingCash, requireCash } from './cash-pickup.mjs';
 import { creditProgram, creditBalance, manageCredits, finalizeCredit, cancelCredit, reopenCredit } from './return-credits.mjs';
 import { defaultCalendar, calendarConfig, paymentDestination, providers, pickupDeadline, orderAttention, paymentReadiness } from '../public/commerce.mjs';
@@ -117,7 +119,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
           benefits: (ledger.management?.benefits || []).filter(b => b.memberId === m.id) })), comments,
         audit: (m.audit || []).slice(0, 500), benefits: m.benefits || [],
         ownerAccounts: actor.authentication === 'cloudflare_access' && actor.role === 'owner' ? { provider: 'Cloudflare Access', configured: true } : { provider: 'Descope', configured: false, activationRequiresApproval: true },
-        email: emailSnapshot(ledger, emailEnv, actor, now),
+        email: emailSnapshot(ledger, emailEnv, actor, now), marketing: marketingSnapshot(ledger,emailEnv),
         notifications: { externalEnabled: false, preferences: m.notificationPreferences || { orders: true, payments: true, stock: true, pickups: true, comments: true, errors: true } },
         limits: { orderCount: ledger.orders.length, orderLimit: 300, memberDirectoryLimit: 500 },
         attention: {
@@ -169,6 +171,11 @@ export async function managementApi({ request, db, now, row, actor, input, path,
   }
   if (m.operations.length >= 2000) bad('This preview has reached its audit-operation limit. Export a backup and ask for a storage expansion; saved data has not been removed.', 409);
   let changedDocument = false, result = {}, description = '', commentChange;
+  if (path === '/api/manage/marketing-process') {
+    if (actor.role !== 'owner') bad('Only an owner can synchronize Marketing.', 403);
+    await drainMarketing(db, emailEnv, now);
+    return json({ ...await snapshot(await current()), result: { processed: true } });
+  }
   const expectedDocument = () => { if (input.revision !== row.revision) bad('The website changed on another device. Your edits are unsaved; reload the current fields before saving.', 409); };
   const order = () => {
     const o = ledger.orders.find(o => o.id === input.id);
@@ -283,6 +290,7 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date || '') || !/^\d{2}:\d{2}$/.test(input.time || '')) bad('Choose the approved pickup date and time.');
     let instant; try { instant = localInstant(input.date, input.time); } catch { bad('Choose a valid pickup date and time.'); }
     if (instant <= now) bad('Choose a future pickup time.');
+    if(input.requestId) { const pending=o.messages?.find(m=>m.id===input.requestId && m.pickupRequestStatus==='pending'); if(!pending || pending.requestedDate!==input.date || pending.requestedTime!==input.time) bad('Refresh and review the requested schedule.',409); decidePickupRequest(o,input,now,actor,'approved'); }
     const previous = { pickup: clone(o.pickup), deadline: o.pickupDeadline };
     o.originalPickup ||= clone(o.pickup);
     o.pickup = { ...o.pickup, date: input.date, start: input.time, end: input.time };
@@ -293,6 +301,12 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     o.messages ||= []; if (o.messages.length >= 100) bad('The conversation has reached its safe message limit.', 409);
     o.messages.push({ id: opaque(), sender: 'owner', name: 'Danielle', body: 'Your new pickup arrangement is approved. See your updated pickup details below.', at, actor });
     o.version = (o.version || 1) + 1; description = 'Extension Approved — new pickup arrangement confirmed'; o.audit.push({ action: description, at, author: actor.name, previous, approved: clone(o.extension) }); result = { orderId: o.id };
+  } else if (path === '/api/manage/decline-pickup-request') {
+    const o=order(); if(input.confirmed!==true) bad('Confirm declining this request.');
+    decidePickupRequest(o,input,now,actor,'declined');
+    o.contact={...o.contact,unresolved:false,extensionRequested:false,resolvedAt:at,resolvedBy:actor};
+    o.messages.push({id:opaque(),sender:'owner',name:'Danielle',body:'Your pickup change request was declined. Your original pickup schedule remains in place.',at,actor});
+    o.version=(o.version || 1)+1; description='Pickup change request declined; original schedule retained'; o.audit.push({action:description,at,actor}); result={orderId:o.id};
   } else if (path === '/api/manage/resolve-contact') {
     const o = order(), reason = text(input.reason, 500, 'the resolution', true);
     if (input.confirmed !== true) bad('Confirm this conversation is resolved.');
@@ -549,6 +563,10 @@ export async function managementApi({ request, db, now, row, actor, input, path,
     const keys = ['orders', 'payments', 'stock', 'pickups', 'comments', 'errors'];
     if (!input.preferences || keys.some(k => typeof input.preferences[k] !== 'boolean')) bad('Check notification preferences.');
     m.notificationPreferences = Object.fromEntries(keys.map(k => [k, input.preferences[k]])); description = 'Studio notification preferences saved';
+  } else if (path.startsWith('/api/manage/marketing-')) {
+    if (input.ledgerVersion !== row.ledger_version) bad('Marketing changed. Refresh and review before saving.', 409);
+    const args = {ledger,input,path,published,now,actor,id:opaque,env:emailEnv};
+    ({description,result} = ['/api/manage/marketing-sync','/api/manage/marketing-review','/api/manage/marketing-send','/api/manage/marketing-test','/api/manage/marketing-results'].includes(path) ? queueMarketing(args) : manageMarketing(args));
   } else if (path === '/api/manage/benefit') {
     if (ledger.returnCredits) bad('Use The Roost → Return Credits for monetary transactions. Legacy records are retained.', 409);
     if (!await first('SELECT id FROM roost_members WHERE id=? AND workspace_id=?', input.memberId, row.id)) bad('Choose a member of this workspace.');
@@ -579,5 +597,6 @@ export async function managementApi({ request, db, now, row, actor, input, path,
       .bind(commentChange.status, at, commentChange.id, row.id, commentChange.version, row.id, commentChange.claim),
   ]))[0] : await statement.run();
   if (written.meta.changes !== 1) bad('Another device or order saved first. Your fields are unsaved; review the current data and retry.', 409);
+  if (path === '/api/manage/marketing-suppress') await syncOneMarketingContact(db, { ...emailEnv, PUBLIC_WORKSPACE_ID: row.id }, input.contactId, now);
   return json({ ...await snapshot(await current()), result });
 }

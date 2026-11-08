@@ -155,7 +155,7 @@ export async function start(root) {
     if (result.studioManagementEnabled) {
       const credentials = accessKeyWorkspace === result.id ? accessKey : null;
       state = null; doc = null; accessKey = null;
-      import('./management.mjs').then(m => m.start(root, result, credentials)).catch(e => notify(e.message, true));
+      import('./management.mjs?v=coordinated-20261107').then(m => m.start(root, result, credentials)).catch(e => notify(e.message, true));
       return;
     }
     render();
@@ -1566,7 +1566,7 @@ export async function start(root) {
       history.replaceState(history.state, '', '/studio' + location.hash);
       try {
         const initial = await apiRequest('/studio/api/studio');
-        await (await import('./management.mjs')).start(root, initial);
+        await (await import('./management.mjs?v=coordinated-20261107')).start(root, initial);
       } catch {
         root.replaceChildren(h('main', { class: 'studio-login' }, h('h1', {}, 'Website Studio'), h('p', {}, 'Reopen Studio to check your owner sign-in and connection. Saved business data has not changed.'), h('a', { href: '/studio', class: 'primary-link' }, 'Reopen Studio')));
       }

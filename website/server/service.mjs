@@ -1,6 +1,7 @@
+import { marketingPublic } from './marketing.mjs';
 import { customerEmailAllowed } from './email-policy.mjs';
 import { bookingAllowed } from './pickup-booking.mjs';
-import { acknowledgePickup } from './pickup-changes.mjs';
+import { acknowledgePickup, requestPickup } from './pickup-changes.mjs';
 import { CASH_METHOD, requireCash } from './cash-pickup.mjs';
 import { POLICY_VERSION, pickupDeadline, defaultCalendar, providers, configuredPayments, paymentReadiness } from '../public/commerce.mjs';
 import * as css from "css-tree";
@@ -493,6 +494,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       if (row.count > max)
         fail("Too many attempts. Please try again in an hour.", 429);
     };
+    if (/^\/api\/marketing\/(signup|confirm|unsubscribe)$/.test(path) && request.method==='POST') return await marketingPublic({db,env:contactLoginEnv,input,path,workspace:publicWorkspaceId,now,hash,token,rateLimit,json});
     const requestedOwnerId = request.headers.get("X-RR-Workspace") || "";
     if (productionContext && [requestedOwnerId, input.workspaceId, url.searchParams.get('workspace')].some(id => id && id !== publicWorkspaceId)) fail('Open this website’s own order or Studio page.', 403);
     if (requestedOwnerId && !/^[a-f0-9]{48}$/.test(requestedOwnerId)) fail("Use a valid workspace identifier.");
@@ -697,6 +699,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
       );
       if (!row) fail("This published workspace was not found. Contact the beta operator; saved content has not been reset.", id === publicWorkspaceId ? 503 : 404);
       return json({
+        marketingSignupEnabled: contactLoginEnv.MARKETING_SIGNUP_ENABLED==='true',
         productionMode: !!productionContext,
         checkoutEnabled: !productionContext || productionContext.checkoutEnabled && !JSON.parse(row.published_json).orderingPaused,
         customerExperienceEnabled,
@@ -724,6 +727,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         fail("This preview expired. Create a new preview in Studio.", 404);
       if (productionContext && row.workspace_id !== publicWorkspaceId) fail('Preview not found.', 404);
       return json({
+        marketingSignupEnabled: contactLoginEnv.MARKETING_SIGNUP_ENABLED==='true',
         productionMode: !!productionContext,
         document: JSON.parse(row.document_json),
         id: row.workspace_id,
@@ -973,7 +977,7 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
         409,
       );
     }
-    const tracking = /^\/api\/order-tracking\/([a-f0-9]{48})\/([a-f0-9]{48})(\/(?:report|message|payment-method|pickup-response))?$/.exec(path);
+    const tracking = /^\/api\/order-tracking\/([a-f0-9]{48})\/([a-f0-9]{48})(\/(?:report|message|payment-method|pickup-response|pickup-request))?$/.exec(path);
     if (tracking && ((request.method === "GET" && !tracking[3]) || (request.method === "POST" && tracking[3]))) {
       const raw = /^Bearer ([a-f0-9]{48})$/.exec(request.headers.get("Authorization") || "")?.[1];
       if (!raw) fail("Use the complete private tracking link from your order confirmation.", 401);
@@ -986,7 +990,11 @@ export async function api(request, db, now = Date.now(), { publicWorkspaceId = "
           fail("This private tracking link is invalid. Check the complete link or contact the farm.", 404);
         }
         if (request.method === "GET") return json(customerOrder(order, row.id, ledger.management?.settings, now));
-        if (tracking[3] === '/pickup-response') {
+        if (tracking[3] === '/pickup-request') {
+          if (contactLoginEnv.PICKUP_REQUESTS_ENABLED !== 'true') fail('Pickup change requests are not available yet.',409);
+          if (attempt === 0) { await rateLimit('pickup-request', 12); await rateLimit('pickup-request:'+order.id, 6); }
+          if (!requestPickup(order,input,now,{kind:'private-tracking'})) return json(customerOrder(order,row.id,ledger.management?.settings,now));
+        } else if (tracking[3] === '/pickup-response') {
           if (!acknowledgePickup(order, input, now, { kind: 'private-tracking' })) return json(customerOrder(order, row.id, ledger.management?.settings, now));
         } else if (tracking[3] === '/report') {
           if (commerceEnabled || studioManagementEnabled) fail('Payment reporting is no longer needed. Danielle verifies payments independently.', 410);
