@@ -1,3 +1,4 @@
+import { openAccountSettings, logOut } from '../account-settings-navigation.mjs';
 import { test, expect } from "@playwright/test";
 import { contactFixture } from "../contact-browser-fixture.mjs";
 let f;
@@ -63,7 +64,7 @@ test("email registration, verification, sign-in, settings and reset work without
     .first()
     .click();
   await expect(page.locator("main [role=status]")).toContainText(
-    "Check your email",
+    /Check your email/i,
   );
   expect(f.sql.prepare("SELECT COUNT(*) n FROM roost_members").get().n).toBe(0);
   await page.goto(f.origin + "/roost#auth=verify." + f.messages.at(-1).secret);
@@ -79,11 +80,9 @@ test("email registration, verification, sign-in, settings and reset work without
     .getByRole("button", { name: "Sign In", exact: true })
     .first()
     .click();
+  await openAccountSettings(page);
   await expect(
-    page.getByRole("heading", { name: "Account Settings", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("neighbor@example.test", { exact: true }),
+    page.locator(".account-controls").getByText("neighbor@example.test", { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", {
@@ -92,10 +91,8 @@ test("email registration, verification, sign-in, settings and reset work without
     }),
   ).toHaveCount(0);
   await page.reload();
-  await expect(
-    page.getByRole("heading", { name: "Account Settings", exact: true }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Log Out", exact: true }).click();
+  await openAccountSettings(page);
+  await logOut(page);
   await page
     .getByRole("button", { name: "Forgot Password?", exact: true })
     .click();
@@ -151,6 +148,7 @@ test("existing customer verifies an email from settings without losing account d
   const original = f.sql.prepare("SELECT * FROM roost_members").all();
   f.config.contactLoginEnv.ROOST_EMAIL_LOGIN_ENABLED = "true";
   await page.goto(f.origin + "/roost");
+  await openAccountSettings(page);
   await page.getByText("Verify email address", { exact: true }).click();
   await page
     .getByLabel("New Email Address", { exact: true })
@@ -160,7 +158,7 @@ test("existing customer verifies an email from settings without losing account d
     .getByRole("button", { name: "Send Verification Link", exact: true })
     .click();
   await expect(page.locator("main [role=status]")).toContainText(
-    "Check your email",
+    /Check your email/i,
   );
   await page.goto(f.origin + "/roost#auth=verify." + f.messages.at(-1).secret);
 
@@ -171,14 +169,12 @@ test("existing customer verifies an email from settings without losing account d
     .fill("neighbor@example.test");
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign In", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "Account Settings", exact: true }),
-  ).toBeVisible();
+  await openAccountSettings(page);
   expect(f.sql.prepare("SELECT * FROM roost_members").all()).toEqual(original);
   await expect(
     page.getByText("Username: original.neighbor", { exact: true }),
   ).toHaveCount(0);
-  await page.getByRole("button", { name: "Log Out", exact: true }).click();
+  await logOut(page);
   await page.getByText("Existing member sign-in", { exact: true }).click();
   await page
     .getByRole("button", {
@@ -199,9 +195,7 @@ test("existing customer verifies an email from settings without losing account d
   await page
     .getByRole("button", { name: "Recover My Account", exact: true })
     .click();
-  await expect(
-    page.getByRole("heading", { name: "Account Settings", exact: true }),
-  ).toBeVisible();
+  await openAccountSettings(page);
   expect(f.sql.prepare("SELECT id FROM roost_members").get().id).toBe(
     original[0].id,
   );
@@ -214,14 +208,14 @@ test('verification in a separate browser context consumes once, never signs in o
  await page.getByLabel('Email Address', {exact:true}).fill('isolated@example.test');
  await page.getByLabel('Password', {exact:true}).fill(password);
  await page.getByRole('button', {name:'Create an Account',exact:true}).first().click();
- await expect(page.locator('main [role=status]')).toContainText('Check your email');
+ await expect(page.locator('main [role=status]')).toContainText(/Check your email/i);
  expect(f.messages).toHaveLength(1);
  const url = f.origin + '/roost#auth=verify.' + f.messages[0].secret;
  const other = await browser.newContext();
  try {
   const verifier = await other.newPage();
   await verifier.goto(url);
-  await expect(verifier.getByRole('heading', {name:'Email Verified Successfully',exact:true})).toBeVisible();
+  await expect(verifier.getByRole('heading', {name:'Email Verified Successfully!',exact:true})).toBeVisible();
   expect(f.sql.prepare('SELECT COUNT(*) n FROM roost_sessions').get().n).toBe(0);
   expect(f.messages).toHaveLength(1);
   await verifier.reload();
@@ -244,9 +238,9 @@ test('Chrome registration verifies in WebKit without transferring browser storag
   await registration.getByLabel('Email Address', {exact:true}).fill('cross-browser@example.test');
   await registration.getByLabel('Password', {exact:true}).fill(password);
   await registration.getByRole('button', {name:'Create an Account',exact:true}).first().click();
-  await expect(registration.locator('main [role=status]')).toContainText('Check your email');
+  await expect(registration.locator('main [role=status]')).toContainText(/Check your email/i);
   await page.goto(f.origin + '/roost#auth=verify.' + f.messages[0].secret);
-  await expect(page.getByRole('heading', {name:'Email Verified Successfully',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading', {name:'Email Verified Successfully!',exact:true})).toBeVisible();
   expect(f.sql.prepare('SELECT COUNT(*) n FROM roost_sessions').get().n).toBe(0);
   expect(f.messages).toHaveLength(1);
  } finally { await chrome.close(); }

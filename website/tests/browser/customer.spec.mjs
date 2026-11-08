@@ -1,3 +1,4 @@
+import { openAccountSettings, logOut } from '../account-settings-navigation.mjs';
 import { test, expect } from '@playwright/test';
 import { primaryFixture } from '../primary-fixture.mjs';
 import { installTestPasskey } from '../install-test-passkey.mjs';
@@ -155,19 +156,20 @@ test.describe('isolated customer experience', () => {
     await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Returning\./ })).toBeVisible();
     await expect(page.getByLabel('Roost recovery key', { exact: true })).toBeVisible();
     // Even an undismissed one-time secret and prefilled contact fields must clear.
-    await page.getByRole('button', { name: 'Log Out', exact: true }).click();
+    await logOut(page);
     await expect(page.getByLabel('Roost recovery key', { exact: true })).toHaveCount(0);
     await expect(page.getByLabel('Name', { exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Sign In', exact: true }).click();
       await page.getByRole('button', { name: 'Sign in with a Passkey', exact: true }).click();
     await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Returning\./ })).toBeVisible();
-    await page.getByLabel('Phone (optional)', { exact: true }).fill('555-0102');
+    await openAccountSettings(page);
+    await page.getByLabel('Phone Number (optional)', { exact: true }).fill('555-0102');
     await page.getByRole('button', { name: 'Save my details', exact: true }).click();
     await expect(page.locator('#notice')).toHaveText('Your pickup details are saved.');
     await page.reload();
-    await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Returning\./ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Account Settings', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Sign in with a Passkey', exact: true })).toHaveCount(0);
-    await expect(page.getByLabel('Phone (optional)', { exact: true })).toHaveValue('555-0102');
+    await expect(page.getByLabel('Phone Number (optional)', { exact: true })).toHaveValue('555-0102');
     await page.goto(fixture.origin+'/shop');
     await page.getByRole('button', { name: 'Add A dozen little sunrises to basket', exact: true }).click();
     await page.locator('.basket-link').click();
@@ -191,7 +193,7 @@ test.describe('isolated customer experience', () => {
       await expect(other.locator('.member-order')).toHaveCount(1);
       expect((await restored.request.get(fixture.origin+'/api/studio')).status()).toBe(401);
     } finally { await restored.close(); }
-    await page.getByRole('button', { name: 'Log Out', exact: true }).click();
+    await logOut(page);
     await expect(page.getByRole('heading', { name: 'Welcome to The Roost' })).toBeVisible();
     await page.getByRole('button', { name: 'Sign In', exact: true }).click();
       await page.getByRole('button', { name: 'Sign in with a Passkey', exact: true }).click();

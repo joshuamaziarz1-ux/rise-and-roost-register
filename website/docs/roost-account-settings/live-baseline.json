@@ -1,0 +1,79 @@
+{
+  "repository_base": "431f0ffae1a88ba5fd96f03025f18d9292c9ddb1",
+  "live_deployment": {
+    "id": "4bcab291-cbdc-404f-8229-4b10697a5677",
+    "source": "api",
+    "strategy": "percentage",
+    "annotations": {
+      "workers/message": "Approved Roost frontend deployment; preserve conditional HTML responses. No API/auth/database/settings changes; deletion disabled.",
+      "workers/triggered_by": "deployment"
+    },
+    "versions": [
+      {
+        "version_id": "fb329604-df73-4e5c-b1b4-8fd1b4dafe08",
+        "percentage": 100
+      }
+    ],
+    "created_on": "2026-11-08T21:38:06.072264Z"
+  },
+  "note": "Recovered only app.mjs, customer.mjs and root HTML from current public responses. Other frontend assets, backend, config and database are unchanged. Access-protected responses are not source files.",
+  "recovered": [
+    {
+      "file": "app.mjs",
+      "sha256": "36c1d3865ed45dea738f50c8c9096280797c25c469a9d8ef8e186095b4e0e4f6"
+    },
+    {
+      "file": "customer.mjs",
+      "sha256": "2ad2af58ae718a4c1e3c2cc1ca37c6590935af66d3cc1d8afcfc324b714262cd"
+    },
+    {
+      "file": "index.html",
+      "sha256": "543f6069e5ec7cc101861d8e304e6e3633e073afb646440d94ada0e85dbc5d03"
+    }
+  ],
+  "worker": {
+    "modules": [
+      {
+        "module": "worker.js",
+        "sha256": "b63c34e094544603e6c50a40bead2974d6891f7ee89ff21ba003c3cc446940dc",
+        "bytes": 1772574,
+        "deletionRoutePresent": false
+      }
+    ]
+  },
+  "preserved_customer_blocks": {
+    "greeting": {
+      "start": "  function greeting() {",
+      "end": "  const jump",
+      "sha256": "868fa7315fef2641a99533a294ebc5ce1b16a47396d0182760a8cf0fe8d35216"
+    },
+    "dashboard": {
+      "start": "  function dashboard() {",
+      "end": "  function creditPanel() {",
+      "sha256": "09e2ee633691911cf176bae5e2645991b1eac68b859fbcf9cda4316e056bfcc6"
+    },
+    "personalized-heading": {
+      "start": "    const heading = h('div', { class: 'page-intro'",
+      "end": "    if (member) {",
+      "sha256": "e8ecb4e0edf130d8aebd1aafdd723160b399eed0be6720fb97253dd577b56ef4"
+    }
+  },
+  "unchanged_assets": [
+    {
+      "file": "app.mjs",
+      "sha256": "36c1d3865ed45dea738f50c8c9096280797c25c469a9d8ef8e186095b4e0e4f6",
+      "normalize_cache_reference": {
+        "from": "./customer.mjs?v=roost-settings-review-20261108",
+        "to": "./customer.mjs?v=roost-settings-20261108"
+      }
+    },
+    {
+      "file": "style.css",
+      "sha256": "1c6a928e05a66ad3b4c366cddfa4b948d17f93cd8198083a9296603ce1c30001"
+    },
+    {
+      "file": "customer.css",
+      "sha256": "23c9937110988e1dbbebeea4f7d06b81f8655f3dc9d02a1b063da27c750e16ed"
+    }
+  ]
+}

@@ -4,7 +4,7 @@ import { dollarsToCents, centsToDollars } from './credit-money.mjs';
 import { POLICY_VERSION, POLICY_TITLE, POLICY, providers } from './commerce.mjs';
 import { h, button, notify, request, guard } from "./dom.mjs";
 import { money, localInstant, pickupLabel, orderByLabel } from "./model.mjs";
-import { createCustomerExperience } from "./customer.mjs?v=launch-membership-20261107";
+import { createCustomerExperience } from "./customer.mjs?v=roost-settings-review-20261108";
 import { pickupLocation } from "./pickup-location.mjs";
 import { sellingMethod } from './selling.mjs';
 
@@ -38,6 +38,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
   const calendarNow = () => Date.now() + serverOffset;
   let creditChoice = 0;
   let experience = false, customer, customerWorkspace = "", checkoutMode = "guest";
+  let checkoutTouched = new Set(), checkoutMemberId = null, checkoutGuestChosen = false;
   let checkoutProfile = { name: "", email: "", phone: "" };
   let orderSubmitting = false;
   const editing = new URLSearchParams(location.search).has("studio-preview");
@@ -569,7 +570,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
       h("h2", {}, "Contact information"),
       h("p", { class: "small-note" }, "We’ll know who your order is for."),
       ...[["Name", "name", "text", "name"], ["Email (optional)", "email", "email", "email"], ["Phone (optional)", "phone", "tel", "tel"]].map(([label, key, type, autocomplete]) => h("label", { class: "field" }, label,
-        h("input", { name: "checkout-" + key, type, autocomplete, required: key === "name", maxlength: key === "name" ? 80 : key === "phone" ? 32 : 254, value: checkoutProfile[key], oninput: e => { checkoutProfile[key] = e.target.value; if (key === "email") checkoutEmail = e.target.value; updateActionValidity(); } })))) : null;
+        h("input", { name: "checkout-" + key, type, autocomplete, required: key === "name", maxlength: key === "name" ? 80 : key === "phone" ? 32 : 254, value: checkoutProfile[key], oninput: e => { checkoutTouched.add(key); checkoutProfile[key] = e.target.value; if (key === "email") checkoutEmail = e.target.value; updateActionValidity(); } })))) : null;
     const receiptEmailInput = experience ? customerFields.querySelector('[name="checkout-email"]') : emailInput;
     receiptEmailInput.required = emailOptIn;
     const checkoutInvalid = () => orderSubmitting || !checkoutEnabled || doc.orderingPaused || !chosen || pickupClosed(chosen) || invalidBasket || !lines.length || isPreview || editing ||
@@ -658,8 +659,8 @@ if (!location.pathname.startsWith('/studio/preview/') && (
           cart.requestId = crypto.randomUUID(); saveCart(); render();
         }, { class: 'text-button' }) : null) : null,
       experience && lines.length ? h("div", { class: "checkout-mode", "aria-label": "Checkout options" },
-        button("Guest checkout", () => { checkoutMode = "guest"; render(); }, { class: checkoutMode === "guest" ? "active" : "", "aria-pressed": checkoutMode === "guest" }),
-        customer?.member ? button("Use my Roost details", () => { checkoutMode = "member"; checkoutProfile = { ...customer.member.profile }; render(); }, { class: checkoutMode === "member" ? "active" : "", "aria-pressed": checkoutMode === "member" }) : link("/roost", "Already a member? Sign in"),
+        button("Guest checkout", () => { checkoutGuestChosen = true; checkoutMode = "guest"; render(); }, { class: checkoutMode === "guest" ? "active" : "", "aria-pressed": checkoutMode === "guest" }),
+        customer?.member ? button("Use my Roost details", () => { checkoutGuestChosen = false; checkoutMode = "member"; for (const key of ["name", "email", "phone"]) if (!checkoutTouched.has(key)) checkoutProfile[key] = customer.member.profile[key] || ""; render(); }, { class: checkoutMode === "member" ? "active" : "", "aria-pressed": checkoutMode === "member" }) : link("/roost", "Already a member? Sign in"),
         h("p", {}, checkoutMode === "guest" ? "No account needed." : "This order will be saved in your Roost.")) : null,
       !lines.length
         ? h(
@@ -817,7 +818,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
   function render() {
     if (!doc) return;
     const t = doc.theme;
-    const pageTitle = path === "/" ? "Home" : path === "/roost" ? "The Roost" : path === "/comments" ? "Leave a Comment" : path === "/cart" ? "Basket" : path.startsWith("/product/") ? doc.products.find(p => p.id === path.split("/")[2])?.name : doc.pages.find(p => p.slug === path)?.title;
+    const pageTitle = path === "/" ? "Home" : path === "/roost/settings" ? "Account Settings" : path === "/roost" ? "The Roost" : path === "/comments" ? "Leave a Comment" : path === "/cart" ? "Basket" : path.startsWith("/product/") ? doc.products.find(p => p.id === path.split("/")[2])?.name : doc.pages.find(p => p.slug === path)?.title;
     document.title = doc.business.name + (experience ? " · " + (pageTitle || "Page") : " · Website beta");
     const site = h("div", {
       class: "site-root" + (experience ? " experience" : ""),
@@ -886,7 +887,7 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     );
     if (path === "/subscribe") site.append(h("main", {class:"section-inner"}, subscriptionPanel || (marketingSignupEnabled ? subscriptionForm() : h("p", {}, "Bakery email signup will be available soon."))));
     else if (path === "/cart") site.append(renderCart());
-    else if (experience && path === "/roost") site.append(customer.roost());
+    else if (experience && ["/roost", "/roost/settings"].includes(path)) site.append(customer.roost(path === "/roost/settings"));
     else if (experience && path === "/comments") site.append(customer.commentPage());
     else if (path.startsWith("/product/"))
       site.append(productDetail(path.split("/")[2]));
@@ -966,7 +967,20 @@ if (!location.pathname.startsWith('/studio/preview/') && (
     if (experience && workspace && customerWorkspace !== workspace) {
       customerWorkspace = workspace;
       customer = createCustomerExperience({ workspaceId: workspace, link, navigate, render, getDocument: () => doc, productCard: card, readOnly: isPreview || editing,
-        onMember: member => { emailOptIn = false; checkoutEmail = member?.profile?.email || ""; creditChoice = 0; checkoutMode = member ? "member" : "guest"; checkoutProfile = member ? { ...member.profile } : { name: "", email: "", phone: "" }; } });
+        onMember: member => {
+          emailOptIn = false; creditChoice = 0;
+          // Clear private values on sign-out/account switches; preserve input typed
+          // while the initial authenticated profile request is still in flight.
+          if (checkoutMemberId && checkoutMemberId !== member?.id) {
+            checkoutProfile = { name: "", email: "", phone: "" }; checkoutTouched.clear(); checkoutGuestChosen = false;
+          }
+          checkoutMemberId = member?.id || null;
+          checkoutMode = member && !checkoutGuestChosen ? "member" : "guest";
+          if (member && !checkoutGuestChosen) for (const key of ["name", "email", "phone"]) {
+            if (!checkoutTouched.has(key)) checkoutProfile[key] = member.profile[key] || "";
+          }
+          checkoutEmail = checkoutProfile.email;
+        } });
       void customer.refresh();
     }
   }

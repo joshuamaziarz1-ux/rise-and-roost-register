@@ -1,3 +1,4 @@
+import { openAccountSettings, logOut } from '../account-settings-navigation.mjs';
 import { test, expect } from '@playwright/test';
 import { primaryFixture } from '../primary-fixture.mjs';
 import { installTestPasskey } from '../install-test-passkey.mjs';
@@ -34,7 +35,7 @@ test.describe('customer remembered login', () => {
       await expect(returning.getByRole('heading', { name: /Good (morning|afternoon|evening), Remembered\./ })).toBeVisible();
       await returning.getByRole('link', { name: 'Shop', exact: true }).click();
       await returning.getByRole('link', { name: 'The Roost', exact: true }).click();
-      await returning.getByRole('button', { name: 'Log Out', exact: true }).click();
+      await logOut(returning);
       await expect(returning.getByRole('heading', { name: 'Welcome to The Roost' })).toBeVisible();
       await returning.goBack();
       await returning.goForward();
@@ -73,9 +74,9 @@ test.describe('customer remembered login', () => {
       const replacement = await fallback.newPage();
       await installTestPasskey(replacement, info, f.origin);
       await replacement.goto(f.origin + '/roost');
-      await replacement.getByRole('button', { name: 'Add a passkey on this device', exact: true }).click();
-      await expect(replacement.getByRole('heading', { name: /Good (morning|afternoon|evening), Remembered\./ })).toBeVisible();
-      await replacement.getByRole('button', { name: 'Log Out', exact: true }).click();
+      await openAccountSettings(replacement);await replacement.getByRole('button', { name: 'Add a passkey on this device', exact: true }).click();
+      await expect(replacement.getByRole('heading', { name: 'Account Settings', exact: true })).toBeVisible();
+      await logOut(replacement);
       await replacement.getByRole('button', { name: 'Sign In', exact: true }).click();
       await replacement.getByRole('button', { name: 'Sign in with a Passkey', exact: true }).click();
       await expect(replacement.getByRole('heading', { name: /Good (morning|afternoon|evening), Remembered\./ })).toBeVisible();
@@ -88,7 +89,7 @@ test.describe('customer remembered login', () => {
     await join(page, info);
     const tab = await context.newPage(); await tab.goto(f.origin + '/roost');
     await expect(tab.getByRole('heading', { name: /Good (morning|afternoon|evening), Remembered\./ })).toBeVisible();
-    await page.getByRole('button', { name: 'Log Out', exact: true }).click();
+    await logOut(page);
     await expect(tab.getByRole('heading', { name: 'Welcome to The Roost' })).toBeVisible();
     await expect(tab.getByLabel('Name', { exact: true })).toHaveCount(0);
     await tab.evaluate(() => { window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })); });

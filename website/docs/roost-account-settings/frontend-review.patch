@@ -1,0 +1,41 @@
+diff --git a/website/public/app.mjs b/website/public/app.mjs
+index 0f7746a..8121ebe 100644
+--- a/website/public/app.mjs
++++ b/website/public/app.mjs
+@@ -4,7 +4,7 @@ import { dollarsToCents, centsToDollars } from './credit-money.mjs';
+ import { POLICY_VERSION, POLICY_TITLE, POLICY, providers } from './commerce.mjs';
+ import { h, button, notify, request, guard } from "./dom.mjs";
+ import { money, localInstant, pickupLabel, orderByLabel } from "./model.mjs";
+-import { createCustomerExperience } from "./customer.mjs?v=roost-settings-20261108";
++import { createCustomerExperience } from "./customer.mjs?v=roost-settings-review-20261108";
+ import { pickupLocation } from "./pickup-location.mjs";
+ import { sellingMethod } from './selling.mjs';
+
+diff --git a/website/public/customer.mjs b/website/public/customer.mjs
+index cb45173..4c4b881 100644
+--- a/website/public/customer.mjs
++++ b/website/public/customer.mjs
+@@ -187,7 +187,9 @@ export function createCustomerExperience({ workspaceId, link, navigate, render,
+       link('/roost', 'Back to The Roost', 'text-button'),
+       h('div', { class: 'page-intro' }, h('h1', {}, 'Account Settings')),
+       error ? h('p', { role: 'alert', class: 'form-error' }, error) : null, recoveryCard(), form,
+-      h('section', {}, h('h2', {}, 'Pickup Details'), h('p', {}, 'Your saved name, email and phone above are used to prefill checkout. You can change them for an individual order at checkout. Saving these details does not change existing orders or your verified sign-in email.'), h('p', {}, 'Choose an available pickup date and time at checkout.')),
++      h('section', {}, h('h2', {}, 'Pickup Details'),
++        h('dl', {}, ...[['Full Name', 'name'], ['Email Address', 'email'], ['Phone Number', 'phone']].map(([label, key]) => h('div', {}, h('dt', {}, label), h('dd', {}, member.profile[key] || 'Not saved')))),
++        h('p', {}, 'Your saved name, email and phone above are used to prefill checkout. You can change them for an individual order at checkout. Saving these details does not change existing orders or your verified sign-in email.'), h('p', {}, 'Choose an available pickup date and time at checkout.')),
+       h('section', { class: 'account-controls' },
+           h('h2', {}, 'Password & Security'), h('p', {}, 'Welcome back to The Roost! This personal device stays signed in for about 30 days after your last visit, for at most 90 days. Log out on shared computers.'),
+           emailLoginEnabled ? emailSettings() : passwordLoginEnabled ? passwordSettings() : simpleLoginEnabled ? contactSettings() : null,
+diff --git a/website/public/index.html b/website/public/index.html
+index ed9a50e..6c48dfb 100644
+--- a/website/public/index.html
++++ b/website/public/index.html
+@@ -12,7 +12,7 @@
+     <link rel="icon" href="/assets/logo.webp" />
+     <link rel="stylesheet" href="/style.css" />
+     <link rel="stylesheet" href="/customer.css?v=23c993711098" />
+-    <script type="module" src="/app.mjs?v=roost-settings-20261108"></script>
++    <script type="module" src="/app.mjs?v=roost-settings-review-20261108"></script>
+   </head>
+   <body>
+     <div id="app"><p class="loading">Setting the table…</p></div>

@@ -35,12 +35,13 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
   let profileDraft;
   let entryView = 'welcome', helpOpen = false;
   let emailLoginEnabled = false, registrationPaused = false, emailNotice = '';
+  let submittedEmail = '', verificationSucceeded = false;
   const emailLink = /^#auth=(verify|reset)\.([a-f0-9]{48})$/.exec(location.hash);
   let emailAction = emailLink?.[1], emailToken = emailLink?.[2];
   window.addEventListener('hashchange', () => {
     const incoming = /^#auth=(verify|reset)\.([a-f0-9]{48})$/.exec(location.hash);
     if (!incoming) return;
-    emailAction = incoming[1]; emailToken = incoming[2]; emailNotice = ''; entryView = 'welcome';
+    emailAction = incoming[1]; emailToken = incoming[2]; emailNotice = ''; verificationSucceeded = false; entryView = 'welcome';
     history.replaceState(null, '', location.pathname + location.search); void action(completeEmailVerification)(); render();
   });
   if (emailLink) history.replaceState(null, '', location.pathname + location.search);
@@ -51,6 +52,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     if (busy) return;
     passwordDraft.password = ''; passwordDraft.currentPassword = ''; passwordDraft.recoveryKey = '';
     emailAction = null; emailToken = null;
+    verificationSucceeded = false;
     entryView = view; helpOpen = false; error = ''; render();
     document.querySelector('.roost-entry h1')?.focus();
   }
@@ -61,7 +63,10 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     busy = true; error = ''; render();
     try { if (pending) await pending; await fn(); }
     catch (e) { error = e.message; }
-    finally { busy = false; render(); }
+    finally {
+      busy = false; render();
+      if (entryView === 'email-check' || entryView === 'email-done' && verificationSucceeded) document.querySelector('.roost-entry h1')?.focus();
+    }
   };
   function clearPrivate() {
     entryView = 'welcome'; helpOpen = false; contactDraft = ''; codeDraft = ''; preferredDraft = ''; contactStep = 'contact'; linkContact = false;
@@ -80,6 +85,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     try {
       const verified = await api('/api/roost/email/verify', { token: verificationToken });
       emailNotice = verified.message;
+      verificationSucceeded = true;
     } catch (e) { error = e.message; }
   }
   async function refresh(rerender = true, duringAction = false) {
@@ -124,11 +130,11 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     recoveryKey = key;
     await refresh(false, true); channel?.postMessage('changed');
   }
-  const profileFields = (profile, suffix = '') => h('div', { class: 'customer-fields' },
+  const profileFields = (profile, suffix = '', settings = false) => h('div', { class: 'customer-fields' },
     field('Preferred name (optional)' + suffix, profile.preferredName || '', v => profile.preferredName = v, { name: 'customer-preferred-name', maxlength: 40 }),
-    field('Name' + suffix, profile.name, v => profile.name = v, { name: 'customer-name', autocomplete: 'name', required: true, maxlength: 80 }),
-    field('Email (optional)' + suffix, profile.email, v => profile.email = v, { name: 'customer-email', autocomplete: 'email', type: 'email', maxlength: 254 }),
-    field('Phone (optional)' + suffix, profile.phone, v => profile.phone = v, { name: 'customer-phone', autocomplete: 'tel', type: 'tel', maxlength: 32 }));
+    field((settings ? 'Full Name' : 'Name') + suffix, profile.name, v => profile.name = v, { name: 'customer-name', autocomplete: 'name', required: true, maxlength: 80 }),
+    field((settings ? 'Email Address (optional)' : 'Email (optional)') + suffix, profile.email, v => profile.email = v, { name: 'customer-email', autocomplete: 'email', type: 'email', maxlength: 254 }),
+    field((settings ? 'Phone Number (optional)' : 'Phone (optional)') + suffix, profile.phone, v => profile.phone = v, { name: 'customer-phone', autocomplete: 'tel', type: 'tel', maxlength: 32 }));
   function recoveryCard() {
     if (!recoveryKey) return null;
     return h('section', { class: 'recovery-card', 'aria-label': 'Save your recovery key' },
@@ -139,21 +145,16 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
       button('Copy recovery key', guard(async () => { await navigator.clipboard.writeText(recoveryKey); notify('Recovery key copied. Save it in your password manager.'); }), { class: 'secondary-button' }),
       button('I saved my recovery key', () => { recoveryKey = ''; render(); }, { class: 'primary-link' }));
   }
-  function roost() {
+  function roost(settings = false) {
     if (emailLoginEnabled && emailAction) return emailEntry();
     if (!loaded) return h('main', { class: 'section-inner roost-page' }, h('h1', {}, 'The Roost'), h('p', { role: 'status' }, 'Opening your Roost…'));
     if (!member) return entry();
+    if (settings) return accountSettings();
     const heading = h('div', { class: 'page-intro' }, h('h1', {}, member ? greeting() + ', ' + (member.profile.preferredName || member.profile.name.split(' ')[0]) + '.' : 'Make yourself at home.'),
       h('p', {}, member ? 'Welcome back to The Roost.' : 'The Roost keeps your pickup details and orders together. Joining is always optional.'));
     const result = h('main', { class: 'section-inner roost-page' }, heading, error ? h('p', { role: 'alert', class: 'form-error' }, error) : null, recoveryCard());
     if (member) {
-      const profile = profileDraft ||= { ...member.profile };
-      const form = h('form', { class: 'roost-profile', onsubmit: async e => {
-        e.preventDefault();
-        profile.preferredName = form.elements['customer-preferred-name'].value; profile.name = form.elements['customer-name'].value; profile.email = form.elements['customer-email'].value; profile.phone = form.elements['customer-phone'].value;
-        await action(async () => { await api('/api/roost/profile', { profile }); await refresh(false, true); onMember(member); notify('Your pickup details are saved.'); })();
-      } }, h('h2', {}, 'Your pickup details'), profileFields(profile), h('button', { type: 'submit', class: 'primary-link', disabled: busy }, 'Save my details'));
-      result.append(dashboard(), h('div', { class: 'roost-layout' },
+      result.append(dashboard(), h('div', { class: 'roost-layout', style: { gridTemplateColumns: '1fr' } },
         h('section', { id: 'my-orders', class: 'member-orders', 'aria-label': 'Your Roost orders' },
           h('div', { class: 'panel-heading' }, h('h2', {}, 'My Orders'), button('Refresh orders', action(() => refresh(false, true)), { class: 'text-button', disabled: busy })),
           orders.length ? orders.map(order => h('article', { class: 'member-order' },
@@ -169,22 +170,39 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
             h('form', { onsubmit: async e => { e.preventDefault(); const input = e.currentTarget.elements.link; await action(async () => { await api('/api/roost/claim-order', { link: input.value }); await refresh(false, true); notify('Order added to your Roost.'); })(); } },
               h('label', { class: 'field' }, 'Private tracking link', h('input', { name: 'link', type: 'text', required: true, autocomplete: 'off' })),
               h('button', { type: 'submit', class: 'secondary-button', disabled: busy }, 'Add my order')))),
-        h('aside', {}, form, h('section', { class: 'account-controls' },
-          h('h2', {}, 'Account Settings'), h('p', {}, 'Welcome back to The Roost! This personal device stays signed in for about 30 days after your last visit, for at most 90 days. Log out on shared computers.'),
+        ));
+      result.append(creditPanel(), favoritesPanel(), link('/roost/settings', 'Account Settings', 'text-button'));
+    }
+    if (busy) result.append(h('p', { role: 'status', class: 'small-note' }, emailLoginEnabled ? 'Please wait…' : 'Please finish the sign-in prompt.'));
+    return result;
+  }
+  function accountSettings() {
+      const profile = profileDraft ||= { ...member.profile };
+      const form = h('form', { class: 'roost-profile', onsubmit: async e => {
+        e.preventDefault();
+        profile.preferredName = form.elements['customer-preferred-name'].value; profile.name = form.elements['customer-name'].value; profile.email = form.elements['customer-email'].value; profile.phone = form.elements['customer-phone'].value;
+        await action(async () => { await api('/api/roost/profile', { profile }); await refresh(false, true); onMember(member); notify('Your pickup details are saved.'); })();
+      } }, h('h2', {}, 'Personal Information'), profileFields(profile, '', true), h('button', { type: 'submit', class: 'primary-link', disabled: busy }, 'Save my details'));
+    return h('main', { class: 'section-inner roost-page', 'data-roost-view': 'settings' },
+      link('/roost', 'Back to The Roost', 'text-button'),
+      h('div', { class: 'page-intro' }, h('h1', {}, 'Account Settings')),
+      error ? h('p', { role: 'alert', class: 'form-error' }, error) : null, recoveryCard(), form,
+      h('section', {}, h('h2', {}, 'Pickup Details'),
+        h('dl', {}, ...[['Full Name', 'name'], ['Email Address', 'email'], ['Phone Number', 'phone']].map(([label, key]) => h('div', {}, h('dt', {}, label), h('dd', {}, member.profile[key] || 'Not saved')))),
+        h('p', {}, 'Your saved name, email and phone above are used to prefill checkout. You can change them for an individual order at checkout. Saving these details does not change existing orders or your verified sign-in email.'), h('p', {}, 'Choose an available pickup date and time at checkout.')),
+      h('section', { class: 'account-controls' },
+          h('h2', {}, 'Password & Security'), h('p', {}, 'Welcome back to The Roost! This personal device stays signed in for about 30 days after your last visit, for at most 90 days. Log out on shared computers.'),
           emailLoginEnabled ? emailSettings() : passwordLoginEnabled ? passwordSettings() : simpleLoginEnabled ? contactSettings() : null,
-          button('Sign out of all devices', action(async () => { await api('/api/roost/logout-all', {}); clearPrivate(); channel?.postMessage('changed'); }), { class: 'text-button', disabled: busy }),
+          button('Sign out of all devices', action(async () => { await api('/api/roost/logout-all', {}); clearPrivate(); channel?.postMessage('changed'); navigate('/roost'); }), { class: 'text-button', disabled: busy }),
           h('p', { class: 'small-note' }, emailLoginEnabled ? 'Verify your sign-in email in Account Settings. Pickup details do not change your verified email.' : passwordLoginEnabled ? 'Your username and password keep your account secure. Your pickup contact details do not grant account access.' : 'Your passkey verifies your Roost membership. Contact details are for pickup, never proof of account ownership.'),
           !member.verifiedEmail ? button('Add a passkey on this device', action(() => authenticate('add')), { class: 'secondary-button', disabled: busy }) : null,
           h('details', { class: 'remembered-devices' }, h('summary', {}, 'Remembered devices'),
             devices.map(device => h('div', { class: 'remembered-device' }, h('p', {}, device.label, device.current ? ' · This device' : ''),
               !device.current ? button('Log out ' + device.label, action(async () => { await api('/api/roost/revoke-device', { deviceId: device.id }); await refresh(false, true); }), { class: 'text-button', disabled: busy }) : null))),
           button('Log Out', action(async () => {
-            await api('/api/roost/logout', {}); clearPrivate(); channel?.postMessage('changed');
-          }), { class: 'text-button', disabled: busy })))));
-      result.append(creditPanel(), favoritesPanel());
-    }
-    if (busy) result.append(h('p', { role: 'status', class: 'small-note' }, emailLoginEnabled ? 'Please wait…' : 'Please finish the sign-in prompt.'));
-    return result;
+            await api('/api/roost/logout', {}); clearPrivate(); channel?.postMessage('changed'); navigate('/roost');
+          }), { class: 'text-button', disabled: busy })),
+      h('section', {}, h('h2', {}, 'Delete My Account'), h('p', {}, 'Secure account deletion is not available yet. No account or order records will be deleted here.'), h('button', { type: 'button', class: 'text-button', disabled: true }, 'Delete My Account')));
   }
   function entry() {
     if (registrationPaused && !['legacy', 'signin', 'password-recover'].includes(entryView)) return h('main', { class: 'section-inner roost-page roost-entry' },
@@ -256,6 +274,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
         const r = await api('/api/roost/email/' + kind, { ...values, ...(emailToken ? { token: emailToken } : {}) });
         if (kind === 'login' || kind === 'recover') { await authenticated(r.recoveryKey); return; }
         emailNotice = r.message || 'If registration is pending, we’ll send a verification email.';
+        if (signup) { submittedEmail = values.email; entryView = 'email-check'; }
         if (kind === 'reset' || kind === 'verify') { emailAction = null; emailToken = null; await refresh(false, true); entryView = 'email-done'; }
         if (linkEmail) await refresh(false, true);
       })();
@@ -270,15 +289,32 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
     h('button', { type: 'submit', class: 'primary-link', disabled: busy || readOnly }, ({ register: 'Create an Account', login: 'Sign In', forgot: 'Send Reset Link', resend: 'Resend Verification Email', reset: 'Save New Password', recover: 'Recover My Account', verify: 'Verify My Email', link: 'Send Verification Link' })[kind]));
     return form;
   }
+  function emailConfirmation(verified) {
+    return h('main', { class: 'section-inner roost-page roost-entry roost-password-entry', style: { textAlign: 'center' } },
+      h('div', { class: 'page-intro', role: 'status' },
+        h('div', { 'aria-hidden': 'true', style: { color: 'var(--green)', fontSize: '64px', lineHeight: '1', marginBottom: '24px' } }, '✓'),
+        h('h1', { tabindex: '-1' }, verified ? 'Email Verified Successfully!' : 'Check Your Email!'),
+        h('p', {}, verified ? 'Welcome to The Roost! Your account is ready.' : 'We’ve sent you a verification link.'),
+        !verified && submittedEmail ? h('p', { style: { overflowWrap: 'anywhere', fontWeight: '600' } }, submittedEmail) : null,
+        h('p', {}, verified ? 'Please return to your original Rise & Roost page and sign in.' : 'Open your email and tap Verify Your Email to finish joining The Roost.')),
+      h('div', { class: 'roost-entry-actions' },
+        verified ? button('Sign In', () => { emailNotice = ''; showEntry('email-signin'); }, { class: 'primary-link', disabled: busy }) : link('/shop', 'Continue Shopping', 'primary-link'),
+        !verified ? button('Already verified? Sign In', () => { emailNotice = ''; showEntry('email-signin'); }, { class: 'secondary-button', disabled: busy }) : null,
+        !verified ? button('Resend Verification Email', () => { emailNotice = ''; showEntry('email-resend'); }, { class: 'text-button', style: { minHeight: '44px' }, disabled: busy }) : null),
+      !verified ? h('p', { class: 'small-note' }, 'Can’t find the email? Check your spam or junk folder.') : null);
+  }
   function emailEntry() {
+    if (entryView === 'email-check') return emailConfirmation(false);
+    if (entryView === 'email-done' && verificationSucceeded) return emailConfirmation(true);
     const kind = entryView === 'email-done' ? 'done' : emailAction && !emailNotice ? emailAction : entryView === 'email-recover' ? 'recover' : entryView === 'email-join' ? 'register' : entryView === 'email-forgot' ? 'forgot' : entryView === 'email-resend' ? 'resend' : 'login';
     return h('main', { class: 'section-inner roost-page roost-entry roost-password-entry' },
       h('div', { class: 'page-intro' }, h('h1', {}, kind === 'done' && emailNotice?.startsWith('Email Verified Successfully') ? 'Email Verified Successfully' : kind === 'register' ? 'Join The Roost' : kind === 'forgot' || kind === 'reset' ? 'Reset Your Password' : 'Welcome to The Roost')),
       error ? h('p', { role: 'alert', class: 'form-error' }, error) : null,
       emailNotice ? h('p', { role: 'status' }, emailNotice) : null,
+      kind === 'register' ? h('p', { style: { textAlign: 'center' } }, 'Welcome, neighbor! Create your account and make yourself at home in The Roost.') : null,
       kind !== 'done' ? emailForm(kind) : null,
       kind !== 'login' ? button('Sign In', () => { emailNotice = ''; showEntry('email-done' === entryView ? 'email-signin' : 'welcome'); }, { class: 'text-button', disabled: busy }) : null,
-      kind !== 'register' ? button('Create an Account', () => { emailNotice = ''; showEntry('email-join'); }, { class: 'text-button', disabled: busy }) : null,
+      kind !== 'register' ? button('Create an Account', () => { emailNotice = ''; showEntry('email-join'); }, { class: kind === 'login' ? 'secondary-button' : 'text-button', style: kind === 'login' ? { borderColor: 'var(--green)', color: 'var(--green)' } : {}, disabled: busy }) : null,
       button('Forgot Password?', () => { emailNotice = ''; showEntry('email-forgot'); }, { class: 'text-button', disabled: busy }),
       kind !== 'done' ? button('Resend Verification Email', () => { emailNotice = ''; showEntry('email-resend'); }, { class: 'text-button', disabled: busy }) : null,
       h('details', {}, h('summary', {}, 'Existing member sign-in'), button('Use email and saved recovery code', () => showEntry('email-recover'), { class: 'text-button', disabled: busy }), h('p', {}, 'Already joined with a username or another sign-in method? Use it once more, then verify an email in Account Settings. Your orders and favorites stay with you.'), button('Use existing sign-in', () => showEntry('legacy'), { class: 'text-button', disabled: busy })),
@@ -398,8 +434,7 @@ export function createCustomerExperience({ workspaceId, link, navigate, render, 
       h('nav', { class: 'roost-shortcuts', 'aria-label': 'My Roost' }, button('My Orders', jump('my-orders'), { class: 'secondary-button' }), button('Favorites', jump('my-favorites'), { class: 'secondary-button' })));
   }
   function creditPanel() {
-    return h('section', { id: 'my-return-credits', class: 'roost-credit-panel' }, h('h2', {}, 'My Return Credits'), h('strong', { class: 'credit-balance' }, money(credits.available) + ' available'),
-      credits.reserved ? h('p', {}, money(credits.reserved) + ' reserved for pending orders. Danielle releases reservations when an order is canceled after review.') : null,
+    return h('section', { id: 'my-return-credits', class: 'roost-credit-panel' }, h('h2', {}, 'Return items and credit history'),
       !credits.enabled ? h('p', {}, 'The return program is currently paused. Your credit history and balance are kept.') : h('p', {}, 'Danielle confirms eligible returns in person. Choose available credit at member checkout.'),
       credits.transactions.length ? h('details', {}, h('summary', {}, 'Credit history (' + credits.transactions.length + ')'), [...credits.transactions].reverse().map(t => h('article', { class: 'credit-transaction' }, h('strong', {}, t.kind.charAt(0).toUpperCase() + t.kind.slice(1) + ' · ' + (['adjusted', 'reversed'].includes(t.kind) ? (t.availableDelta < 0 ? '−' : '+') : '') + money(t.amount)), h('p', {}, t.description), h('time', { datetime: t.at }, new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Indiana/Indianapolis' }).format(new Date(t.at)))))) : h('p', {}, 'Accepted returns will appear here.'),
       h('h3', {}, 'What Can I Return?'), credits.items.length ? credits.items.map(item => h('p', {}, item.name + ' — ' + money(item.cents) + ' credit')) : h('p', {}, 'There are no eligible return items listed right now.'));
