@@ -10,6 +10,9 @@ const publicApi = (path, method) => method === 'GET' && (['/api/site', '/api/com
 // All production owner traffic lives below /studio, so one Access application
 // protects the page AND its APIs. Unprotected legacy owner URLs are closed.
 export async function productionFetch(request, env, now = Date.now()) {
+  if (/^\/studio\/(?:roost-owner-test(?:-script)?(?:\/|$)|api\/roost(?:\/|$))/.test(new URL(request.url).pathname))
+    return new Response('Page not found.', { status: 404 });
+
   const url = new URL(request.url), alias = url.origin === 'https://www.rise-and-roost.com';
   const canonical = new URL(url); canonical.hostname = 'rise-and-roost.com';
   const config = productionConfiguration(env, alias ? new Request(canonical) : request);

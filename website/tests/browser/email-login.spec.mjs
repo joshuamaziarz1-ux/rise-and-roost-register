@@ -67,10 +67,8 @@ test("email registration, verification, sign-in, settings and reset work without
   );
   expect(f.sql.prepare("SELECT COUNT(*) n FROM roost_members").get().n).toBe(0);
   await page.goto(f.origin + "/roost#auth=verify." + f.messages.at(-1).secret);
-  await page
-    .getByRole("button", { name: "Verify My Email", exact: true })
-    .click();
-  await expect(page.locator("main [role=status]")).toContainText("verified");
+
+  await expect(page.locator("main [role=status]")).toContainText("Email Verified Successfully");
   expect(page.url()).not.toContain("#");
   await page.getByRole("button", { name: "Sign In", exact: true }).click();
   await page
@@ -165,10 +163,8 @@ test("existing customer verifies an email from settings without losing account d
     "Check your email",
   );
   await page.goto(f.origin + "/roost#auth=verify." + f.messages.at(-1).secret);
-  await page
-    .getByRole("button", { name: "Verify My Email", exact: true })
-    .click();
-  await expect(page.locator("main [role=status]")).toContainText("verified");
+
+  await expect(page.locator("main [role=status]")).toContainText("Email Verified Successfully");
   await page.getByRole("button", { name: "Sign In", exact: true }).click();
   await page
     .getByLabel("Email Address", { exact: true })
@@ -209,4 +205,49 @@ test("existing customer verifies an email from settings without losing account d
   expect(f.sql.prepare("SELECT id FROM roost_members").get().id).toBe(
     original[0].id,
   );
+});
+
+test('verification in a separate browser context consumes once, never signs in or resends', async ({ browser, page }) => {
+ await page.goto(f.origin + '/roost');
+ await page.getByRole('button', { name: 'Create an Account', exact: true }).click();
+ await page.getByLabel('Full Name', {exact:true}).fill('Isolated Neighbor');
+ await page.getByLabel('Email Address', {exact:true}).fill('isolated@example.test');
+ await page.getByLabel('Password', {exact:true}).fill(password);
+ await page.getByRole('button', {name:'Create an Account',exact:true}).first().click();
+ await expect(page.locator('main [role=status]')).toContainText('Check your email');
+ expect(f.messages).toHaveLength(1);
+ const url = f.origin + '/roost#auth=verify.' + f.messages[0].secret;
+ const other = await browser.newContext();
+ try {
+  const verifier = await other.newPage();
+  await verifier.goto(url);
+  await expect(verifier.getByRole('heading', {name:'Email Verified Successfully',exact:true})).toBeVisible();
+  expect(f.sql.prepare('SELECT COUNT(*) n FROM roost_sessions').get().n).toBe(0);
+  expect(f.messages).toHaveLength(1);
+  await verifier.reload();
+  expect(f.messages).toHaveLength(1);
+  await verifier.goto(url);
+  await expect(verifier.getByRole('alert')).toContainText('already used successfully');
+  expect(f.sql.prepare('SELECT COUNT(*) n FROM roost_members').get().n).toBe(1);
+  expect(f.sql.prepare('SELECT COUNT(*) n FROM roost_sessions').get().n).toBe(0);
+ } finally { await other.close(); }
+});
+
+test('Chrome registration verifies in WebKit without transferring browser storage', async ({ playwright, page, browserName }) => {
+ test.skip(browserName !== 'webkit', 'Cross-engine check runs in the WebKit projects.');
+ const chrome = await playwright.chromium.launch({executablePath:'/usr/bin/chromium'});
+ try {
+  const registration = await chrome.newPage();
+  await registration.goto(f.origin + '/roost');
+  await registration.getByRole('button', {name:'Create an Account',exact:true}).click();
+  await registration.getByLabel('Full Name', {exact:true}).fill('Cross Browser Neighbor');
+  await registration.getByLabel('Email Address', {exact:true}).fill('cross-browser@example.test');
+  await registration.getByLabel('Password', {exact:true}).fill(password);
+  await registration.getByRole('button', {name:'Create an Account',exact:true}).first().click();
+  await expect(registration.locator('main [role=status]')).toContainText('Check your email');
+  await page.goto(f.origin + '/roost#auth=verify.' + f.messages[0].secret);
+  await expect(page.getByRole('heading', {name:'Email Verified Successfully',exact:true})).toBeVisible();
+  expect(f.sql.prepare('SELECT COUNT(*) n FROM roost_sessions').get().n).toBe(0);
+  expect(f.messages).toHaveLength(1);
+ } finally { await chrome.close(); }
 });
