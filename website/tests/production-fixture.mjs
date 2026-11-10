@@ -16,13 +16,13 @@ export function installProductionTestKeys() {
     return new Response(JSON.stringify({ keys }), { headers: { 'Content-Type': 'application/json' } });
   };
 }
-export async function productionFixture() {
+export async function productionFixture({ runtime = worker, schema } = {}) {
   const auth = await accessAuthority(), now = Date.now();
   authorities.set(auth.team + '/cdn-cgi/access/certs', [auth.jwk]);
   const ownerA = await auth.mint({ expiresAt: Math.floor(now / 1000) + 3600 });
   const ownerB = await auth.mint({ email: TESTER_B, subject: 'synthetic-owner-b', expiresAt: Math.floor(now / 1000) + 3600 });
-  const sql = new DatabaseSync(':memory:'); sql.exec(readFileSync(new URL('../production-schema.sql', import.meta.url), 'utf8'));
-  sql.exec(readFileSync(new URL('../migrations/0003_customer_remembered_sessions.sql', import.meta.url), 'utf8'));
+  const sql = new DatabaseSync(':memory:'); sql.exec(schema || readFileSync(new URL('../production-schema.sql', import.meta.url), 'utf8'));
+  if (!schema) sql.exec(readFileSync(new URL('../migrations/0003_customer_remembered_sessions.sql', import.meta.url), 'utf8'));
   const doc = seed(now + 7 * 86400000); doc.business.pickupAddress = { name: 'Rise & Roost', street: 'Synthetic pickup street', city: 'Synthetic Indiana location' };
   doc.products[0].inventoryMode = 'physical'; doc.products[0].stock = 2;
   sql.prepare('INSERT INTO workspaces(id,owner_hash,draft_json,published_json,versions_json,ledger_json,created_at) VALUES(?,?,?,?,?,?,?)').run(PRODUCTION_WORKSPACE_ID, 'disabled-legacy-owner-key', JSON.stringify(doc), JSON.stringify(doc), '[]', '{"orders":[],"management":{"settings":{"payments":{},"paymentsVersion":0},"audit":[],"operations":[],"benefits":[]}}', new Date(now).toISOString());
@@ -33,7 +33,7 @@ export async function productionFixture() {
     DB: sqliteD1(sql), ASSETS: { fetch: () => new Response('Synthetic public assets', { headers: { 'Content-Type': 'text/html' } }) } };
   async function call(path, body, { token, headers = {}, at } = {}) {
     const request = new Request('https://rise-and-roost.com' + path, { method: body === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://rise-and-roost.com', ...(token ? { 'Cf-Access-Jwt-Assertion': token } : {}), ...headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
-    const response = at ? await (await import('../server/production-runtime.mjs')).productionFetch(request, env, at) : await worker.fetch(request, env, {});
+    const response = at ? await (await import('../server/production-runtime.mjs')).productionFetch(request, env, at) : await runtime.fetch(request, env, {});
     const text = await response.text(); let data; try { data = JSON.parse(text); } catch { data = text; }
     return { status: response.status, data, headers: response.headers };
   }

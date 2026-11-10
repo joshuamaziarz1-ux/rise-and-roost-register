@@ -22,7 +22,10 @@
     "test:worker": "node tests/worker-smoke.mjs",
     "screenshots": "node tests/capture-evidence.mjs",
     "test:studio-hosted": "playwright test --config playwright.management-hosted.config.mjs",
-    "test:commerce-browser": "playwright test --config playwright.commerce.config.mjs"
+    "test:commerce-browser": "playwright test --config playwright.commerce.config.mjs",
+    "test:post-order-api": "node --test tests/post-order-payment.acceptance.mjs",
+    "test:post-order-browser": "playwright test --config playwright.post-order.config.mjs",
+    "test:post-order-worker": "node tests/post-order-worker-smoke.mjs"
   },
   "dependencies": {
     "@simplewebauthn/server": "14.0.3",
