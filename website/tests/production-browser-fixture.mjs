@@ -4,10 +4,10 @@ import { resolve, extname } from 'node:path';
 import { productionFixture, installProductionTestKeys } from './production-fixture.mjs';
 import worker from '../server/worker.mjs';
 
-export async function productionBrowserFixture() {
+export async function productionBrowserFixture({ runtime = worker, schema, assetRoot } = {}) {
   const originalFetch = globalThis.fetch;
   installProductionTestKeys();
-  const h = await productionFixture(), root = resolve(new URL('../public/', import.meta.url).pathname);
+  const h = await productionFixture({ runtime, schema }), root = assetRoot || resolve(new URL('../public/', import.meta.url).pathname);
   const mime = { '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.webmanifest': 'application/manifest+json', '.html': 'text/html' };
   h.env.ASSETS.fetch = async request => {
     const path = decodeURIComponent(new URL(request.url).pathname), filename = resolve(root, '.' + path);
@@ -25,7 +25,7 @@ export async function productionBrowserFixture() {
       if (incoming.headers['x-synthetic-owner'] === 'b') headers.set('Cf-Access-Jwt-Assertion', h.ownerB);
       if (headers.get('Origin') === origin) headers.set('Origin', h.env.WEBSITE_BASE_URL);
       const request = new Request(h.env.WEBSITE_BASE_URL + incoming.url, { method: incoming.method, headers, ...(['GET','HEAD'].includes(incoming.method) ? {} : { body: Buffer.concat(body) }) });
-      const response = await worker.fetch(request, h.env, {});
+      const response = await runtime.fetch(request, h.env, {});
       outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(Buffer.from(await response.arrayBuffer()));
     } catch { outgoing.writeHead(500); outgoing.end('Synthetic fixture failure'); }
   });

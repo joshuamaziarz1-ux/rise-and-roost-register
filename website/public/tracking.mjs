@@ -1,9 +1,12 @@
-import { requestedPickupLabel, POLICY_TITLE, POLICY } from './commerce.mjs';
+import { pickupRequest } from './pickup-request.mjs';
+import { confirmationTools } from './order-confirmation.mjs?v=no-refund-20261109';
+import { pickupNotice } from './pickup-notice.mjs';
+import { requestedPickupLabel, POLICY_TITLE, POLICY } from './commerce.mjs?v=no-refund-20261109';
 import { h, button, guard, field } from "./dom.mjs";
 import { money, pickupLabel, orderByLabel, customerTime, customerTimestamp, seed } from "./model.mjs";
 import { paymentLabels, fulfillmentLabels, stages, notificationLabels, eventLabels } from "./orders.mjs";
 import { pickupLocation } from "./pickup-location.mjs";
-import { paymentTiles } from './payment-tiles.mjs';
+import { paymentSelection } from './payment-selection.mjs?v=post-order-20261110';
 
 export async function start(root) {
   const match = /^\/orders\/([a-f0-9]{48})\/([a-f0-9]{48})\/?$/.exec(location.pathname);
@@ -125,6 +128,8 @@ export async function start(root) {
         h("a", { href: shop, class: "brand" }, h("img", { src: doc.business.logo, alt: doc.business.logoAlt }), h("span", {}, doc.business.name)),
         h("a", { href: shop }, "Back to the shop")));
     const main = h("main", { id: "main-content", tabindex: "-1", class: "section-inner cart-page tracking-page" + (order?.paidReceipt ? " has-paid-receipt" : "") },
+      pickupRequest(order, payload => save('/pickup-request', payload), busy),
+      pickupNotice(order || {}, payload => save('/pickup-response', payload), busy),
       h("span", { class: "eyebrow" }, "YOUR PRIVATE ORDER STATUS"),
       h("h1", { style: { fontSize: "clamp(1.25rem, 5vw, 2rem)" } }, order?.orderNumber || "Order tracking"),
       h("p", { class: "small-note" }, "Keep this link private. It lets you view this order and contact Danielle. Payment is verified only by an owner."),
@@ -132,20 +137,21 @@ export async function start(root) {
     const appendMain = (...nodes) => main.append(...nodes.filter(node => node !== null && node !== undefined && node !== false));
     if (!order) appendMain(button("Retry loading order", () => refresh(), { class: "secondary-button" }));
     else {
+      appendMain(confirmationTools(order));
+      if (order.status === 'pending' && !order.resolution && !order.paymentVerifiedAt && !order.paidReceipt && !order.paymentReportedAt && ['not_collected', 'awaiting_cash'].includes(order.paymentStatus)) {
+        appendMain(button('Cancel Order', async () => {
+          if (busy || paymentMethodPending) return;
+          if (!window.confirm('Cancel this order? This releases your reserved items and cannot be undone here. Confirm only if you have NOT sent payment. If you have paid, contact Danielle instead.')) return;
+          await save('/cancel', { confirmCancellation: true, confirmUnpaid: true });
+        }, { class: 'secondary-button', disabled: busy || paymentMethodPending }));
+      }
       appendMain(h("div", { class: "order-summary", "aria-live": "polite", "aria-label": "Current order status" },
         h("h2", {}, (order.status === "picked-up" ? "Historical order" : fulfillmentLabels[order.status]) || "Order Received"),
         h("p", {}, paymentLabels[order.paymentStatus] || "Awaiting Payment Verification"),
         order.paymentCorrectedAt ? h('p', {}, 'An owner corrected a mistaken payment-verification record. Payment is awaiting independent verification; the previous receipt is no longer valid.') : null,
-        order.total === 0 ? h('p', {}, 'No payment is required for this order.') : !order.paymentVerifiedAt ? h('p', {}, 'Danielle will check her payment account and confirm receipt. You do not need to report that you paid.') : h('p', {}, 'Danielle independently verified your payment.'),
+        order.selectedPaymentMethod === 'cash_pickup' ? h('div', {}, h('strong', {}, 'Payment: Cash at Pickup'), h('p', {}, 'Cash Due: ' + money(order.paymentVerifiedAt || order.status === 'canceled' || order.resolution ? 0 : order.total)), h('p', {}, order.paymentVerifiedAt ? 'Danielle confirmed your cash payment.' : order.status === 'canceled' || order.resolution ? 'This cash order is closed.' : 'Please bring your payment when you pick up your order.')) : order.total === 0 ? h('p', {}, 'No payment is required for this order.') : !order.paymentVerifiedAt ? h('p', {}, 'Danielle will check her payment account and confirm receipt. You do not need to report that you paid.') : h('p', {}, 'Danielle independently verified your payment.'),
         order.status === 'canceled' ? h('p', {}, 'This order was canceled. Contact Danielle about any payment or refund.') : null));
-      if (order.total > 0 && !order.paymentVerifiedAt && order.status !== 'canceled' && !order.resolution) {
-        const destinations = order.paymentDestinations || {};
-        appendMain(h('section', { class: 'sub-card', 'aria-label': 'Payment options' }, h('h2', {}, 'Choose how to pay'), h('strong', {}, 'Amount due: ' + money(order.total)),
-          h('p', {}, 'Order reference: ' + order.orderNumber),
-          paymentTiles(order, choosePayment, busy),
-          h('p', {}, 'Your order is saved. Pay the exact amount shown. Include the order reference if your payment app offers a note. No amount or reference is filled automatically. Return to this tab after paying or canceling; opening a payment app never verifies payment.'),
-          !Object.keys(destinations).length ? h('p', {}, 'Business payment destinations are not configured yet. Contact Danielle below before paying.' + (order.simulated ? ' Do not send real money during preview testing.' : '')) : null));
-      }
+      appendMain(paymentSelection(order, choosePayment, busy || paymentMethodPending));
       appendMain(button('Contact Danielle', () => { messaging = !messaging; rememberMessage(); render(); root.querySelector('#contact-message')?.focus(); }, { class: 'primary-link' }),
         order.attention?.customerContacted ? h('p', { role: 'status' }, 'Customer Contacted — awaiting owner review. Your current pickup time stays unchanged until Danielle approves an arrangement.') : null,
         order.attention?.extensionApproved ? h('p', { role: 'status' }, 'Extension Approved — new arrangement confirmed') : null,
@@ -171,9 +177,9 @@ export async function start(root) {
         h("p", {}, "Payment and preparation are tracked separately. A stage is complete only when its own event is recorded."),
         h("ol", { "aria-label": "Order stages" }, stages(order).map(([label, at]) =>
           h("li", { class: "sub-card" }, h("strong", {}, label), h("p", {}, stageNote(label, at))))),
-        h("h2", {}, "Pickup details"), h("p", {}, pickupLabel(order.pickup)),
+        h("h2", {}, "Pickup details"), h("p", {}, order.pickupChange && !order.pickupChange.replacement ? "Awaiting makeup date — the original pickup has changed." : pickupLabel(order.pickup)),
         experience ? pickupLocation({ pickupAddress: order.pickupAddress }) : null,
-        order.pickupDeadline ? h('p', {}, h('strong', {}, 'Pickup deadline: ' + stamp(order.pickupDeadline))) : null,
+        order.pickupDeadline && !order.pickupChange ? h('p', {}, h('strong', {}, 'Pickup deadline: ' + stamp(order.pickupDeadline))) : null,
         order.originalPickup && order.extension ? h('p', {}, 'Original pickup: ' + pickupLabel(order.originalPickup)) : null,
         h('details', {}, h('summary', {}, POLICY_TITLE), POLICY.map((paragraph,i) => h('p', {}, i === 2 ? h('strong', {}, paragraph) : paragraph))),
         h("h2", {}, "Your order"),
